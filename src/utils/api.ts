@@ -65,7 +65,48 @@ class ApiService {
   }
   private async request(endpoint: string, options: { method?: string, body?: any, headers?: any } = {}) {
     const functionName = 'gutzo-api';
-    const invokePath =  `${functionName}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    
+    // Check if we should use custom function URL (for Docker deployments with non-standard routing)
+    const customFunctionUrl = import.meta.env.VITE_SUPABASE_FUNCTION_URL;
+    
+    if (customFunctionUrl) {
+      // Use direct fetch for custom function URLs
+      const fullUrl = `${customFunctionUrl}/${functionName}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+      
+      try {
+        console.log(`Fetching custom function URL: ${fullUrl} with method ${options.method || 'POST'}`);
+        
+        const response = await fetch(fullUrl, {
+          method: options.method || 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'X-Client-Info': 'gutzo-marketplace',
+            ...options.headers,
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`API Error for ${fullUrl}:`, response.status, errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log(`API request successful for ${fullUrl}`);
+        return data;
+      } catch (error: any) {
+        console.error(`API request failed for ${fullUrl}:`, error);
+        if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
+          throw new Error('Network connection failed. Please check your internet connection.');
+        }
+        throw error;
+      }
+    }
+    
+    // Default: use Supabase client for standard deployments
+    const invokePath = `${functionName}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
     try {
       console.log(`Invoking function: ${invokePath} with method ${options.method || 'POST'}`);
