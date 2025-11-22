@@ -56,7 +56,9 @@
       outDir: 'build',
     },
     server: {
-      port: 3000,
+      port: 8000,
       open: true,
+      host: true,
+      allowedHosts: ["192-168-1-36.nip.io"]
     },
   });

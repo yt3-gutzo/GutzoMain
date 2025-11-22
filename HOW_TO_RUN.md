@@ -21,3 +21,6 @@ This creates an optimized version of the app ready for deployment to a live serv
 ---
 
 **That's it!** The app should now be running on your local machine.
+```bash
+npm run dev -- --host
+```
