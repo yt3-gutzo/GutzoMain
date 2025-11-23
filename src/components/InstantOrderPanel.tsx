@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Minus, ShoppingCart, Clock, MapPin, ArrowLeft, CreditCard, Smartphone, Wallet, CheckCircle } from 'lucide-react';
 import { toast } from "sonner";
 import { Button } from './ui/button';
-// ...existing code...
 import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
 import { Separator } from './ui/separator';
@@ -565,12 +564,51 @@ export function InstantOrderPanel({
             <Button
               onClick={async () => {
                 if (cartItems.length === 0 || isProcessing) return;
-                // Don't invoke PhonePe flow. Navigate to a friendly PhonePe placeholder page instead.
+                setIsProcessing(true);
                 try {
                   const orderId = `ORD_${Date.now()}`;
-                  try { sessionStorage.setItem('last_order_id', orderId); } catch {}
-                } catch (e) {}
-                navigate('/phonepe-soon');
+                  const amount = totalAmount > 0 ? totalAmount.toFixed(2) : '1.00';
+                  // Ensure userPhone is always set and valid
+                  let customerId = userPhone;
+                  if (!customerId || typeof customerId !== 'string' || customerId.trim() === '') {
+                    customerId = 'CUST_' + Date.now();
+                  }
+                  // Call Paytm payment API
+                  const data = await apiService.initiatePaytmPayment(orderId, amount, customerId);
+                  if (data.success && data.txnToken) {
+                    // Load Paytm JS Checkout and invoke payment
+                    const script = document.createElement('script');
+                    script.src = 'https://securegw-stage.paytm.in/merchantpgpui/app/paytm-pg.js';
+                    script.async = true;
+                    script.onload = () => {
+                      // @ts-ignore
+                      if (window.Paytm && window.Paytm.CheckoutJS) {
+                        // @ts-ignore
+                        window.Paytm.CheckoutJS.init({
+                          merchant: data.paytmResponse.body.mid,
+                          orderId,
+                          txnToken: data.txnToken,
+                          amount,
+                          handler: {
+                            notifyMerchant: function(eventName: string, eventData: any) {
+                              console.log('Paytm Event:', eventName, eventData);
+                            }
+                          }
+                        }).then(() => {
+                          // @ts-ignore
+                          window.Paytm.CheckoutJS.invoke();
+                        });
+                      }
+                    };
+                    document.body.appendChild(script);
+                  } else {
+                    toast.error('Paytm initiation failed: ' + (data.error || 'Unknown error'));
+                  }
+                } catch (err: any) {
+                  toast.error('Paytm payment error: ' + (err?.message || String(err)));
+                } finally {
+                  setIsProcessing(false);
+                }
               }}
               disabled={cartItems.length === 0 || isProcessing}
               className="w-full bg-gradient-to-r from-gutzo-primary to-gutzo-primary-hover text-white font-medium py-4 rounded-xl hover:shadow-lg transition-all disabled:opacity-50"
@@ -583,7 +621,7 @@ export function InstantOrderPanel({
               ) : cartItems.length > 0 ? (
                 <div className="flex items-center justify-center gap-2">
                   <Smartphone className="w-4 h-4" />
-                  Pay with PhonePe - ₹{totalAmount.toFixed(2)}
+                  Pay with PayTm - ₹{totalAmount.toFixed(2)}
                 </div>
               ) : (
                 'Add items to proceed'

@@ -1212,40 +1212,6 @@ const whatsappMessage = {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     const whatsappResponse = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: {
@@ -2179,5 +2145,64 @@ app.delete('/gutzo-api/user-addresses/:id', async (c)=>{
     }, 500);
   }
 });
+
+app.post('/gutzo-api/paytmint', async (c) => {
+  try {
+    // Parse incoming request body
+    const body = await c.req.json();
+    const { orderId, amount, customerId } = body;
+    if (!orderId || !amount || !customerId) {
+      return c.json({ success: false, error: 'Missing required fields: orderId, amount, customerId' }, 400);
+    }
+
+    // Prepare payload for Paytm initiate-transaction microservice
+    let merchantKey = '';
+    let mid = '';
+    // @ts-ignore
+    if (typeof globalThis.Deno !== 'undefined' && globalThis.Deno.env && globalThis.Deno.env.get) {
+      // @ts-ignore
+      merchantKey = globalThis.Deno.env.get('PAYTM_MERCHANT_KEY') || '';
+      mid = globalThis.Deno.env.get('PAYTM_MID') || '';
+    }
+    // Construct payload for /initiate-transaction
+    const paytmPayload = {
+      mid,
+      orderId,
+      amount,
+      merchantKey
+    };
+
+    // Call the Paytm initiate-transaction microservice
+    const resp = await fetch('http://localhost:3000/initiate-transaction', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(paytmPayload)
+    });
+
+    const result = await resp.json();
+    console.log('Paytm initiate-transaction service response:', result);
+    if (!resp.ok) {
+      return c.json({ success: false, error: 'Initiate transaction service error', details: result }, 500);
+    }
+
+    return c.json({
+      success: true,
+      checksum: result.checksum,
+      initiateTransactionResponse: result.initiateTransactionResponse,
+      message: 'Transaction initiated',
+      receivedData: body
+    });
+  } catch (error) {
+    console.error('❌ Error in /paytmint:', error);
+    return c.json({
+      success: false,
+      error: 'Internal server error',
+      details: typeof error === 'object' && error !== null && 'message' in error ? (error as any).message : String(error)
+    }, 500);
+  }
+});
+
 /*********************************************************/ 
 Deno.serve({ port: 9999 },app.fetch);

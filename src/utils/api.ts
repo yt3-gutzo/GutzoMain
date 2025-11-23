@@ -1,5 +1,3 @@
-
-
 import { supabase } from './supabase/client';
 
 class ApiService {
@@ -361,6 +359,21 @@ class ApiService {
       },
     });
   }
+    async initiatePaytmPayment(orderId: string, amount: string | number, customerId: string) {
+    try {
+      // Log payload for debugging
+      console.log('Paytm payload:', { orderId, amount, customerId });
+      return this.request('/paytmint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { orderId, amount, customerId } // <-- send as object, not string
+      });
+    } catch (err) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+
+
 }
 
 export const apiService = new ApiService();
