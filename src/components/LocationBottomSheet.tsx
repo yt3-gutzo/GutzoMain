@@ -28,7 +28,7 @@ export function LocationBottomSheet({ isOpen, onClose, onShowAddressList }: Loca
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent 
         side="bottom" 
-        className="rounded-t-[0.8rem] p-0 w-full max-w-full left-0 right-0 transition-transform duration-300 ease-in-out" 
+        className="rounded-t-3xl p-0 w-full max-w-full left-0 right-0 transition-transform duration-300 ease-in-out" 
         style={{ top: '104px', bottom: 0, height: 'calc(100vh - 104px)' }}
       >
         <style>{`

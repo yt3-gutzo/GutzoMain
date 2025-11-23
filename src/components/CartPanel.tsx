@@ -329,8 +329,8 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
         <Sheet open={isOpen} onOpenChange={onClose}>
           <SheetContent
             side="bottom"
-            className="rounded-t-3xl p-0 w-full max-w-full left-0 right-0"
-            style={{ top: '80px', bottom: 0, height: 'calc(100vh - 80px)' }}
+            className="rounded-t-3xl p-0 w-full max-w-full left-0 right-0 transition-transform duration-300 ease-in-out"
+            style={{ top: '104px', bottom: 0, height: 'calc(100vh - 104px)' }}
           >
             <style>{`
               [data-slot="sheet-content"] > button[class*="absolute"] {

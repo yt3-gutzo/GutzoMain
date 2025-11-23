@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Header } from "./components/Header";
 import { CategoryBar } from "./components/CategoryBar";
 import { Inspiration } from "./components/Inspiration";
+import WeeklyMealPlansSection from "./components/WeeklyMealPlansSection";
 import { VendorCard } from "./components/VendorCard";
 import { ResponsiveProductDetails } from "./components/ResponsiveProductDetailsFixed";
 import { VendorSkeleton } from "./components/VendorSkeleton";
@@ -428,9 +429,10 @@ function AppContent() {
       />
 
       {/* Inspiration Section (Zomato-style) */}
-  <Inspiration onOptionClick={setSelectedCategory} />
+      <Inspiration onOptionClick={setSelectedCategory} />
 
-
+      {/* Weekly Meal Plans Section (new) */}
+      <WeeklyMealPlansSection />
 
       {/* Vendor Listings */}
         <main
