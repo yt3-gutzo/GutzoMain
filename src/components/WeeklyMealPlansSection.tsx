@@ -1,5 +1,19 @@
-
 import React from "react";
+
+export type MealPlan = {
+	title: string;
+	vendor: string;
+	rating: number;
+	price: string;
+	schedule: string;
+	features: string[];
+	image: string;
+};
+
+interface WeeklyMealPlansSectionProps {
+	noPadding?: boolean;
+	onMealPlanClick?: (plan: MealPlan) => void;
+}
 
 const mealPlans = [
 	{
@@ -20,7 +34,7 @@ const mealPlans = [
 		vendor: "FitMeals",
 		rating: 4.8,
 		price: "₹89/day",
-		schedule: "Mon – Sat · Lnch/Dinner",
+		schedule: "Mon – Sat · Lunch/Dinner",
 		features: [
 			"Curated, chef-cooked dishes",
 			"Daily menu variety",
@@ -70,60 +84,93 @@ const mealPlans = [
 	},
 ];
 
-export default function WeeklyMealPlansSection() {
+export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanClick }: WeeklyMealPlansSectionProps) {
 	return (
-		<section className="w-full bg-white pt-8 pb-10 md:pt-12 md:pb-14 lg:pt-16 lg:pb-20">
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-								<h2
-									className="text-left font-medium tracking-tight w-full mb-4 text-[20px] lg:text-[30px]"
-									style={{ fontFamily: 'Poppins', letterSpacing: '-0.01em', fontWeight: 500, color: '#111' }}
-								>
-									Weekly Meal Plans
-								</h2>
-				<div className="w-full overflow-x-auto scrollbar-hide pb-2 mt-2">
-					<div className="flex flex-nowrap gap-6 sm:gap-5 lg:gap-8 justify-start">
-						{mealPlans.map((plan, idx) => (
+		<section className="w-full bg-[#fafafa] pt-4 pb-8 md:pt-6 md:pb-12 lg:pt-8 lg:pb-16">
+			<div className={`w-full max-w-7xl mx-auto flex flex-col${noPadding ? '' : ' px-4 sm:px-6 lg:px-8'}`}> 
+				<h2
+					className="text-left font-medium tracking-tight w-full mb-3 text-[20px] lg:text-[30px]"
+					style={{ fontFamily: 'Poppins', letterSpacing: '-0.01em', fontWeight: 500, color: '#111', marginTop: 0 }}
+				>
+					Weekly Meal Plans
+				</h2>
+				<div
+					className="gutzo-desktop-scroll scrollbar-hide"
+					style={{
+						width: window.innerWidth >= 1024 ? 'calc(220px * 4.5 + 24px * 4)' : '100%',
+						maxWidth: '100%',
+						overflowX: 'auto',
+						display: 'flex',
+						flexDirection: 'row',
+						gap: '24px',
+					}}
+				>
+					{mealPlans.map((plan, idx) => (
+						<div
+							key={idx}
+							className="gutzo-card-hover"
+							style={{
+								minWidth: window.innerWidth >= 1024 ? '220px' : '170px',
+								maxWidth: window.innerWidth >= 1024 ? '220px' : '220px',
+								height: window.innerWidth >= 1024 ? '340px' : 'auto',
+								display: 'flex',
+								flexDirection: 'column',
+								justifyContent: 'space-between',
+								cursor: 'pointer',
+							}}
+							onClick={() => {
+								if (typeof onMealPlanClick === 'function') {
+									onMealPlanClick(plan);
+								}
+							}}
+						>
 							<div
-								key={idx}
-								className="bg-white rounded-2xl shadow-md border border-gray-100 flex flex-col w-[80vw] max-w-xs sm:w-[320px] lg:w-[340px] overflow-hidden"
-								style={{ minWidth: 260 }}
+								className="w-full"
+								style={{
+									width: window.innerWidth >= 1024 ? '100%' : undefined,
+									height: window.innerWidth >= 1024 ? '180px' : '140px',
+									objectFit: window.innerWidth >= 1024 ? 'cover' : 'cover',
+									borderRadius: '16px',
+									overflow: 'hidden',
+									marginBottom: window.innerWidth >= 1024 ? '12px' : '8px',
+								}}
 							>
-								<div className="relative w-full">
-															<img
-																src={plan.image}
-																alt={plan.title}
-																className="w-full h-28 object-cover rounded-t-2xl"
-									/>
-									<span className="absolute top-3 right-3 bg-white rounded-full px-2 py-0.5 text-xs font-semibold text-gray-800 shadow">
-										{plan.rating}
+								<img
+									src={plan.image}
+									alt={plan.title}
+									style={{
+										width: '100%',
+										height: '100%',
+										objectFit: 'cover',
+										objectPosition: 'center',
+										borderRadius: '16px',
+									}}
+								/>
+							</div>
+							<div className="px-2 pt-2 pb-0 flex flex-col flex-1 md:px-3" style={{ flexGrow: 1 }}>
+								<h3
+									className="text-[13px] font-bold text-gray-900 mb-0.5"
+									style={{ fontFamily: 'Poppins', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}
+									title={plan.title}
+								>
+									{plan.title}
+								</h3>
+								<p className="text-[11px] text-gray-500 mb-0.5">by {plan.vendor}</p>
+								<p className="text-[12px] text-gray-600 mb-1" style={{ fontSize: '12px' }}>{plan.schedule}</p>
+								<p className="text-[13px] font-semibold text-gray-900 mb-2">{plan.price}</p>
+								<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginTop: 4, marginBottom: 10, cursor: 'pointer' }}>
+									<span style={{ color: '#1BA672', fontFamily: 'Poppins', fontWeight: 400, fontSize: 14, letterSpacing: '-0.01em', marginRight: 4 }}>
+										View Plan
 									</span>
-								</div>
-								<div className="px-6 pt-4 pb-5 flex flex-col flex-1 md:px-8">
-									<h3 className="text-lg font-bold text-gray-900 mb-1" style={{ fontFamily: 'Poppins' }}>{plan.title}</h3>
-									<p className="text-sm text-gray-500 mb-1">by {plan.vendor}</p>
-									<p className="text-sm text-gray-600 mb-2">{plan.schedule}</p>
-									<p className="text-xl font-semibold text-gray-900 mb-3">{plan.price}</p>
-									<ul className="mb-4 space-y-1">
-										{plan.features.map((feature, i) => (
-											<li key={i} className="flex items-center text-sm text-gray-700">
-												<span className="text-green-600 mr-2">✔</span>
-												{feature}
-											</li>
-										))}
-									</ul>
-									<button
-										className="mt-auto w-full bg-green-700 hover:bg-green-800 text-white font-semibold py-2 rounded-lg text-base transition-colors duration-150 shadow"
-										style={{ fontFamily: 'Poppins' }}
-									>
-										Subscribe Now
-									</button>
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M6 4L10 8L6 12" stroke="#1BA672" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+									</svg>
 								</div>
 							</div>
-						))}
-					</div>
+						</div>
+					))}
 				</div>
 			</div>
 		</section>
 	);
 }
- 

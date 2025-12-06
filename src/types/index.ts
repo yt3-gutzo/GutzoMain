@@ -38,6 +38,9 @@ export interface Product {
   is_veg: boolean;
   created_at: string;
   updated_at?: string;
+  // InstantPicks specific additions
+  rating?: number;
+  ratingCount?: number;
   // optional tags used by components
   diet_tags?: string[];
   tags?: string[];

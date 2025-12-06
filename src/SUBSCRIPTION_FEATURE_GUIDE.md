@@ -5,7 +5,7 @@
 ### 1. **Subscribe Button Next to Order Now**
 - ✅ Outlined orange button with slightly smaller size than "Order Now"
 - ✅ RefreshCw icon (repeat arrows) on the left
-- ✅ Proper styling with gutzo-primary color (#E7600E)
+- ✅ Proper styling with gutzo-primary color (#1BA672)
 - ✅ Responsive design for both mobile and desktop
 
 ### 2. **Subscription Panel**
@@ -91,7 +91,7 @@
 
 ### Subscribe Button:
 ```css
-- Border: 2px solid #E7600E (gutzo-primary)
+- Border: 2px solid #1BA672 (gutzo-primary)
 - Background: White with hover state
 - Icon: RefreshCw (repeat arrows)
 - Size: Slightly smaller than Order Now

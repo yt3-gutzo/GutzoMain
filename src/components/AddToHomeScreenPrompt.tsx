@@ -62,7 +62,7 @@ const AddToHomeScreenPrompt: React.FC<{ onAddToHomeScreen?: () => void; canInsta
               }
               setVisible(false);
             }}
-            style={{ height: "40px", display: "flex", alignItems: "center", justifyContent: "center", background: '#2FCC5A' }}
+            style={{ height: "40px", display: "flex", alignItems: "center", justifyContent: "center", background: '#1BA672' }}
           >
             ADD
           </button>

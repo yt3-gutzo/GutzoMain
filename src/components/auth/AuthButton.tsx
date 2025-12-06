@@ -27,12 +27,12 @@ export function AuthButton({
 
   const variantClasses = {
     primary: `
-      bg-[#FF6D00] hover:bg-[#E55100] text-white
-      focus:ring-[#FF6D00]
+      bg-[#1BA672] hover:bg-[#14885E] active:bg-[#0E6B49] disabled:bg-[#A8DFCA] text-white
+      focus:ring-[#1BA672]
     `,
     secondary: `
       bg-white border border-[#0B5F3B] text-[#0B5F3B]
-      hover:bg-gray-50 focus:ring-[#0B5F3B]
+      hover:bg-gray-50 focus:ring-[#0B5F3B] active:bg-[#0E6B49] disabled:bg-[#A8DFCA]
     `
   };
 

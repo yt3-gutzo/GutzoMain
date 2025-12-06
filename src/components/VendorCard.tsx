@@ -1,7 +1,9 @@
 import { Star, Clock } from "lucide-react";
+import StarIcon from "./StarIcon";
 import { Card, CardContent } from "./ui/card";
 import { ImageWithFallback } from "./common/ImageWithFallback";
 import { Vendor } from "../types";
+import { useNavigate } from 'react-router-dom';
 
 interface VendorCardProps {
   vendor: Vendor;
@@ -9,56 +11,51 @@ interface VendorCardProps {
 }
 
 export function VendorCard({ vendor, onClick }: VendorCardProps) {
-  const availableCount = vendor.products?.filter(p => p.available).length || 0;
-  const totalCount = vendor.products?.length || 0;
-  // Example: show offer if vendor.tags includes 'offer', show promoted if 'promoted'
-  const isPromoted = vendor.tags?.includes('promoted');
-  const offerTag = vendor.tags?.find(tag => tag.toLowerCase().includes('off'));
+  const navigate = useNavigate();
   return (
     <Card
-      className="cursor-pointer group bg-white rounded-08rem transition-all duration-200 overflow-hidden p-0 flex flex-col border border-transparent shadow-none hover:shadow-lg hover:border-[#F1F1F1]"
+      className="cursor-pointer group rounded-[16px] gutzo-card-hover transition-all duration-200 overflow-hidden p-0 flex flex-col shadow-none w-full"
       style={{
         width: '100%',
-        maxWidth: 370,
         minWidth: 0,
         height: 'auto',
-        aspectRatio: '1.15/1',
+        aspectRatio: '1.1/1',
+        background: 'transparent',
+        border: 'none',
+        outline: 'none',
       }}
-      onClick={() => onClick(vendor)}
+      onClick={() => {
+        navigate(`/vendor/${vendor.id}`, { state: { vendor } });
+        if (onClick) onClick(vendor);
+      }}
     >
-  <div className="relative w-full h-[180px] md:h-[200px] lg:h-[220px] xl:h-[240px] overflow-hidden rounded-t-[0.8rem]">
+      <div className="w-full h-[180px] md:h-[180px] lg:h-[180px] xl:h-[180px] overflow-hidden rounded-[16px]" style={{marginBottom: '0'}}>
         <ImageWithFallback
           src={vendor.image || ""}
-          alt={`${vendor.name} logo`}
-          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+          alt={vendor.name}
+          className="w-full h-full object-cover"
+          style={{ borderRadius: '16px' }}
         />
-        {/* Promoted badge */}
-        {isPromoted && (
-          <div className="absolute top-2 left-2 bg-white/90 text-xs font-semibold px-2 py-0.5 rounded shadow z-10" style={{letterSpacing: 0.2}}>
-            Promoted
-          </div>
-        )}
-        {/* Offer badge */}
-        {offerTag && (
-          <div className="absolute bottom-2 left-2 bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded shadow z-10">
-            {offerTag.toUpperCase()}
-          </div>
-        )}
-        {/* Rating badge */}
-        <div className="absolute top-2 right-2 flex items-center bg-white px-2 py-0.5 rounded shadow z-10">
-          <span className="text-green-700 font-bold text-xs mr-1">{vendor.rating?.toFixed(1)}</span>
-          <Star className="h-3 w-3 text-green-600 fill-current" />
-        </div>
       </div>
-      <CardContent className="flex-1 flex flex-col px-4 py-2">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-semibold text-base truncate text-gray-900" style={{ fontFamily: 'Poppins' }}>{vendor.name}</h3>
-          <span className="text-gray-500 text-xs font-medium">₹{vendor.minimumOrder} for one</span>
+      <CardContent className="flex-1 flex flex-col pt-4 pb-0">
+        {/* Vendor Name */}
+        <h3 className="text-[20px] font-bold text-gray-900 mb-1" style={{ fontFamily: 'Poppins', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={vendor.name}>{vendor.name}</h3>
+        {/* Rating and Delivery Time - single line, star left of rating, black rating */}
+        <div className="flex items-center text-[15px] mb-1" style={{ fontFamily: 'Poppins', gap: '8px' }}>
+          <span className="flex items-center gap-1">
+            <StarIcon size={16} color="#43A047" style={{ marginRight: 2 }} />
+            <span style={{ color: '#222', fontWeight: 600, fontSize: 16, marginLeft: 2 }}>{vendor.rating || '3.9'}</span>
+          </span>
+          <span className="mx-1">•</span>
+          <span style={{ color: '#222' }}>{vendor.deliveryTime || '20-30 mins'}</span>
         </div>
-        <div className="text-gray-600 text-xs truncate mb-1" style={{ fontFamily: 'Poppins' }}>{vendor.cuisineType}</div>
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{vendor.deliveryTime || '30 min'}</span>
-          <span>{vendor.location}</span>
+        {/* Healthy Food Tags */}
+        <div className="text-[15px] text-gray-500 mb-1" style={{ fontFamily: 'Poppins', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+          {vendor.tags ? vendor.tags.join(', ') : 'Balanced Diet, South Indian Diet, High Protein, Low Carb'}
+        </div>
+        {/* Location */}
+        <div className="text-[15px] text-gray-500 mb-2" style={{ fontFamily: 'Poppins', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+          {vendor.location || 'Peelamedu'}
         </div>
       </CardContent>
     </Card>

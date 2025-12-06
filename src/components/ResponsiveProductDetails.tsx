@@ -764,7 +764,7 @@ function MenuItemsList({ items, vendor, onWhatsAppOrder, onSubscribeClick, onSub
                   disabled={!item.available}
                   className={`flex items-center justify-center gap-2 rounded-full px-3 lg:px-4 py-2 transition-all duration-300 transform hover:scale-105 w-full ${
                     item.available
-                      ? 'bg-gradient-to-r from-[#E7600E] to-[#F77B1C] hover:from-[#D14808] hover:to-[#E7600E] text-white shadow-lg hover:shadow-xl'
+                      ? 'bg-gradient-to-r from-[#E7600E] to-[#F77B1C] hover:from-[#14885E] hover:to-[#E7600E] text-white shadow-lg hover:shadow-xl'
                       : 'bg-gray-150 text-gray-500 cursor-not-allowed hover:bg-gray-150 hover:scale-100'
                   }`}
                   size="sm"

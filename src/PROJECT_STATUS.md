@@ -19,7 +19,7 @@ Gutzo is a multi-vendor marketplace for healthy meals in Coimbatore, built with 
 - **WhatsApp Integration**: Order via WhatsApp functionality
 
 ### Brand Colors
-- Primary CTA: `#E7600E` (gutzo-primary)
+- Primary CTA: `#1BA672` (gutzo-primary)
 - Selected/Positive: `#026254` (gutzo-selected)  
 - Soft Highlights: `#D9E86F` (gutzo-highlight)
 

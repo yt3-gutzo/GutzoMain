@@ -1,5 +1,32 @@
+@media (min-width: 1024px) {
+  .cart-badge-desktop {
+    background-color: #E85A1C !important;
+  }
+}
 /* Custom utility for consistent 0.8rem border radius */
+/* Card hover zoom-out animation for desktop */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap");
+
+@media (hover: hover) and (pointer: fine) {
+  .gutzo-card-hover {
+    transition: transform 0.18s cubic-bezier(.4,0,.2,1);
+  }
+  .gutzo-card-hover:hover {
+    transform: scale(0.97);
+    box-shadow: none;
+    border-color: transparent;
+  }
+}
+/* Hide horizontal scrollbar in mobile view */
+@media (max-width: 767px) {
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+}
 .rounded-08rem {
   border-radius: 0.6rem !important;
 }
@@ -1995,8 +2022,8 @@
     background-color: #e7600e;
   }
 
-  .bg-\[\#FF6D00\] {
-    background-color: #ff6d00;
+  .bg-\[#1BA672\] {
+    background-color: #1ba672;
   }
 
   .bg-accent {
@@ -3431,8 +3458,8 @@
   }
 
   @media (hover: hover) {
-    .hover\:bg-\[\#D14808\]:hover {
-      background-color: #d14808;
+    .hover\:bg-\[#14885E\]:hover {
+      background-color: #14885E;
     }
   }
 
@@ -3735,8 +3762,8 @@
     --tw-ring-color: #0b5f3b;
   }
 
-  .focus\:ring-\[\#FF6D00\]:focus {
-    --tw-ring-color: #ff6d00;
+  .focus\:ring-\[#1BA672\]:focus {
+    --tw-ring-color: #1ba672;
   }
 
   .focus\:ring-gutzo-primary:focus {
@@ -4985,13 +5012,13 @@
   --font-size: 14px;
   --background: #fff;
   --foreground: oklch(.145 0 0);
-  --gutzo-primary: #e7600e;
+  --gutzo-primary: #1ba672;
   --gutzo-selected: #026254;
   --gutzo-highlight: #d9e86f;
-  --gutzo-primary-hover: #d14808;
+  --gutzo-primary-hover: #14885E;
   --gutzo-selected-hover: #014a40;
   --auth-green: #0b5f3b;
-  --auth-orange: #ff6d00;
+  --auth-orange: #1ba672;
   --card: #fff;
   --card-foreground: oklch(.145 0 0);
   --popover: oklch(1 0 0);
@@ -5077,6 +5104,17 @@ html {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Hide horizontal scrollbar in desktop view for Weekly Meal Plans and similar sections */
+@media (min-width: 1024px) {
+  .gutzo-desktop-scroll {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE 10+ */
+  }
+  .gutzo-desktop-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Edge */
+  }
 }
 
 .line-clamp-2 {

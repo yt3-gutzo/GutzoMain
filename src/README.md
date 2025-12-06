@@ -24,6 +24,6 @@ Multi-vendor marketplace for healthy meals in Coimbatore.
 
 ## Brand Colors
 
-- Primary: #E7600E
+- Primary: #1BA672
 - Selected: #026254  
 - Highlight: #D9E86F

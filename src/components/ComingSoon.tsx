@@ -100,7 +100,7 @@ export function ComingSoon() {
             <Button
               type="submit"
               disabled={isSubmitting || !!emailError || !email}
-              className="bg-[#E7600E] hover:bg-[#D14808] text-white whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-[#E7600E] hover:bg-[#14885E] text-white whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ minHeight: '44px' }}
             >
               {isSubmitting ? "Subscribing..." : "Notify Me"}

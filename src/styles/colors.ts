@@ -3,7 +3,7 @@
 
 const colors = {
   // Brand Colors
-  brandGreen: '#2FCC5A', // UI green (premium, not neon)
+  brandGreen: '#1BA672', // UI green (premium, not neon)
   brandGreenLogo: '#3CFF3C', // Logo only (neon)
   brandOrange: '#E85A1C', // CTA orange
 

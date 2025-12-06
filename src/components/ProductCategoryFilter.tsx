@@ -31,7 +31,7 @@ export function ProductCategoryFilter({
         variant={selectedCategory === "all" ? "default" : "secondary"}
         className={`cursor-pointer whitespace-nowrap px-3 py-2 ${
           selectedCategory === "all" 
-            ? "bg-[#E7600E] hover:bg-[#D14808] text-white" 
+            ? "bg-[#E7600E] hover:bg-[#14885E] text-white" 
             : "hover:bg-gray-200"
         }`}
         onClick={() => onCategoryChange("all")}
@@ -45,7 +45,7 @@ export function ProductCategoryFilter({
           variant={selectedCategory === category ? "default" : "secondary"}
           className={`cursor-pointer whitespace-nowrap px-3 py-2 ${
             selectedCategory === category 
-              ? "bg-[#E7600E] hover:bg-[#D14808] text-white" 
+              ? "bg-[#E7600E] hover:bg-[#14885E] text-white" 
               : "hover:bg-gray-200"
           }`}
           onClick={() => onCategoryChange(category)}

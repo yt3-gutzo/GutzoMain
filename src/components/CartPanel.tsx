@@ -258,7 +258,7 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
 
       {/* Footer with Order Summary */}
       {syncedItems.length > 0 && (
-        <div className="border-t border-gray-200 bg-white p-6 flex-shrink-0 space-y-4">
+        <div className="bg-white p-6 flex-shrink-0 space-y-4">
           {/* Order Summary */}
           <div className="space-y-2 text-sm">
             {(() => {
@@ -295,7 +295,7 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
                     <span className="text-gray-600">GST included in fees @18%</span>
                     <span className="text-gray-900">₹{includedGstFees.toFixed(2)}</span>
                   </div>
-                  <div className="border-t border-gray-200 pt-2">
+                  <div className="pt-2">
                     <div className="flex justify-between font-medium">
                       <span className="text-gray-900">Total</span>
                       <span className="text-gutzo-primary">₹{total.toFixed(2)}</span>
@@ -329,7 +329,7 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
         <Sheet open={isOpen} onOpenChange={onClose}>
           <SheetContent
             side="bottom"
-            className="rounded-t-3xl p-0 w-full max-w-full left-0 right-0 transition-transform duration-300 ease-in-out"
+            className="p-0 w-full max-w-full left-0 right-0 transition-transform duration-300 ease-in-out"
             style={{ top: '104px', bottom: 0, height: 'calc(100vh - 104px)' }}
           >
             <style>{`

@@ -1,4 +1,4 @@
-import { MapPin, Loader2, AlertCircle, LogOut, User, ChevronDown, ShoppingCart, Search, X } from "lucide-react";
+import { MapPin, Loader2, AlertCircle, LogOut, User, ChevronDown, ShoppingBag, Search, X } from "lucide-react";
 import MobileProfileIcon from "./MobileProfileIcon";
 import { useState } from "react";
 import { Button } from "./ui/button";
@@ -78,7 +78,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <header className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-6 h-20">
           {/* Logo */}
@@ -121,7 +121,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
                     {isLoading ? (
                       <Loader2 className="h-5 w-5 animate-spin text-gray-400 flex-shrink-0" />
                     ) : error ? (
-                      <AlertCircle className="h-5 w-5 text-gutzo-primary flex-shrink-0" />
+                      <AlertCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#E74C3C' }} />
                     ) : (
                       <MapPin className="h-5 w-5 text-gutzo-primary flex-shrink-0" />
                     )}
@@ -181,10 +181,10 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
               onMouseEnter={e => (e.currentTarget.style.color = colors.textPrimary)}
               onMouseLeave={e => (e.currentTarget.style.color = colors.textSecondary)}
             >
-              <ShoppingCart className="h-5 w-5" />
+              <ShoppingBag className="h-5 w-5" strokeWidth={2} />
               <span className="ml-2 font-normal hidden sm:inline">Cart</span>
               {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 bg-gutzo-primary text-white text-xs font-medium rounded-full h-5 w-5 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-gutzo-primary text-white text-xs font-medium rounded-full h-5 w-5 flex items-center justify-center cart-badge-desktop">
                   {totalItems > 99 ? '99+' : totalItems}
                 </span>
               )}
@@ -269,7 +269,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-gray-400 flex-shrink-0" />
               ) : error ? (
-                <AlertCircle className="h-4 w-4 text-gutzo-primary flex-shrink-0" />
+                <AlertCircle className="h-4 w-4 flex-shrink-0" style={{ color: '#E74C3C' }} />
               ) : (
                 <MapPin className="h-4 w-4 text-gutzo-primary flex-shrink-0" />
               )}

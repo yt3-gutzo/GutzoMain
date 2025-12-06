@@ -102,7 +102,7 @@ A **comprehensive payment success modal** that appears after successful payments
 ## 🎨 **Design System Integration**
 
 ### **Brand Colors Used:**
-- ✅ **Gutzo Primary Orange** (#E7600E) - CTAs and amount display
+- ✅ **Gutzo Primary Green** (#1BA672) - CTAs and amount display
 - ✅ **Gutzo Selected Green** (#026254) - Success elements and orders button
 - ✅ **Orange tones** - Delivery notifications and support
 

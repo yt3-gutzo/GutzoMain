@@ -115,7 +115,7 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
           {inspirationOptions.map((option) => (
             <button
               key={option.label}
-              className="flex flex-col items-center group focus:outline-none flex-shrink-0 min-w-[90px]"
+              className="flex flex-col items-center group gutzo-card-hover focus:outline-none flex-shrink-0 min-w-[90px]"
               onClick={() => onOptionClick?.(option.label)}
               style={{ maxWidth: '100%' }}
             >

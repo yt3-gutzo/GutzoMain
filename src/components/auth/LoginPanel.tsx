@@ -499,28 +499,10 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
                 
               </div>
 
-              {/* Form Content */}
+              {/* Form Content with Terms below Proceed button */}
               <div style={{ width: '100%', textAlign: 'left', margin: '0' }}>
                 {loginContent}
-              </div>
-
-              {/* Footer - Terms and Privacy */}
-              <div style={{ 
-                marginTop: '2rem',
-                paddingTop: '1.5rem',
-                borderTop: '1px solid #F3F4F6',
-                textAlign: 'left'
-              }}>
-                <p style={{ fontSize: '0.75rem', color: '#6B7280', textAlign: 'left' }}>
-                  By continuing, I accept the{" "}
-                  <a href="/T&C" className="text-gutzo-primary hover:underline">
-                    Terms & Conditions
-                  </a>{" "}
-                  &{" "}
-                  <a href="/privacy_policy" className="text-gutzo-primary hover:underline">
-                    Privacy Policy
-                  </a>
-                </p>
+                {/* Removed duplicate disclaimer at the bottom */}
               </div>
             </div>
           </div>

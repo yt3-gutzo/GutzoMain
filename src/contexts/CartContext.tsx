@@ -435,6 +435,9 @@ const transformCartToAPI = (cartItems: CartItem[]) => {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, initialState);
+  useEffect(() => {
+    console.log('[CartProvider] totalItems:', state.totalItems, 'items:', state.items);
+  }, [state.totalItems, state.items]);
   const { isAuthenticated, user } = useAuth();
 
   // Load appropriate cart on mount and auth state changes

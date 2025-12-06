@@ -275,24 +275,31 @@ export function PhoneSignIn({
             </div>
           )}
 
-          <div style={{ 
-            width: '100%',
-            maxWidth: '450px',
-            margin: '0',
-            marginTop: '1.25rem'
-          }}>
+          <div style={{ width: '100%', maxWidth: '450px', display: 'flex', flexDirection: 'column', gap: '4px', margin: 0, padding: 0, border: 'none' }}>
             <AuthButton 
               type="submit" 
               loading={loading}
               className="!bg-gutzo-primary hover:!bg-gutzo-primary-hover !py-4 !min-h-[56px] text-base font-semibold text-center"
-              style={{ width: '100%', margin: '0' }}
+              style={{ width: '100%', margin: 0, marginBottom: 0, padding: 0, border: 'none' }}
             >
               {otpSent ? (
                 "Verify OTP"
-            ) : (
-              "Proceed"
-            )}
+              ) : (
+                "Proceed"
+              )}
             </AuthButton>
+            <div style={{ margin: 0, padding: 0, border: 'none', lineHeight: 1 }}>
+              <p style={{ fontSize: '0.75rem', color: '#6B7280', textAlign: 'left', margin: 0, padding: 0, border: 'none', lineHeight: 1 }}>
+                By continuing, I accept the{" "}
+                <a href="/T&C" className="text-gutzo-primary hover:underline">
+                  Terms & Conditions
+                </a>{" "}
+                &{" "}
+                <a href="/privacy_policy" className="text-gutzo-primary hover:underline">
+                  Privacy Policy
+                </a>
+              </p>
+            </div>
           </div>
         </form>
 

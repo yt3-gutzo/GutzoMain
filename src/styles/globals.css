@@ -11,12 +11,12 @@
   --gutzo-primary: #E7600E;
   --gutzo-selected: #026254;
   --gutzo-highlight: #D9E86F;
-  --gutzo-primary-hover: #D14808;
+  --gutzo-primary-hover: #14885E;
   --gutzo-selected-hover: #014A40;
   
   /* Auth Colors */
   --auth-green: #0B5F3B;
-  --auth-orange: #FF6D00;
+  --auth-orange: #1BA672;
   
   --card: #ffffff;
   --card-foreground: oklch(0.145 0 0);

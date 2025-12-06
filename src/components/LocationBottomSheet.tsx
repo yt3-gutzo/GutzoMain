@@ -76,7 +76,7 @@ export function LocationBottomSheet({ isOpen, onClose, onShowAddressList }: Loca
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-gray-400 flex-shrink-0 mt-0.5" />
             ) : error ? (
-              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: colors.error }} />
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#E74C3C' }} />
             ) : (
               <MapPin className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: colors.info }} />
             )}

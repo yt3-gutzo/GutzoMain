@@ -29,7 +29,7 @@ export function Hero({ onScrollToListings }: HeroProps) {
         </p>
         <Button 
           onClick={onScrollToListings}
-          className="bg-[#E7600E] hover:bg-[#D14808] text-white px-8 py-3 text-lg font-semibold rounded-lg transition-colors duration-200"
+          className="bg-[#E7600E] hover:bg-[#14885E] text-white px-8 py-3 text-lg font-semibold rounded-lg transition-colors duration-200"
           style={{ minHeight: '44px' }}
         >
           Explore Healthy Options

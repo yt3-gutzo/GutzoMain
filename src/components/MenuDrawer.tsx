@@ -336,7 +336,7 @@ function MenuItemsList({ items, vendor, onWhatsAppOrder, getDietTags }: MenuItem
                 disabled={!item.available}
                 className={`flex items-center gap-2 rounded-full px-3 lg:px-4 transition-all duration-200 ${
                   item.available
-                    ? 'bg-[#E7600E] hover:bg-[#D14808] text-white'
+                    ? 'bg-[#E7600E] hover:bg-[#14885E] text-white'
                     : 'bg-gray-150 text-gray-500 cursor-not-allowed hover:bg-gray-150'
                 }`}
                 size="sm"
