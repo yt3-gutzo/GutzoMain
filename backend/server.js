@@ -81,7 +81,7 @@ app.post("/initiate-transaction", async (req, res) => {
       userInfo: {
         custId: "CUST_001"
       },
-      callbackUrl: "", // <-- Add your callback URL here
+      callbackUrl: "gutzo.in/paytm-callback", // <-- Add your callback URL here
       industryType: "Retail",
       channelId: "WEB",
       websiteName: "WEBSTAGING",
@@ -97,7 +97,7 @@ app.post("/initiate-transaction", async (req, res) => {
     };
 
     const response = await axios.post(
-      `https://securestage.paytmpayments.com/theia/api/v1/initiateTransaction?mid=${mid}&orderId=${orderId}`,
+      `https://secure.paytmpayments.com/theia/api/v1/initiateTransaction?mid=${mid}&orderId=${orderId}`,
       payload,
       { headers: { "Content-Type": "application/json" } }
     );

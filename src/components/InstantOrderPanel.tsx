@@ -575,34 +575,74 @@ export function InstantOrderPanel({
                   }
                   // Call Paytm payment API
                   const data = await apiService.initiatePaytmPayment(orderId, amount, customerId);
-                  if (data.success && data.txnToken) {
+                  // Check for success - the backend might return paytmResponse (new) or initiateTransactionResponse (old)
+                  // and txnToken might be at root (new) or nested (old)
+                  const paytmResp = data.paytmResponse || data.initiateTransactionResponse;
+                  const token = data.txnToken || paytmResp?.body?.txnToken;
+
+                  if (data.success && token && paytmResp) {
+                    const mid = data.mid || paytmResp.body.mid || 'xFDrTr50750120794198';
+                    console.log('Initializing Paytm with MID:', mid);
+
                     // Load Paytm JS Checkout and invoke payment
                     const script = document.createElement('script');
-                    script.src = 'https://securegw-stage.paytm.in/merchantpgpui/app/paytm-pg.js';
+                    script.src = `https://secure.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
                     script.async = true;
+                    script.crossOrigin = "anonymous"; // Added as per docs
                     script.onload = () => {
+                      console.log('Paytm script loaded. Checking window.Paytm...');
+                      
                       // @ts-ignore
                       if (window.Paytm && window.Paytm.CheckoutJS) {
-                        // @ts-ignore
-                        window.Paytm.CheckoutJS.init({
-                          merchant: data.paytmResponse.body.mid,
-                          orderId,
-                          txnToken: data.txnToken,
-                          amount,
-                          handler: {
-                            notifyMerchant: function(eventName: string, eventData: any) {
-                              console.log('Paytm Event:', eventName, eventData);
-                            }
-                          }
-                        }).then(() => {
-                          // @ts-ignore
-                          window.Paytm.CheckoutJS.invoke();
-                        });
+                         // @ts-ignore
+                         const checkoutJs = window.Paytm.CheckoutJS;
+                         console.log('Hooking into checkoutJs.onLoad...');
+
+                         // Strict adherence to docs: Wrap init in onLoad
+                         checkoutJs.onLoad(() => {
+                            console.log('Paytm CheckoutJS.onLoad callback fired. Initializing...');
+                            const config = {
+                              merchant: {
+                                mid: mid,
+                                name: "Gutzo", // Optional but good for UI
+                                redirect: false
+                              },
+                              flow: "DEFAULT",
+                              data: {
+                                orderId: orderId,
+                                token: token,
+                                tokenType: "TXN_TOKEN",
+                                amount: String(amount) // Ensure string
+                              },
+                              handler: {
+                                notifyMerchant: function(eventName: string, eventData: any) {
+                                  console.log('Paytm Event:', eventName, eventData);
+                                },
+                                transactionStatus: function(paymentStatus: any) {
+                                  console.log('Payment Status:', paymentStatus);
+                                  // invoke api to check status or close if success
+                                  if(onPaymentSuccess) onPaymentSuccess(paymentStatus);
+                                }
+                              }
+                            };
+
+                            checkoutJs.init(config).then(() => {
+                                console.log('Paytm init successful. Invoking...');
+                                checkoutJs.invoke();
+                            }).catch((err: any) => {
+                                console.error('Paytm init error:', err);
+                                toast.error('Paytm initialization error: ' + (err?.message || String(err)));
+                            });
+                         });
+                      } else {
+                         console.error('window.Paytm.CheckoutJS not found on script load');
+                         toast.error('Payment gateway unavailable');
                       }
                     };
                     document.body.appendChild(script);
                   } else {
-                    toast.error('Paytm initiation failed: ' + (data.error || 'Unknown error'));
+                    console.error('Paytm initiation failed data:', data);
+                    toast.error('Paytm initiation failed: ' + (data.error || 'Invalid response from server'));
                   }
                 } catch (err: any) {
                   toast.error('Paytm payment error: ' + (err?.message || String(err)));
