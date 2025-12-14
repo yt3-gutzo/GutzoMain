@@ -631,10 +631,13 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
     <>
       {/* Panel */}
       <div 
-        className={`fixed top-0 right-0 h-full w-[95%] bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-        style={{ maxWidth: '600px' }}
+        className={`fixed z-50 bg-white shadow-2xl transform transition-transform duration-300
+          bottom-0 left-0 w-full max-h-[85vh] rounded-t-3xl border-t border-gray-100
+          ${isOpen ? 'translate-y-0' : 'translate-y-full'}
+          md:top-0 md:right-0 md:h-full md:w-[95%] md:max-w-[600px] md:max-h-full md:rounded-none md:border-none
+          md:translate-y-0
+          ${isOpen ? 'md:translate-x-0' : 'md:translate-x-full'}
+        `}
       >
         {/* Close Button */}
         <div className="absolute top-4 left-4 z-10">
