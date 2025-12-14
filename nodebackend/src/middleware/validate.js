@@ -61,13 +61,13 @@ export const schemas = {
     street: Joi.string().max(200).required(),
     area: Joi.string().max(200).required(),
     landmark: Joi.string().max(200).allow(''),
-    full_address: Joi.string().max(500),
+    full_address: Joi.string().max(500).allow(''),
     city: Joi.string().default('Coimbatore'),
     state: Joi.string().default('Tamil Nadu'),
     zipcode: Joi.string().pattern(/^\d{6}$/).required(),
     latitude: Joi.number().min(-90).max(90),
     longitude: Joi.number().min(-180).max(180),
-    delivery_notes: Joi.string().max(500),
+    delivery_notes: Joi.string().max(500).allow(''),
     is_default: Joi.boolean().default(false)
   }),
 

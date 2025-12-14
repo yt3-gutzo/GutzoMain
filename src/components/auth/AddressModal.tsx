@@ -23,6 +23,7 @@ import {
   reverseGeocode,
   extractAreaFromDetailedAddress,
   extractCityFromDetailedAddress,
+  extractZipcodeFromAddress,
   parseAddressString,
   type DetailedAddress,
 } from "../../utils/geocoding";
@@ -466,7 +467,8 @@ export function AddressModal({
     area: '',
     landmark: '',
     fullAddress: '',
-    isDefault: false
+    isDefault: false,
+    zipcode: ''
   });
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [savingAddress, setSavingAddress] = useState<boolean>(false);
@@ -526,6 +528,7 @@ export function AddressModal({
             fullAddress: detailedAddress.formattedAddress || address,
             street: address.split(',')[0]?.trim() || '', // Extract first part as street
             area: area || '',
+            zipcode: detailedAddress.postalCode // EXTRACT ZIPCODE
           }));
         } else {
           // Fallback to basic string parsing if geocoding fails
@@ -534,6 +537,7 @@ export function AddressModal({
           
           const area = fallbackParsed.area || extractAreaFromAddress(address);
           const city = fallbackParsed.city || extractCityFromAddress(address);
+          const zipcode = extractZipcodeFromAddress(address);
 
           // Update address system
           setAddressData(prev => ({
@@ -543,6 +547,7 @@ export function AddressModal({
             fullAddress: address,
             street: address.split(',')[0]?.trim() || '',
             area: area || '',
+            zipcode: zipcode || '641001' // Use extracted zipcode or safer default
           }));
         }
       } catch (error) {
@@ -551,6 +556,7 @@ export function AddressModal({
         // Final fallback
         const fallbackParsed = parseAddressString(address);
         const area = fallbackParsed.area || extractAreaFromAddress(address);
+        const zipcode = extractZipcodeFromAddress(address);
 
         // Update address system
         setAddressData(prev => ({
@@ -560,6 +566,7 @@ export function AddressModal({
           fullAddress: address,
           street: address.split(',')[0]?.trim() || '',
           area: area || '',
+          zipcode: zipcode || '641001'
         }));
       }
     },
@@ -683,22 +690,27 @@ export function AddressModal({
       }
 
       // Use the modern address data
-      const addressPayload: AddressFormData = {
-        type: addressData.type,
-        label: addressData.type === 'other' ? addressData.label : undefined,
+      // MAP FRONTEND DATA TO BACKEND SCHEMA
+      const addressPayload: any = {
+        label: addressData.type.charAt(0).toUpperCase() + addressData.type.slice(1), // Capitalize: Home, Work, Other
+        custom_label: addressData.type === 'other' ? addressData.label : undefined,
         street: addressData.street || '',
-        area: addressData.area || undefined,
-        landmark: addressData.landmark || undefined,
-        fullAddress: addressData.fullAddress || '',
+        area: addressData.area || '',
+        landmark: addressData.landmark || '',
+        full_address: addressData.fullAddress || '',
+        city: 'Coimbatore', // Default city
+        state: 'Tamil Nadu', // Default state
+        zipcode: addressData.zipcode || '641001', // Fallback zipcode if not extracted
         latitude: addressData.latitude,
         longitude: addressData.longitude,
-        isDefault: addressData.isDefault || false
+        delivery_notes: undefined,
+        is_default: addressData.isDefault || false
       };
 
       console.log('🏠 Saving address with payload:', addressPayload);
 
       // Use the address hook to create address
-      const result = await createAddress(addressPayload);
+      const result = await createAddress(addressPayload as any);
       
       if (result.success) {
         console.log('✅ Address saved successfully');

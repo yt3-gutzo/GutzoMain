@@ -93,6 +93,7 @@ router.post('/addresses', validate(schemas.createAddress), asyncHandler(async (r
     .insert({
       user_id: req.user.id,
       ...addressData,
+      type: addressData.label.toLowerCase(), // Map label (Home) to type (home)
       is_default: count === 0 ? true : addressData.is_default,
       full_address: addressData.full_address || 
         `${addressData.street}, ${addressData.area}, ${addressData.city} - ${addressData.zipcode}`
@@ -100,7 +101,10 @@ router.post('/addresses', validate(schemas.createAddress), asyncHandler(async (r
     .select()
     .single();
 
-  if (error) throw new ApiError(500, 'Failed to add address');
+  if (error) {
+    console.error('Supabase Error (Create Address):', error);
+    throw new ApiError(500, 'Failed to add address');
+  }
 
   successResponse(res, address, 'Address added successfully', 201);
 }));
@@ -136,6 +140,7 @@ router.put('/addresses/:id', validate(schemas.createAddress), asyncHandler(async
     .from('user_addresses')
     .update({
       ...addressData,
+      type: addressData.label.toLowerCase(),
       full_address: addressData.full_address || 
         `${addressData.street}, ${addressData.area}, ${addressData.city} - ${addressData.zipcode}`,
       updated_at: new Date().toISOString()

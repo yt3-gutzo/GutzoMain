@@ -44,9 +44,17 @@ class NodeApiService {
             const responseData = await response.json();
 
             if (!response.ok) {
-                throw new Error(
-                    responseData.message || `HTTP ${response.status}`,
-                );
+                const errorMessage = responseData.message ||
+                    `HTTP ${response.status}`;
+                // Append validation details if available
+                const details = responseData.errors
+                    ? ` (${
+                        responseData.errors.map((e: any) => e.message).join(
+                            ", ",
+                        )
+                    })`
+                    : "";
+                throw new Error(errorMessage + details);
             }
 
             return responseData;
