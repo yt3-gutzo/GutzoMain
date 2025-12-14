@@ -282,9 +282,9 @@ router.post('/callback', asyncHandler(async (req, res) => {
 
   // Redirect based on status
   if (txnStatus === 'TXN_SUCCESS') {
-    res.redirect(`${process.env.FRONTEND_URL}/order-success?orderId=${orderId}`);
+    res.redirect(`${process.env.FRONTEND_URL}/payment-status?orderId=${orderId}`);
   } else {
-    res.redirect(`${process.env.FRONTEND_URL}/order-failed?orderId=${orderId}&reason=${txnStatus}`);
+    res.redirect(`${process.env.FRONTEND_URL}/payment-status?orderId=${orderId}&status=failed&reason=${txnStatus}`);
   }
 }));
 
@@ -388,6 +388,60 @@ router.post('/webhook', asyncHandler(async (req, res) => {
 
   console.log(`[Paytm Webhook] Successfully processed ${orderId}`);
   return res.status(200).send('OK');
+}));
+
+// CHECK PAYMENT STATUS
+router.get('/:id/status', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const { data: order, error } = await supabaseAdmin
+    .from('orders')
+    .select('payment_status, id')
+    .eq('order_number', id)
+    .single();
+
+  if (error || !order) {
+    // Try checking payments table directly if order not found
+    const { data: payment } = await supabaseAdmin
+      .from('payments')
+      .select('status')
+      .eq('merchant_order_id', id)
+      .maybeSingle();
+      
+    if (payment) {
+       let code = 'PENDING';
+       let state = 'PENDING';
+       
+       if (payment.status === 'paid') {
+         code = 'SUCCESS';
+         state = 'COMPLETED';
+       } else if (payment.status === 'failed' || payment.status === 'cancelled') {
+         code = 'FAILED';
+         state = 'FAILED';
+       }
+       
+       return successResponse(res, { code, state });
+    }
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  // Map internal status to generic status expected by frontend
+  let code = 'PENDING';
+  let state = 'PENDING';
+  
+  if (order.payment_status === 'paid') {
+    code = 'SUCCESS';
+    state = 'COMPLETED';
+  } else if (order.payment_status === 'failed' || order.payment_status === 'cancelled') {
+    code = 'FAILED';
+    state = 'FAILED';
+  }
+  
+  successResponse(res, {
+    code,
+    state,
+    transactionId: id
+  });
 }));
 
 // PAYTM REFUND

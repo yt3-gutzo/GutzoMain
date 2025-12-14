@@ -318,6 +318,13 @@ router.get('/', asyncHandler(async (req, res) => {
 
   const { data: orders, error, count } = await query;
 
+  console.log(`[DEBUG] GET /orders for User ${req.user.id} (${req.user.phone}) - Found: ${count}`);
+  if (orders && orders.length > 0) {
+      console.log(`[DEBUG] First order ID: ${orders[0].id} Status: ${orders[0].status}`);
+  } else {
+      console.log(`[DEBUG] No orders found for query details.`);
+  }
+
   if (error) throw new ApiError(500, 'Failed to fetch orders');
 
   paginatedResponse(res, orders, page, limit, count);

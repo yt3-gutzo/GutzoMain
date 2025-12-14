@@ -45,6 +45,13 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) === -1) {
+      // In development, allow all, but log it
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚠️ CORS Warning: Origin not in allow list but allowed in DEV:', origin);
+        return callback(null, true);
+      }
+      
+      console.error('❌ CORS Error: Blocked Origin:', origin);
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
     }

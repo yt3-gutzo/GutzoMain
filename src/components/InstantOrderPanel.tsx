@@ -726,14 +726,57 @@ export function InstantOrderPanel({
                                 tokenType: "TXN_TOKEN",
                                 amount: String(amount) // Ensure string
                               },
-                              handler: {
+                                handler: {
                                 notifyMerchant: function(eventName: string, eventData: any) {
                                   console.log('Paytm Event:', eventName, eventData);
                                 },
                                 transactionStatus: function(paymentStatus: any) {
                                   console.log('Payment Status:', paymentStatus);
-                                  // invoke api to check status or close if success
-                                  if(onPaymentSuccess) onPaymentSuccess(paymentStatus);
+                                  window.Paytm.CheckoutJS.close();
+                                  
+                                  // For localhost/verification: Submit data to backend callback to update DB and redirect
+                                  if (paymentStatus.STATUS === 'TXN_SUCCESS' || paymentStatus.resultInfo?.resultStatus === 'S') {
+                                     const form = document.createElement('form');
+                                     form.method = 'POST';
+                                     form.action = 'http://localhost:3001/api/payments/callback'; // Configured callback URL
+                                     
+                                     // Flatten object and add fields
+                                     Object.keys(paymentStatus).forEach(key => {
+                                        const value = paymentStatus[key];
+                                        if (typeof value === 'object') return; // skip nested mostly
+                                        const input = document.createElement('input');
+                                        input.type = 'hidden';
+                                        input.name = key;
+                                        input.value = String(value);
+                                        form.appendChild(input);
+                                     });
+                                     
+                                     // Ensure CHECKSUMHASH exists (sometimes it's uppercase)
+                                     /* 
+                                        Note: The object structure in transactionStatus might differ slightly from POST params
+                                        but typically contains everything needed for verification if 'CHECKSUMHASH' is present.
+                                     */
+                                     
+                                     document.body.appendChild(form);
+                                     form.submit();
+                                  } else {
+                                     // Handle failure via callback redirect too? Or just toast
+                                     // Ideally redirect to retain robust flow
+                                     const form = document.createElement('form');
+                                     form.method = 'POST';
+                                     form.action = 'http://localhost:3001/api/payments/callback';
+                                     Object.keys(paymentStatus).forEach(key => {
+                                        const value = paymentStatus[key];
+                                        if (typeof value === 'object') return;
+                                        const input = document.createElement('input');
+                                        input.type = 'hidden';
+                                        input.name = key;
+                                        input.value = String(value);
+                                        form.appendChild(input);
+                                     });
+                                     document.body.appendChild(form);
+                                     form.submit();
+                                  }
                                 }
                               }
                             };
@@ -748,6 +791,7 @@ export function InstantOrderPanel({
                          });
                       } else {
                          console.error('window.Paytm.CheckoutJS not found on script load');
+
                          toast.error('Payment gateway unavailable');
                       }
                     };

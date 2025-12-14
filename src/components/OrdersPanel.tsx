@@ -86,13 +86,23 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
     }
   }, [user, recentOrderData]);
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const fetchOrders = async (phone: string) => {
     setLoading(true);
+    setErrorMsg(null);
     try {
+      console.log('Fetching orders for:', phone);
       const resp = await apiService.getOrders(phone);
-      setOrders(resp.orders || []);
-    } catch (err) {
-      toast.error('Failed to load orders');
+      console.log('Orders response:', resp);
+      // API returns { success: true, data: [...], pagination: ... }
+      // The orders list is in resp.data, not resp.orders
+      setOrders(resp.data || []);
+    } catch (err: any) {
+      console.error('Fetch orders error:', err);
+      const msg = err?.message || 'Failed to load orders';
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -118,6 +128,21 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
             </div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <div className={`space-y-6 ${className}`}>
+        <div className="text-center py-16 text-red-600">
+           <AlertCircle className="h-12 w-12 mx-auto mb-4" />
+           <h3 className="font-semibold mb-2">Error Loading Orders</h3>
+           <p>{errorMsg}</p>
+           <Button onClick={() => user?.phone && fetchOrders(user.phone)} className="mt-4" variant="outline">
+             Retry
+           </Button>
+        </div>
       </div>
     );
   }

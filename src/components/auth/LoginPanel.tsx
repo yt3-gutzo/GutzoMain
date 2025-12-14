@@ -225,8 +225,12 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
         }
       }
       
+      
+      // Sanitized phone (10 digits only)
+      const cleanPhone = formattedPhone.replace(/[^\d]/g, '').slice(-10);
+      
       const authData = {
-        phone: formattedPhone.replace('+91', ''),
+        phone: `+91${cleanPhone}`, // Store normalized +91 format in Context/LocalStorage
         name: userInfo.name || '',
         email: userInfo.email || '',
         verified: true,

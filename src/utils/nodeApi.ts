@@ -9,7 +9,17 @@ class NodeApiService {
 
     private formatPhone(phone: string) {
         if (!phone) return "";
-        return phone.startsWith("+91") ? phone : `+91${phone}`;
+        // Remove all spaces and non-digit characters (except + at start if we wanted to keep it, but safer to strip all)
+        const clean = phone.replace(/[^\d]/g, "");
+        // If it starts with 91 and is long enough 12 digits, unlikely to be local number starting with 91
+        // But safer assumption: if 10 digits, add 91. If 12 digits and starts with 91, add +.
+
+        // Simple robust logic for India:
+        // Take last 10 digits. Add +91.
+        if (clean.length >= 10) {
+            return `+91${clean.slice(-10)}`;
+        }
+        return `+91${clean}`; // Fallback
     }
 
     private async request(
@@ -770,24 +780,14 @@ class NodeApiService {
         });
     }
 
-    // Payment Status - PhonePe
+    // Generic Payment Status (Works for Paytm and PhonePe)
+    async getPaymentStatus(orderId: string) {
+        return this.request(`/payments/${orderId}/status`);
+    }
+
+    // Alias for compatibility
     async getPhonePePaymentStatus(orderId: string) {
-        // Map to getPaymentStatus or just check order
-        // api.ts endpoint: /phonepe-status/:id
-        // We can check payment status by merchant_order_id potentially, if we had an endpoint.
-        // Or we can assume this is handled by the generic payment status or order track.
-        // For now, let's try to map to /payments/history and filter, or just fail gracefully.
-        // Actually, we can just fetch the order and check payment_status.
-        // But the frontend might expect specific PhonePe response structure.
-        // Let's implement a 'best effort' check using getOrder.
-        // NOTE: This might need a real backend endpoint.
-        console.warn(
-            "getPhonePePaymentStatus is not fully implemented on Node backend specific endpoint yet.",
-        );
-        return {
-            success: false,
-            message: "Not implemented in Node backend yet",
-        };
+        return this.getPaymentStatus(orderId);
     }
 
     // Payment - Paytm

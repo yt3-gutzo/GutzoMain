@@ -103,7 +103,9 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
 
   const userData = getUserData();
   const displayName = realUserData?.name || userData.name || 'User';
-  const displayPhone = userData.phone ? `+91 ${userData.phone}` : '';
+  // Robust display: Strip everything, take last 10 digits, add +91
+  const rawPhone = (userData.phone || '').replace(/[^\d]/g, '').slice(-10);
+  const displayPhone = rawPhone ? `+91 ${rawPhone}` : '';
   const displayEmail = realUserData?.email || userData.email || '';
 
   // Update temp values when displayName/displayEmail changes
