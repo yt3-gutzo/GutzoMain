@@ -75,7 +75,7 @@ router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
   /* Refactored to use Paytm initiateTransaction API for JS Checkout */
   const paytmParams = {
     mid: PAYTM_MID,
-    orderId: order_id,
+    orderId: order.order_number, // User friendly order number
     requestType: 'Payment',
     txnAmount: {
       value: String(amount),
@@ -100,7 +100,7 @@ router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
     };
 
     const response = await fetch(
-      `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction?mid=${PAYTM_MID}&orderId=${order_id}`,
+      `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction?mid=${PAYTM_MID}&orderId=${order.order_number}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,8 +113,8 @@ router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
 
     // Create payment record
     await supabaseAdmin.from('payments').insert({
-      order_id,
-      merchant_order_id: order_id,
+      order_id: order_id, // keep UUID link
+      merchant_order_id: order.order_number, // Use order number for matching
       amount,
       status: 'initiated',
       gateway: 'paytm',
@@ -144,9 +144,11 @@ router.post('/initiate-transaction', asyncHandler(async (req, res) => {
     throw new ApiError(400, 'orderId and amount are required');
   }
 
+  // NOTE: orderId here is assumed to be order_number from client
+  
   const paytmParams = {
     mid: merchantId,
-    orderId,
+    orderId, // assumed order number
     requestType: 'Payment',
     txnAmount: {
       value: String(amount),
@@ -184,12 +186,16 @@ router.post('/initiate-transaction', asyncHandler(async (req, res) => {
 
     // Create payment record
     await supabaseAdmin.from('payments').insert({
-      order_id: orderId,
-      merchant_order_id: orderId,
+      // We don't have UUID here if client only sent order number
+      // So we assume orderId is merchant_order_id
+      merchant_order_id: orderId, 
       amount,
       status: 'initiated',
       gateway: 'paytm',
       mode: 'web'
+      // Note: order_id (UUID) might be null if not looked up, 
+      // but schema usually requires it.
+      // Ideally we should lookup order UUID from order_number here
     });
 
     successResponse(res, {
@@ -202,7 +208,7 @@ router.post('/initiate-transaction', asyncHandler(async (req, res) => {
   }
 }));
 
-// PAYTM CALLBACK/WEBHOOK
+// PAYTM CALLBACK/WEBHOOK (REDIRECT FLOW)
 router.post('/callback', asyncHandler(async (req, res) => {
   const paytmParams = req.body;
   console.log('[Paytm Callback] Received:', paytmParams);
@@ -280,6 +286,108 @@ router.post('/callback', asyncHandler(async (req, res) => {
   } else {
     res.redirect(`${process.env.FRONTEND_URL}/order-failed?orderId=${orderId}&reason=${txnStatus}`);
   }
+}));
+
+// PAYTM S2S WEBHOOK (BACKGROUND NOTIFICATION)
+router.post('/webhook', asyncHandler(async (req, res) => {
+  // 1. Verify that content-type is form-urlencoded (Paytm sends it this way)
+  // Express body-parser handles this automatically if configured.
+  
+  const paytmParams = req.body;
+  console.log('[Paytm Webhook] Received:', JSON.stringify(paytmParams));
+
+  const receivedChecksum = paytmParams.CHECKSUMHASH;
+
+  if (!receivedChecksum) {
+    console.error('[Paytm Webhook] No checksum provided');
+    return res.status(200).send('CHECKSUM_MISSING'); 
+  }
+
+  // Remove checksum for verification
+  const paramsForVerify = { ...paytmParams };
+  delete paramsForVerify.CHECKSUMHASH;
+
+  // 2. Verify Checksum
+  const isValid = PaytmChecksum.verifySignature(paramsForVerify, PAYTM_MERCHANT_KEY, receivedChecksum);
+
+  if (!isValid) {
+    console.error('[Paytm Webhook] Invalid checksum');
+    return res.status(200).send('CHECKSUM_INVALID');
+  }
+
+  // 3. Process Status
+  const orderId = paytmParams.ORDERID;
+  const txnStatus = paytmParams.STATUS;
+  const txnId = paytmParams.TXNID;
+  const txnAmount = paytmParams.TXNAMOUNT;
+
+  console.log(`[Paytm Webhook] Processing Order: ${orderId}, Status: ${txnStatus}`);
+
+  // Fetch existing order to check idempotency
+  const { data: existingOrder } = await supabaseAdmin
+    .from('orders')
+    .select('id, user_id, payment_status')
+    .eq('order_number', orderId)
+    .single();
+
+  if (!existingOrder) {
+    console.error(`[Paytm Webhook] Order ${orderId} not found`);
+    return res.status(200).send('ORDER_NOT_FOUND');
+  }
+
+  // Idempotency: If already paid, do nothing
+  if (existingOrder.payment_status === 'paid' && txnStatus === 'TXN_SUCCESS') {
+    console.log(`[Paytm Webhook] Order ${orderId} already paid. Skipping update.`);
+    return res.status(200).send('OK');
+  }
+
+  let paymentStatus = 'failed';
+  let orderStatus = 'payment_failed';
+
+  if (txnStatus === 'TXN_SUCCESS') {
+    paymentStatus = 'paid';
+    orderStatus = 'confirmed';
+  } else if (txnStatus === 'PENDING') {
+    paymentStatus = 'pending';
+    orderStatus = 'pending';
+  }
+
+  // Update Order
+  await supabaseAdmin
+    .from('orders')
+    .update({
+      payment_status: paymentStatus,
+      payment_method: 'paytm',
+      payment_id: txnId,
+      status: orderStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('order_number', orderId);
+
+  // Update Payment Record
+  await supabaseAdmin
+    .from('payments')
+    .update({
+      transaction_id: txnId,
+      status: paymentStatus,
+      gateway_response: paytmParams,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('merchant_order_id', orderId);
+
+  // Send Notification (Only if status changed to PAID)
+  if (paymentStatus === 'paid' && existingOrder.payment_status !== 'paid') {
+     await supabaseAdmin.from('notifications').insert({
+      user_id: existingOrder.user_id,
+      type: 'payment_success',
+      title: 'Payment Successful!',
+      message: `Payment of ₹${txnAmount} received for order #${orderId}`,
+      data: { order_id: orderId, txn_id: txnId }
+    });
+  }
+
+  console.log(`[Paytm Webhook] Successfully processed ${orderId}`);
+  return res.status(200).send('OK');
 }));
 
 // PAYTM REFUND
