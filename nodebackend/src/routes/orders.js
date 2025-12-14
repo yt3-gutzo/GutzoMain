@@ -57,7 +57,9 @@ const calculateOrderTotal = async (items, vendorId, couponCode = null) => {
     .eq('id', vendorId)
     .single();
 
-  const deliveryFee = vendor?.delivery_fee || 0;
+  const deliveryFee = vendor?.delivery_fee || 50; // Default to 50 if missing, matching UI
+  const packagingFee = 0; // Removed separate packaging fee
+  const platformFee = 10; // Fixed platform fee matching UI (incl 18% GST)
   let discount = 0;
 
   // Apply coupon if provided
@@ -83,11 +85,21 @@ const calculateOrderTotal = async (items, vendorId, couponCode = null) => {
     }
   }
 
-  const total = subtotal + deliveryFee - discount;
+  // Calculate included taxes for reporting (approximate based on UI logic)
+  // UI logic: 5% on items, 18% on fees. Both are inclusive.
+  const itemTax = subtotal - (subtotal / 1.05);
+  const feeTax = (deliveryFee + platformFee) - ((deliveryFee + platformFee) / 1.18);
+  const totalTax = Math.round(itemTax + feeTax);
+
+  // Total is sum of components (prices are inclusive)
+  const total = subtotal + deliveryFee + packagingFee + platformFee - discount;
 
   return {
     subtotal,
     deliveryFee,
+    packagingFee,
+    platformFee,
+    taxes: totalTax, // Use calculated inclusive tax
     discount,
     total,
     itemDetails
@@ -102,54 +114,73 @@ router.use(authenticate);
 // POST /api/orders
 // ============================================
 router.post('/', validate(schemas.createOrder), asyncHandler(async (req, res) => {
-  const {
-    vendor_id,
-    items,
-    delivery_address,
-    delivery_phone,
-    coupon_code,
-    tip_amount = 0,
-    special_instructions,
-    payment_method,
-    order_source = 'app'
-  } = req.body;
-
-  // Verify vendor is open
-  const { data: vendor, error: vendorError } = await supabaseAdmin
-    .from('vendors')
-    .select('*')
-    .eq('id', vendor_id)
-    .eq('is_active', true)
-    .single();
-
-  if (vendorError || !vendor) throw new ApiError(404, 'Vendor not found');
-  if (!vendor.is_open) throw new ApiError(400, 'Vendor is currently closed');
-
-  // Calculate totals
-  const calculation = await calculateOrderTotal(items, vendor_id, coupon_code);
-
-  // Check minimum order
-  if (vendor.minimum_order && calculation.subtotal < vendor.minimum_order) {
-    throw new ApiError(400, `Minimum order amount is ₹${vendor.minimum_order}`);
-  }
-
-  const orderNumber = generateOrderNumber();
-  const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
-
-  // Create order
-  const { data: order, error: orderError } = await supabaseAdmin
-    .from('orders')
-    .insert({
-      order_number: orderNumber,
-      user_id: req.user.id,
-      user_phone: req.user.phone,
+  try {
+    const {
       vendor_id,
-      vendor_name: vendor.name,
-      delivery_address: JSON.stringify(delivery_address),
+      items,
+      delivery_address,
       delivery_phone,
-      subtotal: calculation.subtotal,
+      coupon_code,
+      tip_amount = 0,
+      special_instructions,
+      payment_method,
+      order_source = 'app'
+    } = req.body;
+
+    console.log('📦 Creating Order:', { vendor_id, itemCount: items.length });
+
+    // Verify vendor is open
+    const { data: vendor, error: vendorError } = await supabaseAdmin
+      .from('vendors')
+      .select('*')
+      .eq('id', vendor_id)
+      .eq('is_active', true)
+      .single();
+
+    if (vendorError) {
+        console.error('❌ Vendor Error:', vendorError);
+        throw new ApiError(404, 'Vendor not found');
+    }
+    if (!vendor) {
+        console.error('❌ Vendor not found');
+        throw new ApiError(404, 'Vendor not found');
+    }
+    if (!vendor.is_open) throw new ApiError(400, 'Vendor is currently closed');
+
+    // Calculate totals
+    console.log('🧮 Calculating totals...');
+    const calculation = await calculateOrderTotal(items, vendor_id, coupon_code);
+
+    // Check minimum order
+    // Check minimum order
+    /* Disabled as per user request
+    if (vendor.minimum_order && calculation.subtotal < vendor.minimum_order) {
+      throw new ApiError(400, `Minimum order amount is ₹${vendor.minimum_order}`);
+    }
+    */
+
+    const orderNumber = generateOrderNumber();
+    const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    console.log('📝 Inserting Order:', orderNumber);
+
+    // Create order
+    const { data: order, error: orderError } = await supabaseAdmin
+      .from('orders')
+      .insert({
+        order_number: orderNumber,
+        user_id: req.user.id,
+        // user_phone removed as it is not in schema
+        vendor_id,
+        // vendor_name removed as it is not in schema
+        delivery_address: JSON.stringify(delivery_address),
+        delivery_phone,
+        subtotal: calculation.subtotal,
       delivery_fee: calculation.deliveryFee,
-      discount: calculation.discount,
+      packaging_fee: calculation.packagingFee,
+      platform_fee: calculation.platformFee,
+      taxes: calculation.taxes,
+      discount_amount: calculation.discount,
       tip_amount,
       total_amount: calculation.total + tip_amount,
       status: 'placed',
@@ -163,18 +194,22 @@ router.post('/', validate(schemas.createOrder), asyncHandler(async (req, res) =>
     .select()
     .single();
 
-  if (orderError) throw new ApiError(500, 'Failed to create order');
+  if (orderError) {
+      console.error('❌ DB Error inserting order:', orderError);
+      throw new ApiError(500, `Failed to create order: ${orderError.message}`);
+  }
 
   // Create order items
   const orderItems = calculation.itemDetails.map(item => ({
     order_id: order.id,
     product_id: item.product_id,
+    vendor_id: vendor_id, // Added matching schema
     product_name: item.product_name,
     quantity: item.quantity,
     unit_price: item.unit_price,
     total_price: item.total_price,
-    variant_id: item.variant_id,
-    addons: item.addons ? JSON.stringify(item.addons) : null,
+    // variant_id removed
+    customizations: item.addons ? JSON.stringify(item.addons) : null, // Mapped addons to customizations
     special_instructions: item.special_instructions
   }));
 
@@ -183,9 +218,10 @@ router.post('/', validate(schemas.createOrder), asyncHandler(async (req, res) =>
     .insert(orderItems);
 
   if (itemsError) {
+    console.error('❌ DB Error inserting order items:', itemsError);
     // Rollback order
     await supabaseAdmin.from('orders').delete().eq('id', order.id);
-    throw new ApiError(500, 'Failed to create order items');
+    throw new ApiError(500, `Failed to create order items: ${itemsError.message}`);
   }
 
   // Update coupon usage if used
@@ -252,6 +288,10 @@ router.post('/', validate(schemas.createOrder), asyncHandler(async (req, res) =>
       total: calculation.total + tip_amount
     }
   }, 'Order placed successfully', 201);
+  } catch (error) {
+     console.error('❌ Create Order Unhandled Error:', error);
+     throw error; // Re-throw to be caught by asyncHandler
+  }
 }));
 
 // ============================================

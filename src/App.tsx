@@ -237,7 +237,7 @@ function AppContent() {
   const listingsRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const { navigate } = useRouter();
-  const { clearCart } = useCart();
+  const { clearCart, items: cartItems } = useCart();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [addressRefreshTrigger, setAddressRefreshTrigger] = useState(0); // Trigger for address updates
 
@@ -680,7 +680,7 @@ function AppContent() {
       <InstantOrderPanel
         isOpen={showCheckoutPanel}
         onClose={handleCloseCheckout}
-        cartItems={checkoutData?.items || []}
+        cartItems={cartItems}
         onPaymentSuccess={handlePaymentSuccess}
         onAddAddress={() => {
           setShowAddressModal(true);

@@ -792,13 +792,15 @@ class NodeApiService {
 
     // Payment - Paytm
     async initiatePaytmPayment(
+        phone: string, // Added phone param
         orderId: string,
         amount: string | number,
         customerId: string,
     ) {
+        const formattedPhone = this.formatPhone(phone);
         return this.request("/payments/initiate", {
             method: "POST",
-            headers: { "x-user-phone": "unknown" }, // We might need phone here
+            headers: { "x-user-phone": formattedPhone },
             body: { order_id: orderId, amount },
         });
     }

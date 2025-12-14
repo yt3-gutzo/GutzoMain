@@ -72,22 +72,44 @@ router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
   if (!order) throw new ApiError(404, 'Order not found');
   if (order.payment_status === 'paid') throw new ApiError(400, 'Order already paid');
 
+  /* Refactored to use Paytm initiateTransaction API for JS Checkout */
   const paytmParams = {
-    MID: PAYTM_MID,
-    WEBSITE: PAYTM_WEBSITE_NAME,
-    INDUSTRY_TYPE_ID: 'Retail',
-    CHANNEL_ID: 'WEB',
-    ORDER_ID: order_id,
-    CUST_ID: req.user.id,
-    TXN_AMOUNT: String(amount),
-    CALLBACK_URL: PAYTM_CALLBACK_URL,
-    EMAIL: req.user.email || '',
-    MOBILE_NO: req.user.phone?.replace('+91', '') || '',
+    mid: PAYTM_MID,
+    orderId: order_id,
+    requestType: 'Payment',
+    txnAmount: {
+      value: String(amount),
+      currency: 'INR'
+    },
+    userInfo: {
+      custId: req.user.id
+    },
+    callbackUrl: PAYTM_CALLBACK_URL,
+    industryType: 'Retail',
+    channelId: 'WEB',
+    websiteName: PAYTM_WEBSITE_NAME,
   };
 
   try {
-    const checksum = await PaytmChecksum.generateSignature(paytmParams, PAYTM_MERCHANT_KEY);
+    const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams), PAYTM_MERCHANT_KEY);
     console.log('Generated Paytm Checksum:', checksum);
+
+    const payload = {
+      body: paytmParams,
+      head: { signature: checksum }
+    };
+
+    const response = await fetch(
+      `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction?mid=${PAYTM_MID}&orderId=${order_id}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await response.json();
+    console.log('Paytm initiateTransaction response:', data);
 
     // Create payment record
     await supabaseAdmin.from('payments').insert({
@@ -99,18 +121,15 @@ router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
       mode: 'web'
     });
 
-    // For web integration, return params to be used in form POST
     successResponse(res, {
-      paytmParams: {
-        ...paytmParams,
-        CHECKSUMHASH: checksum,
-      },
-      paymentUrl: `${PAYTM_BASE_URL}/theia/processTransaction`,
+      checksum,
+      mid: PAYTM_MID,
+      paytmResponse: data,
       message: 'Paytm payment initiated'
     });
   } catch (err) {
-    console.error('Paytm checksum error:', err);
-    throw new ApiError(500, 'Failed to generate Paytm checksum');
+    console.error('Paytm API error:', err);
+    throw new ApiError(500, 'Failed to initiate Paytm transaction');
   }
 }));
 

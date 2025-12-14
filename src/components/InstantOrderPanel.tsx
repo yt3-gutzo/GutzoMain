@@ -665,7 +665,7 @@ export function InstantOrderPanel({
                     })),
                     delivery_address: selectedAddress,
                     delivery_phone: userPhone,
-                    payment_method: 'paytm',
+                    payment_method: 'wallet', // Map Paytm to 'wallet' for backend validation
                     special_instructions: specialInstructions.trim() || undefined
                   };
 
@@ -683,15 +683,17 @@ export function InstantOrderPanel({
                   console.log('✅ Order created:', orderId);
 
                   // 2. Initiate Payment with Real Order ID
-                  const data = await apiService.initiatePaytmPayment(orderId, amount, user?.id || userPhone);
+                  const data = await apiService.initiatePaytmPayment(userPhone, orderId, amount, user?.id || userPhone);
                   
                   // Check for success - the backend might return paytmResponse (new) or initiateTransactionResponse (old)
-                  // and txnToken might be at root (new) or nested (old)
-                  const paytmResp = data.paytmResponse || data.initiateTransactionResponse;
-                  const token = data.txnToken || paytmResp?.body?.txnToken;
+                  // The data object from apiService return might be nested in data.data or root depending on wrapper
+                  // Based on logs: { success: true, data: { paytmResponse: ... } }
+                  const responseData = data.data || data; 
+                  const paytmResp = responseData.paytmResponse || responseData.initiateTransactionResponse;
+                  const token = responseData.txnToken || paytmResp?.body?.txnToken;
 
                   if (data.success && token && paytmResp) {
-                    const mid = data.mid || paytmResp.body.mid || 'xFDrTr50750120794198';
+                    const mid = responseData.mid || paytmResp.body.mid || 'xFDrTr50750120794198';
                     console.log('Initializing Paytm with MID:', mid);
 
                     // Load Paytm JS Checkout and invoke payment
