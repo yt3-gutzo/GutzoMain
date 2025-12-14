@@ -10,6 +10,7 @@ import { ImageWithFallback } from './common/ImageWithFallback';
 import { Product, Vendor } from '../types/index';
 import { nodeApiService as apiService } from '../utils/nodeApi';
 import { useRouter } from './Router';
+import { useAuth } from '../contexts/AuthContext';
 
 export interface CartItem {
   id: string;
@@ -40,6 +41,8 @@ interface InstantOrderPanelProps {
   onProceedToPayment?: (orderData: InstantOrderData) => void;
   onPaymentSuccess?: (paymentData: any) => void;
   onAddAddress?: () => void;
+  refreshTrigger?: number;
+  newAddressId?: string | null;
 }
 
 export interface InstantOrderData {
@@ -59,7 +62,9 @@ export function InstantOrderPanel({
   onConfirmOrder,
   onProceedToPayment,
   onPaymentSuccess,
-  onAddAddress
+  onAddAddress,
+  refreshTrigger = 0,
+  newAddressId
 }: InstantOrderPanelProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [syncedItems, setSyncedItems] = useState<CartItem[]>([]);
@@ -178,31 +183,68 @@ export function InstantOrderPanel({
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [showAddressPanel, setShowAddressPanel] = useState(false);
   const [userPhone, setUserPhone] = useState('');
+  const { user } = useAuth(); // Use auth context for reliable user data
 
   useEffect(() => {
-    let phone = '';
-    try {
-      const authData = localStorage.getItem('gutzo_auth');
-      if (authData) {
-        const parsed = JSON.parse(authData);
-        phone = parsed.phone || '';
-      }
-    } catch {}
-    const formatted = phone && phone.startsWith('+91') ? phone : (phone ? `+91${phone}` : '');
-    setUserPhone(formatted);
-    if (formatted) {
+    console.log('🔄 [InstantOrderPanel] sync initiated', { 
+      isOpen, 
+      refreshTrigger,
+      userPhone: user?.phone 
+    });
+
+    if (user?.phone) {
+      const formatted = user.phone.startsWith('+91') 
+        ? user.phone 
+        : `+91${user.phone}`;
+      
+      setUserPhone(formatted);
+      
+      console.log('📡 [InstantOrderPanel] Fetching addresses for:', formatted);
+      
       import('../utils/addressApi').then(({ AddressApi }) => {
         AddressApi.getUserAddresses(formatted).then(res => {
+          console.log('📥 [InstantOrderPanel] Address API Response:', res);
+          
           if (res.success && Array.isArray(res.data)) {
             setAddresses(res.data);
-            setSelectedAddress(res.data.find(a => a.is_default) || res.data[0]);
+            
+            // LOGIC: Auto-select newly added address OR default
+            let addressToSelect = null;
+            
+            if (newAddressId) {
+              console.log('🔍 [InstantOrderPanel] Looking for newAddressId:', newAddressId);
+              const newAddr = res.data.find(a => a.id === newAddressId);
+              if (newAddr) {
+                console.log('✨ [InstantOrderPanel] Auto-selecting new address:', newAddr);
+                addressToSelect = newAddr;
+              } else {
+                 console.warn('⚠️ [InstantOrderPanel] New address ID not found in fetched list:', newAddressId);
+                 // Dump IDs for debugging
+                 console.log('📋 Available IDs:', res.data.map(a => a.id));
+              }
+            }
+            
+            if (!addressToSelect) {
+               addressToSelect = res.data.find(a => a.is_default) || res.data[0];
+            }
+            
+            setSelectedAddress(addressToSelect);
+            console.log('✅ [InstantOrderPanel] Final Selected address:', addressToSelect);
+            
           } else if (res.success && !res.data) {
+             console.log('⚠️ [InstantOrderPanel] No addresses found in response data');
              setAddresses([]);
+          } else {
+             console.error('❌ [InstantOrderPanel] Address fetch failed or invalid format');
           }
+        }).catch(err => {
+          console.error('❌ [InstantOrderPanel] Address fetch error:', err);
         });
       });
+    } else {
+      console.log('ℹ️ [InstantOrderPanel] No user phone available, skipping fetch');
     }
-  }, [isOpen]);
+  }, [isOpen, refreshTrigger, user?.phone, newAddressId]);
 
   if (!isOpen) return null;
 
@@ -342,17 +384,43 @@ export function InstantOrderPanel({
                       <p className="text-xs text-gray-600 mt-1">{selectedAddress.landmark ? selectedAddress.landmark : userPhone}</p>
                     </div>
                   ) : (
-                    <p className="text-gray-500">No address selected.</p>
+                    <div className="flex flex-col items-start">
+                       <p className="text-gray-500 mb-2 text-sm">No address found.</p>
+                       <Button 
+                         size="sm" 
+                         className="bg-gutzo-primary text-white h-8 text-xs"
+                         onClick={() => {
+                           if (onAddAddress) onAddAddress();
+                         }}
+                       >
+                         + Add Address
+                       </Button>
+                    </div>
                   )}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-gutzo-primary border-gutzo-primary hover:bg-gutzo-primary/5 text-xs"
-                  onClick={() => setShowAddressPanel(true)}
-                >
-                  Change
-                </Button>
+                <div className="flex flex-col gap-2">
+                  {selectedAddress && addresses.length > 1 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-gutzo-primary border-gutzo-primary hover:bg-gutzo-primary/5 text-xs w-full"
+                      onClick={() => setShowAddressPanel(true)}
+                    >
+                      Change
+                    </Button>
+                  )}
+                  {selectedAddress && (
+                    <Button
+                      size="sm"
+                      className="bg-gutzo-primary text-white text-xs h-8 px-3"
+                      onClick={() => {
+                        if (onAddAddress) onAddAddress();
+                      }}
+                    >
+                      + Add
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
             {showAddressPanel && (
@@ -566,17 +634,49 @@ export function InstantOrderPanel({
             <Button
               onClick={async () => {
                 if (cartItems.length === 0 || isProcessing) return;
+                
+                if (!selectedAddress) {
+                  toast.error('Please select a delivery address');
+                  return;
+                }
+
                 setIsProcessing(true);
                 try {
-                  const orderId = `ORD_${Date.now()}`;
-                  const amount = totalAmount > 0 ? totalAmount.toFixed(2) : '1.00';
-                  // Ensure userPhone is always set and valid
-                  let customerId = userPhone;
-                  if (!customerId || typeof customerId !== 'string' || customerId.trim() === '') {
-                    customerId = 'CUST_' + Date.now();
+                  // 1. Create order first
+                  const orderPayload = {
+                    vendor_id: displayVendor?.id || cartItems[0].vendorId, // Fallback if vendor object missing
+                    items: syncedItems.length > 0 ? syncedItems.map(item => ({
+                      product_id: item.productId || item.id,
+                      quantity: item.quantity,
+                      variant_id: undefined, // Add if variant support needed
+                      addons: undefined,     // Add if addons support needed
+                      special_instructions: undefined // Add if needed
+                    })) : cartItems.map(item => ({
+                      product_id: item.productId || item.id,
+                      quantity: item.quantity
+                    })),
+                    delivery_address: selectedAddress,
+                    delivery_phone: userPhone,
+                    payment_method: 'paytm',
+                    special_instructions: specialInstructions.trim() || undefined
+                  };
+
+                  console.log('📝 Creating order with payload:', orderPayload);
+                  const orderRes = await apiService.createOrder(userPhone, orderPayload);
+                  
+                  if (!orderRes.success || !orderRes.data || !orderRes.data.order) {
+                     throw new Error(orderRes.message || 'Failed to create order');
                   }
-                  // Call Paytm payment API
-                  const data = await apiService.initiatePaytmPayment(orderId, amount, customerId);
+
+                  const order = orderRes.data.order;
+                  const orderId = order.id; // Real UUID from backend
+                  const amount = order.total_amount || totalAmount;
+
+                  console.log('✅ Order created:', orderId);
+
+                  // 2. Initiate Payment with Real Order ID
+                  const data = await apiService.initiatePaytmPayment(orderId, amount, user?.id || userPhone);
+                  
                   // Check for success - the backend might return paytmResponse (new) or initiateTransactionResponse (old)
                   // and txnToken might be at root (new) or nested (old)
                   const paytmResp = data.paytmResponse || data.initiateTransactionResponse;
@@ -611,7 +711,12 @@ export function InstantOrderPanel({
                               },
                               flow: "DEFAULT",
                               data: {
-                                orderId: orderId,
+                                orderId: orderId, // Use order_number for Paytm display if preferred, or ID. Backend expects ID for validation? Backend initiate uses ID. 
+                                // WAIT: Backend initiate uses ID to look up order. But Paytm params use ORDER_ID.
+                                // If backend initiated with UUID, then Paytm expects UUID.
+                                // Let's check backend: router.post('/initiate'...) uses req.body.order_id to fetch order.
+                                // Then it sends ORDER_ID: order_id to Paytm.
+                                // So we MUST use the same ID we sent to /initiate.
                                 token: token,
                                 tokenType: "TXN_TOKEN",
                                 amount: String(amount) // Ensure string
@@ -647,12 +752,13 @@ export function InstantOrderPanel({
                     toast.error('Paytm initiation failed: ' + (data.error || 'Invalid response from server'));
                   }
                 } catch (err: any) {
-                  toast.error('Paytm payment error: ' + (err?.message || String(err)));
+                  console.error('Process error:', err);
+                  toast.error('Order/Payment error: ' + (err?.message || String(err)));
                 } finally {
                   setIsProcessing(false);
                 }
               }}
-              disabled={cartItems.length === 0 || isProcessing}
+              disabled={cartItems.length === 0 || isProcessing || !selectedAddress}
               className="w-full bg-gradient-to-r from-gutzo-primary to-gutzo-primary-hover text-white font-medium py-4 rounded-xl hover:shadow-lg transition-all disabled:opacity-50"
             >
               {isProcessing ? (

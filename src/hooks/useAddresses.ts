@@ -74,7 +74,7 @@ export function useAddresses() {
   // Create new address
   const createAddress = async (
     addressData: AddressFormData,
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; data?: any }> => {
     if (!isAuthenticated || !user?.phone) {
       return { success: false, error: "User not authenticated" };
     }
@@ -88,7 +88,7 @@ export function useAddresses() {
       if (response.success) {
         // Refresh addresses and available types
         await Promise.all([fetchAddresses(), fetchAvailableTypes()]);
-        return { success: true };
+        return { success: true, data: response.data || undefined };
       } else {
         setError(response.error || "Failed to create address");
         return { success: false, error: response.error };

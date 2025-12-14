@@ -332,18 +332,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
 
     return (
       <div className="space-y-6">
-        {/* Real Data Indicator */}
-        {realUserData && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-green-700 font-medium">Live Database Connected</span>
-            </div>
-            <p className="text-xs text-green-600 mt-1">
-              Profile data synced with Supabase database
-            </p>
-          </div>
-        )}
+
 
         {/* Profile Header */}
         <div className="text-center">
@@ -511,18 +500,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
 
     return (
       <div className="space-y-4">
-        {/* Real Data Indicator */}
-        {realOrders.length > 0 && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-green-700 font-medium">Live Orders from Database</span>
-            </div>
-            <p className="text-xs text-green-600 mt-1">
-              {realOrders.length} orders found in Supabase database
-            </p>
-          </div>
-        )}
+
 
         <OrdersPanel 
           onViewOrderDetails={onViewOrderDetails} 
@@ -708,20 +686,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
               </div>
             )}
 
-            {/* Real Data Indicators */}
-            {content === 'address' && realAddresses.length > 0 && (
-              <div className="mb-4">
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-sm text-green-700 font-medium">Live Database Connected</span>
-                  </div>
-                  <p className="text-xs text-green-600 mt-1">
-                    {realAddresses.length} addresses synced with Supabase database
-                  </p>
-                </div>
-              </div>
-            )}
+
 
             {/* Content Rendering */}
             {content === 'profile' && renderProfileContent()}

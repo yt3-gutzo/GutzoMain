@@ -239,6 +239,8 @@ function AppContent() {
   const { navigate } = useRouter();
   const { clearCart } = useCart();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [addressRefreshTrigger, setAddressRefreshTrigger] = useState(0); // Trigger for address updates
+
   // Next steps state for meal plan
   // (already declared above, remove duplicate)
 
@@ -492,7 +494,18 @@ function AppContent() {
     setShowPaymentSuccess(true);
     setShowProfilePanel(false);
   };
+  const [newlyAddedAddressId, setNewlyAddedAddressId] = useState<string | null>(null);
+
   const handleAddressAdded = async (address: any) => {
+    console.log('🏗️ [App] handleAddressAdded called with:', address);
+    // If address has an ID (returned from backend), store it to auto-select
+    if (address && address.id) {
+      console.log('✅ [App] Setting newlyAddedAddressId to:', address.id);
+      setNewlyAddedAddressId(address.id);
+    } else {
+      console.warn('⚠️ [App] No ID found in added address object!');
+    }
+    setAddressRefreshTrigger(prev => prev + 1);
     setShowAddressModal(false);
   };
   const handleAddressSelected = (address: any) => {
@@ -663,20 +676,17 @@ function AppContent() {
         onShowCheckout={handleShowCheckout}
       />
       {/* Show CartStrip only when cart, profile, and login panels are not open */}
-      {!showCartPanel && !showProfilePanel && !showLoginPanel && <CartStrip onShowCart={handleShowCart} />}
+      {!showCartPanel && !showProfilePanel && !showLoginPanel && !showCheckoutPanel && <CartStrip onShowCart={handleShowCart} />}
       <InstantOrderPanel
         isOpen={showCheckoutPanel}
         onClose={handleCloseCheckout}
         cartItems={checkoutData?.items || []}
         onPaymentSuccess={handlePaymentSuccess}
         onAddAddress={() => {
-          setShowCheckoutPanel(false);
-          setReturnToCheckout(true);
-          setTimeout(() => {
-            setProfilePanelContent('address');
-            setShowProfilePanel(true);
-          }, 250);
+          setShowAddressModal(true);
         }}
+        refreshTrigger={addressRefreshTrigger}
+        newAddressId={newlyAddedAddressId}
       />
       {paymentSuccessData && (
         <PaymentSuccessModal

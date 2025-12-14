@@ -16,8 +16,8 @@ export class AddressApi {
       if (!userPhone) {
         return { success: false, error: "User not authenticated" };
       }
-      const data = await apiService.getUserAddresses(userPhone);
-      return { success: true, data: data || [] };
+      const response = await apiService.getUserAddresses(userPhone);
+      return { success: true, data: response?.data || [] };
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -59,7 +59,8 @@ export class AddressApi {
         return { success: false, error: "User not authenticated" };
       }
       const result = await apiService.createAddress(userPhone, addressData);
-      return { success: true, data: result };
+      // Result is { success: true, data: address_object }
+      return { success: true, data: result.data || result };
     } catch (error: any) {
       return { success: false, error: error.message };
     }

@@ -715,7 +715,7 @@ export function AddressModal({
       if (result.success) {
         console.log('✅ Address saved successfully');
         // Only trigger onSave to update UI (fetch latest addresses), not to create another address
-        if (onSave) await onSave(addressPayload);
+        if (onSave) await onSave(result.data || addressPayload);
         // Reset and close
         handleClose();
       } else {
