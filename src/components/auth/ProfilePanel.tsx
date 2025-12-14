@@ -40,7 +40,23 @@ interface ProfilePanelProps {
   } | null;
 }
 
+// Helper hook for media queries
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) setMatches(media.matches);
+    const listener = () => setMatches(media.matches);
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, [query, matches]);
+  return matches;
+}
+
 export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onViewOrderDetails, recentOrderData }: ProfilePanelProps) {
+  // Check for desktop view
+  const isDesktop = useMediaQuery('(min-width: 850px)');
+  
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   
   // Real user data state
@@ -631,13 +647,14 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
     <>
       {/* Panel */}
       <div 
-        className={`fixed z-50 bg-white shadow-2xl transform transition-transform duration-300
-          bottom-0 left-0 w-full max-h-[85vh] rounded-t-3xl border-t border-gray-100
-          ${isOpen ? 'translate-y-0' : 'translate-y-full'}
-          md:top-0 md:right-0 md:h-full md:w-[95%] md:max-w-[600px] md:max-h-full md:rounded-none md:border-none
-          md:translate-y-0
-          ${isOpen ? 'md:translate-x-0' : 'md:translate-x-full'}
-        `}
+        className={isDesktop 
+          ? `fixed top-0 right-0 h-full w-[95%] max-w-[600px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
+              isOpen ? 'translate-x-0' : 'translate-x-full'
+            }`
+          : `fixed bottom-0 left-0 w-full max-h-[85vh] bg-white shadow-2xl z-50 rounded-t-3xl border-t border-gray-100 transform transition-transform duration-300 ${
+              isOpen ? 'translate-y-0' : 'translate-y-full'
+            }`
+        }
       >
         {/* Close Button */}
         <div className="absolute top-4 left-4 z-10">
