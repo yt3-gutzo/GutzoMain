@@ -1,6 +1,6 @@
 import React from "react";
 
-const VendorDetailsPage: React.FC = ({ children }) => {
+const VendorDetailsPage: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
   return (
     <div
       style={{

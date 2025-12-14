@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiService } from '../utils/api';
+import { nodeApiService } from '../utils/nodeApi';
 
 // Types
 interface AuthData {
@@ -52,8 +52,6 @@ export const useAuth = () => {
 const AUTH_CONFIG = {
   VALIDATION_INTERVAL: 60 * 60 * 1000, // 1 hour
   TOKEN_EXPIRY: 30 * 24 * 60 * 60 * 1000, // 30 days
-  SUPABASE_URL: import.meta.env.VITE_SUPABASE_FUNCTION_URL,
-  SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY
 };
 
 // Auth Provider Component
@@ -175,10 +173,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Validate user against database with fallback logic
   const validateUserWithFallback = async (authData: AuthData): Promise<boolean> => {
     try {
-      console.log('🔍 Validating user via apiService...');
-      const result = await apiService.validateUser(authData.phone);
-      const isValid = result.userExists && result.verified;
-      console.log(`✅ User validation result: exists=${result.userExists}, verified=${result.verified}, valid=${isValid}`);
+      console.log('🔍 Validating user via nodeApiService...');
+      const result = await nodeApiService.validateUser(authData.phone);
+      
+      if (!result.success) {
+         console.log('❌ User validation failed - API error:', result.error);
+         return false;
+      }
+
+      const isValid = result.data?.userExists && result.data?.verified;
+      console.log(`✅ User validation result: exists=${result.data?.userExists}, verified=${result.data?.verified}, valid=${isValid}`);
+      
       if (isValid) {
         const updatedAuth = { ...authData, lastValidated: Date.now() };
         saveAuthData(updatedAuth);
@@ -199,9 +204,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Fetch detailed user data
   const fetchUserData = async (phone: string): Promise<UserData | null> => {
     try {
-      console.log('📱 Fetching detailed user data via apiService for phone:', phone);
-      const userData = await apiService.getUser(phone);
-      if (userData.userExists && userData.name) {
+      console.log('📱 Fetching detailed user data via nodeApiService for phone:', phone);
+      const response = await nodeApiService.getUser(phone);
+      
+      if (response.success && response.data?.exists && response.data?.user) {
+        const userData = response.data.user;
         console.log('✅ User data fetched successfully');
         return {
           id: userData.id,
@@ -308,12 +315,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
     }
   };
+    // ... skipping unrelated code ...
 
   // Create user in database if they don't exist
   const createUserInDatabase = async (authData: AuthData): Promise<void> => {
     try {
-      console.log('👤 Creating user in database via apiService...');
-      await apiService.createUser({
+      console.log('👤 Creating user in database via nodeApiService...');
+      await nodeApiService.createUser({
         phone: authData.phone,
         name: authData.name || 'User',
         verified: authData.verified,

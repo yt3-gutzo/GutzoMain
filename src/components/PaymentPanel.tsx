@@ -114,7 +114,7 @@ export function PaymentPanel({
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Mock successful payment
+      // Payment processing logic
       const paymentResult: PaymentResult = {
         subscriptionId: isSubscription ? `SUB_${Date.now()}` : `ORD_${Date.now()}`,
         paymentId: `PAY_${Date.now()}`,

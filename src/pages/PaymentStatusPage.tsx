@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { apiService } from '../utils/api';
+import { nodeApiService as apiService } from '../utils/nodeApi';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -34,7 +34,7 @@ export default function PaymentStatusPage() {
     async function poll() {
       try {
     const res = await apiService.getPhonePePaymentStatus(id);
-    const result = res?.data || res; // handle either shape
+    const result = (res as any)?.data || res; // handle either shape
   console.log('Payment status response:', JSON.stringify(result, null, 2));
         const code = result?.code || result?.data?.code;
         const state = result?.state || result?.data?.state;

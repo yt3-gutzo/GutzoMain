@@ -6,7 +6,7 @@ import { Badge } from "./ui/badge";
 import { VendorRegistrationForm } from "./VendorRegistrationForm";
 import { ProductManagementForm } from "./ProductManagementForm";
 import { VendorOnboardingGuide } from "./VendorOnboardingGuide";
-import { apiService } from "../utils/api";
+import { nodeApiService as apiService } from "../utils/nodeApi";
 import { toast } from "sonner";
 import { 
   Store, 

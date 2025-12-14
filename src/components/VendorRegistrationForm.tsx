@@ -6,7 +6,7 @@ import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { toast } from "sonner";
-import { apiService } from "../utils/api";
+import { nodeApiService as apiService } from "../utils/nodeApi";
 import { Store, Phone, MapPin, Star, Upload, Image as ImageIcon } from "lucide-react";
 
 interface VendorFormData {

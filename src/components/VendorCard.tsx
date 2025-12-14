@@ -14,7 +14,7 @@ export function VendorCard({ vendor, onClick }: VendorCardProps) {
   const navigate = useNavigate();
   return (
     <Card
-      className="cursor-pointer group rounded-[16px] gutzo-card-hover transition-all duration-200 overflow-hidden p-0 flex flex-col shadow-none w-full"
+      className="cursor-pointer group rounded-[16px] gutzo-card-hover transition-all duration-200 overflow-hidden p-0 flex flex-col shadow-none w-full gap-3"
       style={{
         width: '100%',
         minWidth: 0,
@@ -37,13 +37,13 @@ export function VendorCard({ vendor, onClick }: VendorCardProps) {
           style={{ borderRadius: '16px' }}
         />
       </div>
-      <CardContent className="flex-1 flex flex-col pt-4 pb-0">
+      <CardContent className="flex-1 flex flex-col pt-0 px-0 pb-0">
         {/* Vendor Name */}
         <h3 className="text-[20px] font-bold text-gray-900 mb-1" style={{ fontFamily: 'Poppins', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={vendor.name}>{vendor.name}</h3>
         {/* Rating and Delivery Time - single line, star left of rating, black rating */}
         <div className="flex items-center text-[15px] mb-1" style={{ fontFamily: 'Poppins', gap: '8px' }}>
           <span className="flex items-center gap-1">
-            <StarIcon size={16} color="#43A047" style={{ marginRight: 2 }} />
+            <StarIcon size={16} color="#43A047" className="mr-0.5" />
             <span style={{ color: '#222', fontWeight: 600, fontSize: 16, marginLeft: 2 }}>{vendor.rating || '3.9'}</span>
           </span>
           <span className="mx-1">•</span>

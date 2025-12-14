@@ -8,7 +8,7 @@ import { CartPanel } from "./CartPanel";
 import React, { useState, useEffect } from "react";
 
 // Simple right panel for desktop
-const RightPanelNextSteps = ({ plan, onClose }) => (
+const RightPanelNextSteps = ({ plan, onClose }: { plan: any; onClose: () => void }) => (
   <div style={{
     position: 'fixed',
     top: 0,
@@ -28,14 +28,14 @@ const RightPanelNextSteps = ({ plan, onClose }) => (
     <p>Price: {plan?.price}</p>
     <p>Schedule: {plan?.schedule}</p>
     <ul>
-      {plan?.features?.map((f, i) => <li key={i}>{f}</li>)}
+      {plan?.features?.map((f: string, i: number) => <li key={i}>{f}</li>)}
     </ul>
     {/* Add next steps UI here */}
   </div>
 );
 
 // Simple bottom sheet for mobile
-const BottomSheetNextSteps = ({ plan, onClose }) => (
+const BottomSheetNextSteps = ({ plan, onClose }: { plan: any; onClose: () => void }) => (
   <div style={{
     position: 'fixed',
     left: 0,
@@ -54,7 +54,7 @@ const BottomSheetNextSteps = ({ plan, onClose }) => (
     <p>Price: {plan?.price}</p>
     <p>Schedule: {plan?.schedule}</p>
     <ul>
-      {plan?.features?.map((f, i) => <li key={i}>{f}</li>)}
+      {plan?.features?.map((f: string, i: number) => <li key={i}>{f}</li>)}
     </ul>
     {/* Add next steps UI here */}
   </div>
@@ -72,6 +72,7 @@ import { useCart } from "../contexts/CartContext";
 import { useLocation } from 'react-router-dom';
 import { Header } from "../components/Header";
 import WeeklyMealPlansSection from "../components/WeeklyMealPlansSection";
+import MealPlanBottomSheet from "./MealPlanBottomSheet";
 
 function getVendorIdFromRoute(route: string) {
   const match = route.match(/\/vendor\/(.+)/);
@@ -93,7 +94,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId }) => {
   const id = vendorId || getVendorIdFromRoute(currentRoute);
   const vendor = vendorFromState || vendors.find(v => v.id === id);
   const [showVendorDetails, setShowVendorDetails] = useState(true);
-  const [selectedMealPlan, setSelectedMealPlan] = useState(null);
+  const [selectedMealPlan, setSelectedMealPlan] = useState<any | null>(null);
 
   // Framer Motion slide variants (fixed for smooth, fast animation)
   const slideVariants = {
@@ -113,7 +114,9 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId }) => {
     return (
       <div className="vendor-details-page desktop" style={{ background: '#f7f7fa', minHeight: '100vh' }}>
         {/* Always render header; use CSS for responsive visibility */}
-        <Header onShowCart={() => setShowCartPanel(true)} />
+        <div className="hidden lg:block">
+          <Header onShowCart={() => setShowCartPanel(true)} />
+        </div>
         <div
           style={{
             maxWidth: 800,
@@ -144,14 +147,14 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId }) => {
                 onClose={() => setSelectedMealPlan(null)}
               />
             ) : (
-              <BottomSheetNextSteps
+                <MealPlanBottomSheet
                 plan={selectedMealPlan}
                 onClose={() => setSelectedMealPlan(null)}
               />
             )
           )}
           {/* Today's best picks section inside same container */}
-          <InstantPicks noPadding />
+          <InstantPicks noPadding vendorId={vendor.id} />
         </div>
       <CartStrip onShowCart={() => setShowCartPanel(true)} />
       <CartPanel

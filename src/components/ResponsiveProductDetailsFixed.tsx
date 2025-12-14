@@ -5,7 +5,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, Dr
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { ImageWithFallback } from "./common/ImageWithFallback";
 import { useState, useEffect, useRef } from "react";
-import { apiService } from "../utils/api";
+import { nodeApiService as apiService } from "../utils/nodeApi";
 import { toast } from "sonner";
 import { Vendor, Product } from "../types";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";

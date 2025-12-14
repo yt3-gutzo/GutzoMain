@@ -1,0 +1,375 @@
+import express from 'express';
+import { supabaseAdmin } from '../config/supabase.js';
+import { asyncHandler, successResponse, ApiError } from '../middleware/errorHandler.js';
+import { authenticate } from '../middleware/auth.js';
+import PaytmChecksum from '../utils/paytmChecksum.js';
+
+const router = express.Router();
+
+// Paytm Environment variables
+const PAYTM_MID = process.env.PAYTM_MID;
+const PAYTM_MERCHANT_KEY = process.env.PAYTM_MERCHANT_KEY;
+const PAYTM_WEBSITE_NAME = process.env.PAYTM_WEBSITE_NAME || 'WEBSTAGING';
+const PAYTM_CALLBACK_URL = process.env.PAYTM_CALLBACK_URL || 'gutzo.in/paytm-callback';
+const PAYTM_ENV = process.env.PAYTM_ENV || 'staging';
+
+// Paytm URLs based on environment
+const PAYTM_BASE_URL = PAYTM_ENV === 'production' 
+  ? 'https://secure.paytmpayments.com' 
+  : 'https://securestage.paytmpayments.com';
+
+// ============================================
+// PAYTM PAYMENT ENDPOINTS
+// ============================================
+
+// GENERATE PAYTM CHECKSUM
+router.post('/generate-checksum', asyncHandler(async (req, res) => {
+  const { merchantKey, ...params } = req.body;
+
+  const key = merchantKey || PAYTM_MERCHANT_KEY;
+  if (!key || Object.keys(params).length === 0) {
+    throw new ApiError(400, 'merchantKey and params are required');
+  }
+
+  const checksum = await PaytmChecksum.generateSignature(params, key);
+
+  successResponse(res, { checksum }, 'Checksum generated successfully');
+}));
+
+// VERIFY PAYTM CHECKSUM
+router.post('/verify-checksum', asyncHandler(async (req, res) => {
+  const { body, merchantKey, checksum } = req.body;
+
+  const key = merchantKey || PAYTM_MERCHANT_KEY;
+  if (!body || !key || !checksum) {
+    throw new ApiError(400, 'body, merchantKey, and checksum are required');
+  }
+
+  const isValid = PaytmChecksum.verifySignature(body, key, checksum);
+
+  successResponse(res, { 
+    valid: isValid, 
+    message: isValid ? 'Checksum is valid' : 'Checksum is invalid' 
+  });
+}));
+
+// INITIATE PAYTM TRANSACTION (For web form-based flow)
+router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
+  const { order_id, amount } = req.body;
+
+  if (!order_id || !amount) {
+    throw new ApiError(400, 'Order ID and amount are required');
+  }
+
+  // Verify order exists
+  const { data: order } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('id', order_id)
+    .eq('user_id', req.user.id)
+    .single();
+
+  if (!order) throw new ApiError(404, 'Order not found');
+  if (order.payment_status === 'paid') throw new ApiError(400, 'Order already paid');
+
+  const paytmParams = {
+    MID: PAYTM_MID,
+    WEBSITE: PAYTM_WEBSITE_NAME,
+    INDUSTRY_TYPE_ID: 'Retail',
+    CHANNEL_ID: 'WEB',
+    ORDER_ID: order_id,
+    CUST_ID: req.user.id,
+    TXN_AMOUNT: String(amount),
+    CALLBACK_URL: PAYTM_CALLBACK_URL,
+    EMAIL: req.user.email || '',
+    MOBILE_NO: req.user.phone?.replace('+91', '') || '',
+  };
+
+  try {
+    const checksum = await PaytmChecksum.generateSignature(paytmParams, PAYTM_MERCHANT_KEY);
+    console.log('Generated Paytm Checksum:', checksum);
+
+    // Create payment record
+    await supabaseAdmin.from('payments').insert({
+      order_id,
+      merchant_order_id: order_id,
+      amount,
+      status: 'initiated',
+      gateway: 'paytm',
+      mode: 'web'
+    });
+
+    // For web integration, return params to be used in form POST
+    successResponse(res, {
+      paytmParams: {
+        ...paytmParams,
+        CHECKSUMHASH: checksum,
+      },
+      paymentUrl: `${PAYTM_BASE_URL}/theia/processTransaction`,
+      message: 'Paytm payment initiated'
+    });
+  } catch (err) {
+    console.error('Paytm checksum error:', err);
+    throw new ApiError(500, 'Failed to generate Paytm checksum');
+  }
+}));
+
+// INITIATE PAYTM TRANSACTION (API method)
+router.post('/initiate-transaction', asyncHandler(async (req, res) => {
+  const { mid, orderId, amount, merchantKey } = req.body;
+
+  const merchantId = mid || PAYTM_MID;
+  const key = merchantKey || PAYTM_MERCHANT_KEY;
+
+  if (!orderId || !amount) {
+    throw new ApiError(400, 'orderId and amount are required');
+  }
+
+  const paytmParams = {
+    mid: merchantId,
+    orderId,
+    requestType: 'Payment',
+    txnAmount: {
+      value: String(amount),
+      currency: 'INR'
+    },
+    userInfo: {
+      custId: 'CUST_001'
+    },
+    callbackUrl: PAYTM_CALLBACK_URL,
+    industryType: 'Retail',
+    channelId: 'WEB',
+    websiteName: PAYTM_WEBSITE_NAME,
+  };
+
+  try {
+    const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams), key);
+    console.log('Generated Checksum:', checksum);
+
+    const payload = {
+      body: paytmParams,
+      head: { signature: checksum }
+    };
+
+    const response = await fetch(
+      `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction?mid=${merchantId}&orderId=${orderId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await response.json();
+    console.log('Paytm initiateTransaction response:', data);
+
+    // Create payment record
+    await supabaseAdmin.from('payments').insert({
+      order_id: orderId,
+      merchant_order_id: orderId,
+      amount,
+      status: 'initiated',
+      gateway: 'paytm',
+      mode: 'web'
+    });
+
+    successResponse(res, {
+      checksum,
+      initiateTransactionResponse: data
+    });
+  } catch (err) {
+    console.error('Paytm error:', err);
+    throw new ApiError(500, 'Error calling Paytm API');
+  }
+}));
+
+// PAYTM CALLBACK/WEBHOOK
+router.post('/callback', asyncHandler(async (req, res) => {
+  const paytmParams = req.body;
+  console.log('[Paytm Callback] Received:', paytmParams);
+
+  const receivedChecksum = paytmParams.CHECKSUMHASH;
+  delete paytmParams.CHECKSUMHASH;
+
+  const isValid = PaytmChecksum.verifySignature(paytmParams, PAYTM_MERCHANT_KEY, receivedChecksum);
+
+  if (!isValid) {
+    console.error('[Paytm Callback] Invalid checksum');
+    return res.status(400).json({ success: false, error: 'Invalid checksum' });
+  }
+
+  const orderId = paytmParams.ORDERID;
+  const txnStatus = paytmParams.STATUS;
+  const txnId = paytmParams.TXNID;
+  const bankTxnId = paytmParams.BANKTXNID;
+  const txnAmount = paytmParams.TXNAMOUNT;
+
+  let paymentStatus = 'failed';
+  let orderStatus = 'payment_failed';
+
+  if (txnStatus === 'TXN_SUCCESS') {
+    paymentStatus = 'paid';
+    orderStatus = 'confirmed';
+  } else if (txnStatus === 'PENDING') {
+    paymentStatus = 'pending';
+    orderStatus = 'pending';
+  }
+
+  // Update order
+  const { data: updatedOrder } = await supabaseAdmin
+    .from('orders')
+    .update({
+      payment_status: paymentStatus,
+      payment_method: 'paytm',
+      payment_id: txnId,
+      status: orderStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('order_number', orderId)
+    .select()
+    .single();
+
+  // Update payment record
+  await supabaseAdmin
+    .from('payments')
+    .update({
+      transaction_id: txnId,
+      status: paymentStatus,
+      gateway_response: paytmParams,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('merchant_order_id', orderId);
+
+  // Create notification for user
+  if (updatedOrder) {
+    await supabaseAdmin.from('notifications').insert({
+      user_id: updatedOrder.user_id,
+      type: paymentStatus === 'paid' ? 'payment_success' : 'payment_failed',
+      title: paymentStatus === 'paid' ? 'Payment Successful!' : 'Payment Failed',
+      message: paymentStatus === 'paid' 
+        ? `Payment of ₹${txnAmount} received for order #${orderId}`
+        : `Payment failed for order #${orderId}. Please try again.`,
+      data: { order_id: orderId, txn_id: txnId }
+    });
+  }
+
+  console.log(`[Paytm Callback] Order ${orderId} updated to ${orderStatus}`);
+
+  // Redirect based on status
+  if (txnStatus === 'TXN_SUCCESS') {
+    res.redirect(`${process.env.FRONTEND_URL}/order-success?orderId=${orderId}`);
+  } else {
+    res.redirect(`${process.env.FRONTEND_URL}/order-failed?orderId=${orderId}&reason=${txnStatus}`);
+  }
+}));
+
+// PAYTM REFUND
+router.post('/refund', authenticate, asyncHandler(async (req, res) => {
+  const { order_id, refund_amount, reason } = req.body;
+
+  if (!order_id || !refund_amount) {
+    throw new ApiError(400, 'Order ID and refund amount are required');
+  }
+
+  const { data: order } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('id', order_id)
+    .eq('user_id', req.user.id)
+    .single();
+
+  if (!order) throw new ApiError(404, 'Order not found');
+  if (order.payment_status !== 'paid') throw new ApiError(400, 'Can only refund paid orders');
+
+  const refundId = `REFUND_${Date.now()}`;
+
+  const paytmParams = {
+    MID: PAYTM_MID,
+    TXNID: order.payment_id,
+    ORDERID: order.order_number,
+    REFUNDAMOUNT: String(refund_amount),
+    REFID: refundId,
+  };
+
+  try {
+    const checksum = await PaytmChecksum.generateSignature(paytmParams, PAYTM_MERCHANT_KEY);
+
+    const payload = {
+      body: paytmParams,
+      head: { signature: checksum }
+    };
+
+    const response = await fetch(
+      `${PAYTM_BASE_URL}/refund/apply`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await response.json();
+    console.log('Paytm refund response:', data);
+
+    // Create support ticket for tracking
+    await supabaseAdmin
+      .from('support_tickets')
+      .insert({
+        user_id: req.user.id,
+        order_id,
+        subject: `Refund Request - Order #${order.order_number}`,
+        description: reason || 'Refund requested',
+        category: 'refund',
+        priority: 'high'
+      });
+
+    successResponse(res, {
+      refund_id: refundId,
+      status: data?.body?.resultInfo?.resultStatus || 'PENDING',
+      message: 'Refund initiated'
+    });
+  } catch (err) {
+    console.error('Paytm refund error:', err);
+    throw new ApiError(500, 'Error processing refund');
+  }
+}));
+
+// ============================================
+// GENERIC PAYMENT ENDPOINTS
+// ============================================
+
+// GET PAYMENT STATUS
+router.get('/status/:paymentId', authenticate, asyncHandler(async (req, res) => {
+  const { data: payment, error } = await supabaseAdmin
+    .from('payments')
+    .select('*')
+    .eq('id', req.params.paymentId)
+    .single();
+
+  if (error || !payment) throw new ApiError(404, 'Payment not found');
+
+  successResponse(res, {
+    payment_id: payment.id,
+    status: payment.status,
+    amount: payment.amount,
+    gateway: payment.gateway,
+    transaction_id: payment.transaction_id
+  });
+}));
+
+// GET USER PAYMENT HISTORY
+router.get('/history', authenticate, asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20 } = req.query;
+
+  const { data: payments, error, count } = await supabaseAdmin
+    .from('payments')
+    .select('*, order:orders(order_number, vendor_name, total_amount)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+
+  if (error) throw new ApiError(500, 'Failed to fetch payments');
+
+  successResponse(res, { payments, page, limit, total: count });
+}));
+
+export default router;

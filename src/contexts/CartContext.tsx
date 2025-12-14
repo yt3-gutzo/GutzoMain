@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { Product, Vendor } from '../types';
 import { toast } from 'sonner';
-import { apiService } from '../utils/api';
+import { nodeApiService as apiService } from '../utils/nodeApi';
 import { useAuth } from './AuthContext';
 
 export interface CartItem {
@@ -809,7 +809,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // Only sync with API if user is authenticated
     if (isAuthenticated && user) {
       try {
-        const success = await apiService.updateCartItem(productId, quantity, user.phone);
+        const success = await apiService.updateCartItem(user.phone, productId, { quantity });
         
         if (success) {
           console.log('✅ Cart item update synced with API successfully');
@@ -843,7 +843,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const currentQuantity = state.items.find(item => item.productId === product.id)?.quantity || 0;
         const newQuantity = currentQuantity + quantity;
         
-        const success = await apiService.updateCartItem(product.id, newQuantity, user.phone);
+        const success = await apiService.updateCartItem(user.phone, product.id, { quantity: newQuantity });
         
         if (success) {
           console.log('✅ Cart item addition synced with API successfully');
@@ -872,7 +872,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // Only sync with API if user is authenticated
     if (isAuthenticated && user) {
       try {
-        const success = await apiService.updateCartItem(productId, 0, user.phone);
+        const success = await apiService.updateCartItem(user.phone, productId, { quantity: 0 });
         if (!success) {
           console.error('❌ Failed to remove item from database');
           toast.error('Failed to remove item. Please try again.');

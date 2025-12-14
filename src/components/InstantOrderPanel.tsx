@@ -8,7 +8,7 @@ import { Separator } from './ui/separator';
 import { Input } from './ui/input';
 import { ImageWithFallback } from './common/ImageWithFallback';
 import { Product, Vendor } from '../types/index';
-import { apiService } from '../utils/api';
+import { nodeApiService as apiService } from '../utils/nodeApi';
 import { useRouter } from './Router';
 
 export interface CartItem {
@@ -77,7 +77,7 @@ export function InstantOrderPanel({
       try {
         const productIds = cartItems.map(item => item.productId);
         const result = await apiService.getProductsByIds(productIds);
-        const products = result.products || result;
+        const products = result.data || [];
         const priceMap: Record<string, number> = {};
         products.forEach((prod: any) => {
           priceMap[prod.id] = prod.price;
@@ -193,9 +193,11 @@ export function InstantOrderPanel({
     if (formatted) {
       import('../utils/addressApi').then(({ AddressApi }) => {
         AddressApi.getUserAddresses(formatted).then(res => {
-          if (res.success && res.data) {
+          if (res.success && Array.isArray(res.data)) {
             setAddresses(res.data);
             setSelectedAddress(res.data.find(a => a.is_default) || res.data[0]);
+          } else if (res.success && !res.data) {
+             setAddresses([]);
           }
         });
       });

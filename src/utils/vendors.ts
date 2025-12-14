@@ -1,4 +1,4 @@
-import { Vendor, Product } from "../types";
+import { Product, Vendor } from "../types";
 
 // Tag mapping for description-based tag generation
 const TAG_MAP: { [key: string]: string[] } = {
@@ -24,20 +24,24 @@ export const generateTagsFromDescription = (description: string): string[] => {
 
 export const processVendorData = (vendor: any): Vendor => ({
   id: vendor.id,
-  name: vendor.name || 'Unknown Vendor',
+  name: vendor.name || "Unknown Vendor",
   description: vendor.description || "",
   location: vendor.address || "Coimbatore",
   rating: vendor.rating || 4.5,
   image: vendor.image || "",
-  deliveryTime: vendor.deliveryTime || "25-30 mins",
-  minimumOrder: vendor.minimumOrder || 0,
-  deliveryFee: vendor.deliveryFee || 0,
-  cuisineType: vendor.cuisineType || "Healthy Meals",
+  deliveryTime: vendor.delivery_time || vendor.deliveryTime || "25-30 mins",
+  minimumOrder: vendor.minimum_order || vendor.minimumOrder || 0,
+  deliveryFee: vendor.delivery_fee || vendor.deliveryFee || 0,
+  cuisineType: vendor.cuisine_type || vendor.cuisineType || "Healthy Meals",
   phone: vendor.phone || "",
-  isActive: vendor.isActive !== undefined ? vendor.isActive : true,
-  isFeatured: vendor.isFeatured || false,
+  isActive: vendor.is_active !== undefined
+    ? vendor.is_active
+    : (vendor.isActive !== undefined ? vendor.isActive : true),
+  isFeatured: vendor.is_featured !== undefined
+    ? vendor.is_featured
+    : (vendor.isFeatured || false),
   created_at: vendor.created_at || new Date().toISOString(),
-  tags: vendor.tags || generateTagsFromDescription(vendor.description || "")
+  tags: vendor.tags || generateTagsFromDescription(vendor.description || ""),
 });
 
 // Keep exact category names without normalization
@@ -49,10 +53,10 @@ export const normalizeCategory = (category: string): string => {
 // Extract unique categories from all products across all vendors
 export const extractCategoriesFromVendors = (vendors: Vendor[]): string[] => {
   const categories = new Set<string>();
-  
-  vendors.forEach(vendor => {
+
+  vendors.forEach((vendor) => {
     if (vendor.products) {
-      vendor.products.forEach(product => {
+      vendor.products.forEach((product) => {
         if (product.category && product.category.trim()) {
           // Use exact category names without normalization
           categories.add(product.category.trim());
@@ -60,31 +64,33 @@ export const extractCategoriesFromVendors = (vendors: Vendor[]): string[] => {
       });
     }
   });
-  
+
   return ["All", ...Array.from(categories).sort()];
 };
 
-
-
 // Exact category matching only - no fuzzy matching
-const categoryMatches = (productCategory: string, selectedCategory: string): boolean => {
+const categoryMatches = (
+  productCategory: string,
+  selectedCategory: string,
+): boolean => {
   if (!productCategory) return false;
-  
+
   // Only exact match (case insensitive)
-  return productCategory.trim().toLowerCase() === selectedCategory.trim().toLowerCase();
+  return productCategory.trim().toLowerCase() ===
+    selectedCategory.trim().toLowerCase();
 };
 
 // Filter vendors based on category - SIMPLIFIED FOR MVP
 export const filterVendors = (
   vendors: Vendor[],
-  selectedCategory: string
+  selectedCategory: string,
 ): Vendor[] => {
   const hasFiltersActive = selectedCategory !== "All";
-  
-  console.log('🔍 FILTERING VENDORS:', {
+
+  console.log("🔍 FILTERING VENDORS:", {
     total: vendors.length,
     category: selectedCategory,
-    filtersActive: hasFiltersActive
+    filtersActive: hasFiltersActive,
   });
 
   const filteredVendors = vendors.filter((vendor) => {
@@ -92,7 +98,9 @@ export const filterVendors = (
     if (!vendor.products || vendor.products.length === 0) {
       const showVendor = selectedCategory === "All";
       if (!showVendor && hasFiltersActive) {
-        console.log(`❌ "${vendor.name}" - No products, hiding due to active filters`);
+        console.log(
+          `❌ "${vendor.name}" - No products, hiding due to active filters`,
+        );
       }
       return showVendor;
     }
@@ -103,13 +111,19 @@ export const filterVendors = (
       categoryMatch = true;
     } else {
       // Vendor must have at least one product in the selected category
-      categoryMatch = vendor.products.some(product => {
-        return categoryMatches(product.category || '', selectedCategory);
+      categoryMatch = vendor.products.some((product) => {
+        return categoryMatches(product.category || "", selectedCategory);
       });
-      
+
       if (!categoryMatch) {
-        console.log(`❌ "${vendor.name}" - No products in category "${selectedCategory}"`);
-        console.log(`   Product categories: ${vendor.products.map(p => p.category).filter(Boolean).join(', ')}`);
+        console.log(
+          `❌ "${vendor.name}" - No products in category "${selectedCategory}"`,
+        );
+        console.log(
+          `   Product categories: ${
+            vendor.products.map((p) => p.category).filter(Boolean).join(", ")
+          }`,
+        );
       }
     }
 
@@ -120,11 +134,16 @@ export const filterVendors = (
     return categoryMatch;
   });
 
-  console.log(`🎯 VENDOR FILTER RESULT: ${filteredVendors.length}/${vendors.length} vendors shown`);
+  console.log(
+    `🎯 VENDOR FILTER RESULT: ${filteredVendors.length}/${vendors.length} vendors shown`,
+  );
   if (hasFiltersActive) {
-    console.log(`📋 Filtered vendors: ${filteredVendors.map(v => v.name).join(', ') || 'None'}`);
+    console.log(
+      `📋 Filtered vendors: ${
+        filteredVendors.map((v) => v.name).join(", ") || "None"
+      }`,
+    );
   }
-  
+
   return filteredVendors;
 };
-

@@ -5,6 +5,7 @@ import { SignUp } from "./SignUp";
 import { OTPVerification } from "./OTPVerification";
 import { toast } from "sonner";
 import { supabase } from "../../utils/supabase/client";
+import { nodeApiService } from "../../utils/nodeApi";
 import { Sheet, SheetContent } from "../ui/sheet";
 
 type AuthStep = 'signup' | 'login';
@@ -73,18 +74,12 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
         toast.success(`OTP sent to +91 ${data.phoneNumber.replace(/(\d{5})(\d{5})/, '$1-$2')} (dummy)`);
         return;
       }
-      // First check if user already exists using supabase.functions.invoke
-      const { data: checkResult, error: checkError } = await supabase.functions.invoke(
-        'gutzo-api/check-user',
-        {
-          method: 'POST',
-          body: { phone: `+91${data.phoneNumber}` },
-        }
-      );
+      // First check if user already exists using nodeApiService
+      const checkResult = await nodeApiService.getUser(data.phoneNumber);
 
-      if (checkError) throw checkError;
-
-      if (checkResult.exists) {
+      // Node backend returns { success: true, data: { exists: true, user: ... } }
+      // We check result.data.exists
+      if (checkResult.success && checkResult.data?.exists) {
         toast.error("Account already exists with this phone number. Please login instead.");
         setAuthMode('login');
         setCurrentStep('login');
@@ -125,17 +120,9 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
       }
       // For login, check if user exists first
       if (authMode === 'login') {
-        const { data: checkResult, error: checkError } = await supabase.functions.invoke(
-          'gutzo-api/check-user',
-          {
-            method: 'POST',
-            body: { phone: `+91${phone}` },
-          }
-        );
+        const checkResult = await nodeApiService.getUser(phone);
 
-        if (checkError) throw checkError;
-
-        if (!checkResult.exists) {
+        if (checkResult.success && !checkResult.data?.exists) {
           // Auto-redirect to signup with phone pre-filled
           setPhoneNumber(phone);
           setAuthMode('signup');
@@ -170,19 +157,10 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
         return;
       }
 
-      const formattedPhone = `+91${phone}`;
-      
-      const { data: result, error: invokeError } = await supabase.functions.invoke(
-        'gutzo-api/send-otp',
-        {
-          method: 'POST',
-          body: { phone: formattedPhone },
-        }
-      );
+      const result = await nodeApiService.sendOtp(phone);
 
-      if (invokeError) throw invokeError;
       if (!result.success) {
-        throw new Error(result.error || 'Failed to send OTP');
+        throw new Error(result.error || result.message || 'Failed to send OTP');
       }
       
       setOtpSent(true);
@@ -213,17 +191,10 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
         console.log(`✅ Dummy OTP verification successful for ${formattedPhone}`);
       } else {
         console.log(`🔐 Verifying OTP with server for ${formattedPhone}`);
-        const { data: result, error: verifyError } = await supabase.functions.invoke(
-          'gutzo-api/verify-otp',
-          {
-            method: 'POST',
-            body: { phone: formattedPhone, otp: otp },
-          }
-        );
+        const result = await nodeApiService.verifyOtp(phoneNumber, otp);
 
-        if (verifyError) throw verifyError;
         if (!result.success) {
-          throw new Error(result.error || 'Invalid OTP');
+          throw new Error(result.error || result.message || 'Invalid OTP');
         }
 
         console.log(`✅ OTP verification successful for ${formattedPhone}`);
@@ -240,21 +211,15 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
           console.log('📝 Skipping create-user in dummy mode');
         } else {
           console.log('📝 Creating user account for signup...');
-          const { data: createResult, error: createError } = await supabase.functions.invoke(
-            'gutzo-api/create-user',
-            {
-              method: 'POST',
-              body: {
-                phone: formattedPhone,
-                name: userInfo.name,
-                email: userInfo.email,
-              },
-            }
-          );
+          const createResult = await nodeApiService.createUser({
+            phone: phoneNumber,
+            name: userInfo.name,
+            email: userInfo.email,
+            verified: true
+          });
 
-          if (createError) throw createError;
           if (!createResult.success) {
-            throw new Error(createResult.error || 'Failed to create user account');
+            throw new Error(createResult.error || createResult.message || 'Failed to create user account');
           }
           console.log('✅ User account created successfully');
         }
@@ -283,19 +248,10 @@ export function LoginPanel({ isOpen, onClose, onAuthComplete }: LoginPanelProps)
   const handleResendOTP = async () => {
     setResendLoading(true);
     try {
-      const formattedPhone = `+91${phoneNumber}`;
-      
-      const { data: result, error: invokeError } = await supabase.functions.invoke(
-        'gutzo-api/send-otp',
-        {
-          method: 'POST',
-          body: { phone: formattedPhone },
-        }
-      );
+      const result = await nodeApiService.sendOtp(phoneNumber);
 
-      if (invokeError) throw invokeError;
       if (!result.success) {
-        throw new Error(result.error || 'Failed to resend OTP');
+        throw new Error(result.error || result.message || 'Failed to resend OTP');
       }
       
       toast.success("OTP resent successfully via WhatsApp");

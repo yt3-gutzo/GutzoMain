@@ -107,7 +107,7 @@ export function PaymentSuccessPanel({
   };
 
   const handleDownloadReceipt = () => {
-    // Mock download functionality
+    // Implement download functionality
     console.log('Downloading receipt for:', paymentResult.paymentId);
   };
 

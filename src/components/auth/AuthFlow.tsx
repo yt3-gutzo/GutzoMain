@@ -3,9 +3,7 @@ import { PhoneSignIn } from "./PhoneSignIn";
 import { OTPVerification } from "./OTPVerification";
 import { AuthSuccess } from "./AuthSuccess";
 import { toast } from "sonner";
-
-const VITE_SUPABASE_FUNCTION_URL = import.meta.env.VITE_SUPABASE_FUNCTION_URL;
-const VITE_SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { nodeApiService } from "../../utils/nodeApi";
 
 type AuthStep = 'phone' | 'otp' | 'success';
 
@@ -23,33 +21,12 @@ export function AuthFlow({ onAuthComplete, onClose }: AuthFlowProps) {
   const handleSendOTP = async (phone: string) => {
     setLoading(true);
     try {
-      // Format phone number to international format
-      const formattedPhone = `+91${phone}`;
-      
-      // Call the send_otp endpoint from gutzo-api
-      const response = await fetch(
-        `${VITE_SUPABASE_FUNCTION_URL}/gutzo-api/send-otp`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            phone: formattedPhone
-          })
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to send OTP');
-      }
+      // Use nodeApiService instead of direct fetch
+      const result = await nodeApiService.sendOtp(phone);
       
       setPhoneNumber(phone);
       setCurrentStep('otp');
-      toast.success(`OTP sent to +91 ${phone.replace(/(\\d{5})(\\d{5})/, '$1-$2')} via WhatsApp`);
+      toast.success(`OTP sent to +91 ${phone.replace(/(\d{5})(\d{5})/, '$1-$2')} via WhatsApp`);
     } catch (error: any) {
       console.error("Send OTP error:", error);
       toast.error(error.message || "Failed to send OTP. Please try again.");
@@ -88,29 +65,8 @@ export function AuthFlow({ onAuthComplete, onClose }: AuthFlowProps) {
   const handleResendOTP = async () => {
     setResendLoading(true);
     try {
-      // Format phone number to international format
-      const formattedPhone = `+91${phoneNumber}`;
-      
-      // Call the send_otp endpoint from gutzo-api again
-      const response = await fetch(
-        `${VITE_SUPABASE_FUNCTION_URL}/gutzo-api/send-otp`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            phone: formattedPhone
-          })
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to resend OTP');
-      }
+      // Use nodeApiService for resend as well
+      await nodeApiService.sendOtp(phoneNumber);
       
       toast.success("OTP resent successfully via WhatsApp");
     } catch (error: any) {

@@ -83,7 +83,7 @@ export function AddressListPanel({
   const handleDeleteAddress = async (addressId: string) => {
     setDeletingId(addressId);
     try {
-      const response = await AddressApi.deleteAddress(addressId);
+      const response = await AddressApi.deleteAddress(addressId, userPhone);
       
       if (response.success) {
         await loadAddresses(); // Refresh list

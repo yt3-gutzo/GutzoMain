@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import { toast } from "sonner";
-import { apiService } from "../utils/api";
+import { nodeApiService as apiService } from "../utils/nodeApi";
 import { UtensilsCrossed, IndianRupee, Tag, Image as ImageIcon, Plus, X, Clock } from "lucide-react";
 
 interface ProductFormData {

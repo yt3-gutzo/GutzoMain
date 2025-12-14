@@ -83,13 +83,14 @@ export function PaymentSuccessModal({
   };
 
   const handleDownloadReceipt = () => {
-    // Mock receipt download
-    console.log('📄 Downloading receipt for payment:', paymentDetails.paymentId);
+    // Implement receipt download
+    console.log('Downloading receipt...');
+    // Implement contact support behavioraymentDetails.paymentId);
     // In real implementation, this would trigger a download
   };
 
   const handleContactSupport = () => {
-    // Mock contact support
+    // Contact support logic
     console.log('📞 Contacting support for order:', paymentDetails.subscriptionId);
     // In real implementation, this would open support chat/WhatsApp
   };

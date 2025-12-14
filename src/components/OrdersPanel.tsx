@@ -8,7 +8,7 @@ import { Separator } from './ui/separator';
 import { ImageWithFallback } from './common/ImageWithFallback';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
-import { apiService } from '../utils/api';
+import { nodeApiService as apiService } from '../utils/nodeApi';
 
 // Types for orders
 export interface InstantOrder {

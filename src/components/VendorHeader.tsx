@@ -43,11 +43,11 @@ const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, loca
       </div>
 
       {/* Card Section (below header) */}
-      <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', margin: '16px auto', padding: 16, fontFamily: 'Poppins, sans-serif' }}>
+      <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', margin: '16px auto', padding: 16, fontFamily: 'Poppins, sans-serif', width: '100%' }}>
         {/* Ratings & Price Row (plain text, bold, no pill) */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
           <span style={{ fontWeight: 700, fontSize: '1rem', color: '#1A1A1A', marginRight: 8, display: 'flex', alignItems: 'center' }}>
-            <StarIcon size={16} color="#43A047" style={{ marginRight: 4, fontFamily: 'Poppins, Arial, sans-serif' }} />
+            <StarIcon size={16} color="#43A047" className="mr-1 font-sans" />
             <span style={{ color: '#1A1A1A' }}>{rating}</span>
             <span style={{ color: '#6B6B6B', fontWeight: 500, marginLeft: 4 }}>({reviews} ratings)</span>
           </span>

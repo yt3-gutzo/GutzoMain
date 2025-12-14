@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Category } from "../types";
-import { apiService } from "../utils/api";
+import { nodeApiService as apiService } from "../utils/nodeApi";
 
 export const useCategories = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -10,8 +10,16 @@ export const useCategories = () => {
   const loadCategories = async () => {
     try {
       console.log("Loading categories from database...");
-      const data = await apiService.getCategories();
-      console.log("Loaded categories from API:", data?.length || 0);
+      // Using nodeApiService via alias
+      const response = await apiService.getCategories();
+
+      // Node backend response wrapper check
+      const data = response.success ? response.data : response;
+
+      console.log(
+        "Loaded categories from API:",
+        Array.isArray(data) ? data.length : 0,
+      );
 
       if (!data || !Array.isArray(data)) {
         console.log("No categories received from API");
@@ -21,10 +29,13 @@ export const useCategories = () => {
 
       setCategories(data);
       console.log("Categories loaded successfully:", data);
-      
     } catch (error) {
       console.error("Failed to load categories:", error);
-      toast.error(`Failed to load categories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(
+        `Failed to load categories: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      );
       setCategories([]);
     } finally {
       setLoading(false);
@@ -37,6 +48,6 @@ export const useCategories = () => {
 
   return {
     categories,
-    loading
+    loading,
   };
 };

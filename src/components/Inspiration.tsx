@@ -30,7 +30,7 @@ interface InspirationProps {
 export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
   return (
   <section className="w-full bg-[#fafafa] pt-4 pb-8 md:pt-6 md:pb-12 lg:pt-8 lg:pb-16">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col">
         <h2
           className="text-left font-medium tracking-tight w-full mb-4 text-[20px] lg:text-[30px]"
           style={{ fontFamily: 'Poppins', letterSpacing: '-0.01em', fontWeight: 500, color: '#111' }}
@@ -39,9 +39,9 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
         </h2>
         <div className="mt-2" />
         {/* Mobile: double-lined horizontal scroll (both rows scroll together) */}
-        <div className="sm:hidden w-full overflow-x-auto scrollbar-hide pb-2">
+        <div className="sm:hidden overflow-x-auto scrollbar-hide pb-2 -mr-4" style={{ width: 'calc(100% + 16px)' }}>
           <div className="flex flex-col min-w-max">
-            <div className="flex gap-4 mb-2">
+            <div className="flex gap-2 mb-2">
               {inspirationOptions.slice(0, Math.ceil(inspirationOptions.length / 2)).map((option) => (
                 <button
                   key={option.label}
@@ -74,7 +74,7 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
                 </button>
               ))}
             </div>
-            <div className="flex gap-4">
+            <div className="flex gap-2">
               {inspirationOptions.slice(Math.ceil(inspirationOptions.length / 2)).map((option) => (
                 <button
                   key={option.label}

@@ -15,12 +15,12 @@ interface CachedLocation {
 }
 
 export class LocationService {
-  private static readonly CACHE_KEY = 'gutzo_user_location';
+  private static readonly CACHE_KEY = "gutzo_user_location";
   private static readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
   // Check if geolocation is available
   static isGeolocationAvailable(): boolean {
-    return 'geolocation' in navigator;
+    return "geolocation" in navigator;
   }
 
   // Get cached location if still valid
@@ -30,7 +30,7 @@ export class LocationService {
       if (!cached) return null;
 
       const parsedCache: CachedLocation = JSON.parse(cached);
-      
+
       // Check if cache is still valid
       if (Date.now() > parsedCache.expiresAt) {
         localStorage.removeItem(this.CACHE_KEY);
@@ -39,7 +39,7 @@ export class LocationService {
 
       return parsedCache.data;
     } catch (error) {
-      console.error('Error reading cached location:', error);
+      console.error("Error reading cached location:", error);
       localStorage.removeItem(this.CACHE_KEY);
       return null;
     }
@@ -50,11 +50,11 @@ export class LocationService {
     try {
       const cacheData: CachedLocation = {
         data: locationData,
-        expiresAt: Date.now() + this.CACHE_DURATION
+        expiresAt: Date.now() + this.CACHE_DURATION,
       };
       localStorage.setItem(this.CACHE_KEY, JSON.stringify(cacheData));
     } catch (error) {
-      console.error('Error caching location:', error);
+      console.error("Error caching location:", error);
     }
   }
 
@@ -67,16 +67,19 @@ export class LocationService {
     } else if (location.state) {
       return location.state;
     } else {
-      return location.country || 'Unknown Location';
+      return location.country || "Unknown Location";
     }
   }
 
   // Reverse geocode coordinates to location data
-  private static async reverseGeocode(latitude: number, longitude: number): Promise<LocationData> {
+  private static async reverseGeocode(
+    latitude: number,
+    longitude: number,
+  ): Promise<LocationData> {
     try {
       // Using BigDataCloud free API (no key required, 10k requests/month)
       const response = await fetch(
-        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
       );
 
       if (!response.ok) {
@@ -84,24 +87,24 @@ export class LocationService {
       }
 
       const data = await response.json();
-      
+
       return {
-        city: data.city || data.locality || '',
-        state: data.principalSubdivision || data.countryName || '',
-        country: data.countryName || '',
+        city: data.city || data.locality || "",
+        state: data.principalSubdivision || data.countryName || "",
+        country: data.countryName || "",
         coordinates: { latitude, longitude },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     } catch (error) {
-      console.error('Reverse geocoding error:', error);
-      
+      console.error("Reverse geocoding error:", error);
+
       // Fallback location data
       return {
-        city: '',
-        state: '',
-        country: 'Unknown',
+        city: "",
+        state: "",
+        country: "Unknown",
         coordinates: { latitude, longitude },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
   }
@@ -114,7 +117,7 @@ export class LocationService {
   } = {}): Promise<LocationData> {
     return new Promise((resolve, reject) => {
       if (!this.isGeolocationAvailable()) {
-        reject(new Error('Geolocation is not supported by this browser'));
+        reject(new Error("Geolocation is not supported by this browser"));
         return;
       }
 
@@ -122,7 +125,7 @@ export class LocationService {
         enableHighAccuracy: true,
         timeout: 10000,
         maximumAge: 300000, // 5 minutes
-        ...options
+        ...options,
       };
 
       navigator.geolocation.getCurrentPosition(
@@ -130,33 +133,33 @@ export class LocationService {
           try {
             const { latitude, longitude } = position.coords;
             const locationData = await this.reverseGeocode(latitude, longitude);
-            
+
             // Cache the location
             //this.cacheLocation(locationData);
-            
+
             resolve(locationData);
           } catch (error) {
             reject(error);
           }
         },
         (error) => {
-          let errorMessage = 'Unable to get your location';
-          
+          let errorMessage = "Unable to get your location";
+
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMessage = 'Location access denied by user';
+              errorMessage = "Location access denied by user";
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information is unavailable';
+              errorMessage = "Location information is unavailable";
               break;
             case error.TIMEOUT:
-              errorMessage = 'Location request timed out';
+              errorMessage = "Location request timed out";
               break;
           }
-          
+
           reject(new Error(errorMessage));
         },
-        defaultOptions
+        defaultOptions,
       );
     });
   }
@@ -172,12 +175,15 @@ export class LocationService {
 
     // If no cache, try to get fresh location
     try {
-      console.log('Fetching fresh location...');
+      console.log("Fetching fresh location...");
       const location = await this.getCurrentLocation();
-      console.log('Fresh location obtained:', this.getLocationDisplay(location));
+      console.log(
+        "Fresh location obtained:",
+        this.getLocationDisplay(location),
+      );
       return location;
     } catch (error) {
-      console.log('Could not get fresh location:', error);
+      console.log("Could not get fresh location:", error);
       return null;
     }
   }
@@ -191,10 +197,10 @@ export class LocationService {
   static isInCoimbatore(location: LocationData): boolean {
     const city = location.city.toLowerCase();
     const state = location.state.toLowerCase();
-    
+
     return (
-      city.includes('coimbatore') ||
-      city.includes('kovai')
+      city.includes("coimbatore") ||
+      city.includes("kovai")
     );
   }
 }

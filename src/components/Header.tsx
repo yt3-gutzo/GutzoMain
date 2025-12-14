@@ -80,19 +80,20 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
     <>
       <header className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-6 h-20">
+        <div className="flex items-center justify-between gap-2 md:gap-4 lg:gap-6 h-20">
           {/* Logo */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0" style={{ minWidth: '140px' }}>
             <button
               type="button"
               aria-label="Go to homepage"
               onClick={() => navigate('/')}
               className="p-0 bg-transparent border-0 inline-flex items-center cursor-pointer hover:opacity-90 active:scale-95 transition-transform"
             >
-              <ImageWithFallback
+              <img
                 src="https://35-194-40-59.nip.io/service/storage/v1/object/public/Gutzo/GUTZO.svg"
-                alt="Gutzo - Healthy Feels Good"
-                className="h-32 w-auto sm:h-36 md:h-40"
+                alt="Gutzo"
+                className="desktop-logo-height object-contain block"
+                style={{ width: '140px', height: 'auto' }}
               />
             </button>
           </div>
@@ -112,7 +113,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
             <div className="hidden md:flex flex-1 items-center max-w-2xl">
               <div className="flex flex-1 items-center border border-gray-200 rounded-08rem bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] min-h-[60px]">
                 {/* Location Selector with Dropdown */}
-                <div className="relative min-w-[180px]">
+                <div className="relative min-w-[130px] lg:min-w-[180px]">
                   <div 
                     className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50/50 transition-colors"
                     onClick={() => setShowLocationDropdown(!showLocationDropdown)}
@@ -182,7 +183,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
               onMouseLeave={e => (e.currentTarget.style.color = colors.textSecondary)}
             >
               <ShoppingBag className="h-5 w-5" strokeWidth={2} />
-              <span className="ml-2 font-normal hidden sm:inline">Cart</span>
+              <span className="ml-2 font-normal hidden lg:inline">Cart</span>
               {totalItems > 0 && (
                 <span className="absolute -top-1 -right-1 bg-gutzo-primary text-white text-xs font-medium rounded-full h-5 w-5 flex items-center justify-center cart-badge-desktop">
                   {totalItems > 99 ? '99+' : totalItems}
@@ -215,7 +216,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
                   style={{ minWidth: 44, minHeight: 44 }}
                 >
                   <User className="h-5 w-5" />
-                  <span className="ml-2 font-medium max-w-[100px] truncate inline-block align-middle">{displayName}</span>
+                  <span className="ml-2 font-medium truncate inline-block align-middle username-truncate">{displayName}</span>
                 </button>
                 <ProfileDropdown
                   isOpen={showDropdown}

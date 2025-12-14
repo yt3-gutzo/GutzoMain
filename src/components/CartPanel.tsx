@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { Sheet, SheetContent } from "./ui/sheet";
 import { useCart } from "../contexts/CartContext";
 import { ImageWithFallback } from "./common/ImageWithFallback";
-import { apiService } from "../utils/api";
+import { nodeApiService as apiService } from "../utils/nodeApi";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 
@@ -32,7 +32,7 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
       try {
         const productIds = items.map((item) => item.productId);
         const result = await apiService.getProductsByIds(productIds);
-        const products: Array<{ id: string; price: number }> = result.products || result;
+        const products = result.data || [];
         const priceMap: Record<string, number> = {};
         products.forEach((prod) => {
           priceMap[prod.id] = prod.price;

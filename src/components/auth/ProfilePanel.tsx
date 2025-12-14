@@ -7,7 +7,7 @@ import { Input } from "../ui/input";
 import { UserAddress } from '../../types/address';
 import { AddressModal } from "./AddressModal";
 import { OrdersPanel } from "../OrdersPanel";
-import { apiService } from '../../utils/api';
+import { nodeApiService as apiService } from '../../utils/nodeApi';
 
 type ProfilePanelContent = 'profile' | 'orders' | 'address';
 
@@ -151,8 +151,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
     }
   };
 
-  // Mock address fetching (fallback)
-  // Removed: All address fetching is now direct from Supabase/database
+  // Address fetching is handled via apiService
 
   // Fetch data when panel opens and content changes
   useEffect(() => {
@@ -260,38 +259,21 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
     }
   };
 
-  const handleSaveAddressMock = async (newAddress: Omit<UserAddress, 'id'>) => {
-    // Mock logic removed: all address creation must use live backend
-    // This function is now deprecated
-  };
-
   const handleDeleteAddress = async (addressId: string) => {
     if (!userData.phone) return;
     setDeletingAddressId(addressId);
     try {
       console.log('🗑️ Deleting address via API service:', addressId);
-  await apiService.deleteAddress(addressId);
+      await apiService.deleteAddress(userData.phone, addressId);
       // Remove from local state
       const updatedAddresses = realAddresses.filter(addr => addr.id !== addressId);
       setRealAddresses(updatedAddresses);
     } catch (error) {
       console.error('❌ Error deleting address via API service:', error);
-      await handleDeleteAddressMock(addressId);
+      // toast.error("Failed to delete address");
     } finally {
       setDeletingAddressId(null);
     }
-  };
-
-  const handleDeleteAddressMock = async (addressId: string) => {
-    console.log('🗑️ Deleting address in mock mode:', addressId);
-    
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const updatedAddresses = realAddresses.filter(addr => addr.id !== addressId);
-    setRealAddresses(updatedAddresses);
-    localStorage.setItem('gutzo_mock_addresses', JSON.stringify(updatedAddresses));
-    
-    console.log('✅ Address deleted successfully (mock mode)');
   };
 
   const getAddressIcon = (type: string) => {
@@ -536,10 +518,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
     );
   };
 
-  const resetMockData = () => {
-  // Removed: All addresses are managed via backend
-  setRealAddresses([]);
-  };
+
 
   const renderAddressContent = () => {
     if (loadingAddresses) {
@@ -563,30 +542,6 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
 
     return (
       <div className="space-y-4" ref={addressListRef}>
-        {/* Database Status Indicator */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-blue-700 font-medium">
-                {addresses.length > 0 ? 'Database Connected' : 'Mock Data Mode'}
-              </span>
-            </div>
-            <button
-              onClick={resetMockData}
-              className="text-xs text-blue-600 hover:text-blue-800 underline"
-            >
-              Reset Data
-            </button>
-          </div>
-          <p className="text-xs text-blue-600 mt-1">
-            {addresses.length > 0 
-              ? `${addresses.length} addresses synced with database`
-              : 'Addresses are saved locally for testing. No server required.'
-            }
-          </p>
-        </div>
-
         {/* Address List */}
         {addresses.length > 0 ? (
           <div className="space-y-3">

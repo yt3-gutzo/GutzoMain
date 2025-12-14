@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
-import { apiService } from "../utils/api";
+import { nodeApiService as apiService } from "../utils/nodeApi";
 
 export function ComingSoon() {
   const [email, setEmail] = useState("");
@@ -44,7 +44,7 @@ export function ComingSoon() {
     try {
       const response = await apiService.subscribeToNotifications(email);
       
-      if (response.already_subscribed) {
+      if ((response as any).already_subscribed) {
         toast.success("You're already subscribed! We'll notify you when Gutzo Points launches.");
       } else {
         toast.success("Thanks! We'll notify you when Gutzo Points launches.");

@@ -1,47 +1,131 @@
 // Shared content for meal plan next steps panel
 import type { MealPlan } from "./components/WeeklyMealPlansSection";
-const NextStepsContent = ({ plan }: { plan: MealPlan }) => (
-  <div style={{ fontFamily: 'Poppins, sans-serif', color: '#222' }}>
-    <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>{plan?.title} Plan</h1>
-    <div style={{ fontSize: 16, fontWeight: 500, color: '#555', marginBottom: 2 }}>by {plan?.vendor}</div>
-    <div style={{ fontSize: 16, color: '#666', marginBottom: 18 }}>Eat well without deciding every day</div>
-    <div style={{ background: '#f7f7fa', borderRadius: 16, padding: 16, marginBottom: 16 }}>
-      <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>₹{plan?.price?.replace('/day','').replace('/week','')} / {plan?.price?.includes('week') ? 'week' : 'day'}</div>
-      <div style={{ fontSize: 15, color: '#444', marginBottom: 8 }}>{plan?.schedule} · Free delivery</div>
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>Select meals</div>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#e6f4ea', borderRadius: 8, padding: '4px 12px' }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Lunch</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#e6f4ea', borderRadius: 8, padding: '4px 12px' }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Dinner</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f0f0f0', borderRadius: 8, padding: '4px 12px', color: '#aaa' }}>□ Breakfast</div>
+import { MealPlanMenuPreview } from "./components/MealPlanMenuPreview";
+
+const NextStepsContent = ({ plan, hideTitle = false, isMobile = false, hideVendor = false }: { plan: MealPlan; hideTitle?: boolean; isMobile?: boolean; hideVendor?: boolean }) => (
+  <div className="font-primary text-main">
+    {/* 1. Plan Title */}
+    {!hideTitle && <h1 className="text-2xl font-bold mb-1">{plan?.title} Plan</h1>}
+    
+    {/* 2. Vendor Name */}
+    {!hideVendor && <div className="text-base font-medium text-sub mb-0.5">by {plan?.vendor}</div>}
+    
+
+    
+    {/* 4. Weekly Menu Preview (3 days) */}
+    <MealPlanMenuPreview removePadding={isMobile} />
+
+
+
+    <div className="bg-gutzo-bg rounded-gutzo-panel p-4 mb-4">
+
+
+      {/* 7. Price Section */}
+      <div className="text-lg font-medium mb-2">
+        ₹{plan?.price?.includes('week') 
+          ? Math.round(parseInt(plan.price.replace(/[^\d]/g, '')) / 6) 
+          : plan?.price?.replace('/day','').replace('/week','')} / day
       </div>
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>Select days</div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        {['Mon','Tue','Wed','Thu','Fri','Sat'].map(day => (
-          <div key={day} style={{ background: '#fff', borderRadius: 8, padding: '4px 12px', border: '1px solid #eee', fontWeight: 500 }}>{day}</div>
-        ))}
+
+      {/* 6. Social Proof Badge (Moved) */}
+      <div className="inline-flex items-center gap-1.5 bg-white text-main text-xs font-bold px-3 py-1.5 mb-2 rounded-full border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)]">
+        <Zap className="w-3.5 h-3.5 fill-main text-main" />
+        <span>Most chosen · 72% continue after week 1</span>
       </div>
-      <div style={{ color: '#888', fontSize: 14, marginBottom: 8 }}>○ Sunday – vendor closed</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <div style={{ fontWeight: 600 }}>Start from</div>
-        <div style={{ fontWeight: 500, color: '#222' }}>Tomorrow &gt;</div>
+      <div className="text-xs text-[#9A9A9A] mb-3">Cheaper than home cooking • No delivery fees • Daily variety</div>
+
+      
+      <hr className="border-gray-100 my-4" />
+
+      {/* 8. Customize Your Plan */}
+      <h3 className="font-semibold text-base mb-3 text-main">Customize Your Plan</h3>
+      
+      <div className="space-y-4">
+        {/* Included Daily (Meals) */}
+        <div>
+          <div className="text-sm text-sub mb-2 font-medium">Included Daily:</div>
+          <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 bg-brand-light border border-transparent rounded-gutzo-badge px-3 py-2 cursor-pointer transition-all hover:border-brand">
+               <div className="w-4 h-4 rounded-full bg-brand flex items-center justify-center">
+                 <span className="text-white text-xs font-bold">✓</span>
+               </div>
+               <span className="text-main font-medium text-sm">Lunch</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-brand-light border border-transparent rounded-gutzo-badge px-3 py-2 cursor-pointer transition-all hover:border-brand">
+               <div className="w-4 h-4 rounded-full bg-brand flex items-center justify-center">
+                 <span className="text-white text-xs font-bold">✓</span>
+               </div>
+               <span className="text-main font-medium text-sm">Dinner</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-white border border-main rounded-gutzo-badge px-3 py-2 cursor-pointer transition-all hover:border-gray-400 opacity-60">
+               <div className="w-4 h-4 rounded-full border border-gray-400"></div>
+               <span className="text-sub font-medium text-sm">Breakfast (+₹39)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Delivery Days */}
+        <div>
+          <div className="text-sm text-sub mb-2 font-medium">Delivery Days:</div>
+          <div className="flex flex-wrap gap-1.5">
+            {['Mon','Tue','Wed','Thu','Fri','Sat'].map(day => (
+              <div key={day} className="bg-brand text-white rounded-gutzo-badge w-10 h-8 flex items-center justify-center font-medium text-xs shadow-sm">
+                {day}
+              </div>
+            ))}
+             <div className="bg-gray-100 text-disabled rounded-gutzo-badge w-10 h-8 flex items-center justify-center font-medium text-xs opacity-50">
+                Sun
+              </div>
+          </div>
+          <div className="text-brand text-xs mt-2 font-medium flex items-center gap-0.5">
+             <span className="w-1.5 h-1.5 rounded-full bg-brand"></span>
+             Sunday is a rest day (Vendor closed)
+          </div>
+        </div>
       </div>
-      <div style={{ color: '#1BA672', fontWeight: 500, marginBottom: 8, cursor: 'pointer' }}>View sample weekly menu &gt;</div>
+
+      <div className="h-px bg-gray-200 my-4"></div>
+      
+      {/* Starting From */}
+      <div className="flex justify-between items-center bg-white p-3 rounded-gutzo-badge border border-gray-100">
+        <div className="flex flex-col">
+          <span className="text-xs text-sub font-medium">Starting From</span>
+          <span className="font-semibold text-main text-sm">Tomorrow, Lunch</span>
+        </div>
+        <span className="text-brand font-medium text-sm">Change &gt;</span>
+      </div>
     </div>
-    <div style={{ background: '#f7f7fa', borderRadius: 16, padding: 16, marginBottom: 16 }}>
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>What this plan includes</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Fresh daily meals</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Free delivery</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Skip or pause anytime</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> No lock-in & cancel anytime</div>
+
+    {/* 9. Plan Benefits */}
+    <div className="bg-gutzo-bg rounded-gutzo-panel p-4 mb-4">
+      <div className="font-semibold mb-3">Plan Benefits</div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex items-start gap-2">
+          <span className="text-brand font-bold text-lg leading-none">✓</span>
+          <span className="text-sm text-sub leading-tight">Fresh menu every day</span>
+        </div>
+        <div className="flex items-start gap-2">
+          <span className="text-brand font-bold text-lg leading-none">✓</span>
+          <span className="text-sm text-sub leading-tight">Pause/skip anytime</span>
+        </div>
+        <div className="flex items-start gap-2">
+          <span className="text-brand font-bold text-lg leading-none">✓</span>
+          <span className="text-sm text-sub leading-tight">Cancel anytime</span>
+        </div>
       </div>
     </div>
-    <div style={{ background: '#f7f7fa', borderRadius: 16, padding: 16, marginBottom: 16, fontWeight: 500, color: '#222', cursor: 'pointer' }}>
-      Will I get the same food every day? &gt;
+
+    {/* 10. FAQ Section */}
+    <div className="space-y-3 mb-6">
+      <div className="bg-gutzo-bg rounded-gutzo-panel p-4 font-medium text-main cursor-pointer flex justify-between items-center transition-colors hover:bg-gray-100">
+        <span className="text-sm font-medium">Will I get the same food every day?</span>
+        <span className="text-sub">&gt;</span>
+      </div>
+      <div className="bg-gutzo-bg rounded-gutzo-panel p-4 font-medium text-main cursor-pointer flex justify-between items-center transition-colors hover:bg-gray-100">
+        <span className="text-sm font-medium">Can I cancel my plan?</span>
+        <span className="text-sub">&gt;</span>
+      </div>
     </div>
-    <button style={{ width: '100%', background: '#1BA672', color: '#fff', fontWeight: 600, fontSize: 20, borderRadius: 12, padding: '16px 0', border: 'none', marginTop: 8, marginBottom: 8, cursor: 'pointer' }}>
-      Continue &rarr;
-    </button>
   </div>
 );
 import { useState, useRef, useEffect } from "react";
@@ -85,7 +169,7 @@ import { AboutPage } from "./pages/AboutPage";
 import PaymentStatusPage from "./pages/PaymentStatusPage";
 import PhonePeComingSoon from "./pages/PaytmComingSoon";
 import { Toaster } from "./components/ui/sonner";
-import { Loader2, MapPin, Plus, X } from "lucide-react";
+import { Loader2, MapPin, Plus, X, Zap } from "lucide-react";
 import { Vendor } from "./types/index";
 import { useVendors } from "./hooks/useVendors";
 import { filterVendors, extractCategoriesFromVendors } from "./utils/vendors";
@@ -100,7 +184,7 @@ import CartStrip from "./components/CartStrip";
 
 function AppContent() {
     // Use responsive hook for desktop detection
-    const isDesktop = useMediaQuery('(min-width: 900px)');
+    const isDesktop = useMediaQuery('(min-width: 850px)');
 
     // Next steps state for meal plan
     const [selectedMealPlan, setSelectedMealPlan] = useState<MealPlan | null>(null);
@@ -159,131 +243,87 @@ function AppContent() {
   // (already declared above, remove duplicate)
 
   // Prevent background scroll when panel is open
-  useEffect(() => {
-    if (selectedMealPlan) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [selectedMealPlan]);
+  // Meal plan scroll lock handled in consolidated effect below
 
   // Right panel and bottom sheet components (reuse from VendorDetailsPage)
   const RightPanelNextSteps = ({ plan, onClose }: { plan: MealPlan, onClose: () => void }) => (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      right: 0,
-      height: '100%',
-      width: '95%',
-      maxWidth: '600px',
-      backgroundColor: 'white',
-      boxShadow: '-10px 0 40px rgba(0, 0, 0, 0.2)',
-      zIndex: 50,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      overflowY: 'auto',
-    }}>
-      <button
+    <>
+      <div 
+        className="fixed inset-0 bg-black/50 transition-opacity" 
+        style={{ zIndex: 1090 }}
         onClick={onClose}
-        style={{
-          position: 'absolute',
-          top: '1.5rem',
-          right: '1.5rem',
-          zIndex: 10,
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          cursor: 'pointer',
-        }}
-        aria-label="Close panel"
+        aria-hidden="true"
+      />
+      <div 
+        className="fixed top-0 right-0 h-full w-full bg-gutzo-surface shadow-modal flex flex-col items-stretch"
+        style={{ zIndex: 1100, maxWidth: '600px' }}
       >
-        <X className="h-6 w-6 text-gray-500" />
-      </button>
-      <div style={{ padding: '2rem', paddingTop: '5rem', width: '100%' }}>
-        <NextStepsContent plan={plan} />
-      </div>
-    </div>
-  );
-
-  const BottomSheetNextSteps = ({ plan, onClose }: { plan: MealPlan, onClose: () => void }) => (
-    <div style={{
-      position: 'fixed',
-      left: 0,
-      bottom: 0,
-      width: '100vw',
-      background: '#fff',
-      boxShadow: '0 -2px 8px rgba(0,0,0,0.08)',
-      zIndex: 1000,
-      padding: 20,
-      borderTopLeftRadius: 16,
-      borderTopRightRadius: 16,
-      minHeight: '60vh',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, fontFamily: 'Poppins, sans-serif', color: '#222' }}>{plan?.title} Plan</h1>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            marginLeft: 12,
-          }}
-          aria-label="Close panel"
+        <div 
+          className="flex-none py-6 pb-2 bg-gutzo-surface z-10"
+          style={{ paddingLeft: '24px', paddingRight: '24px' }}
         >
-          <X className="h-6 w-6 text-gray-500" />
-        </button>
+          <div className="flex items-start justify-between">
+            <h1 className="text-3xl font-bold m-0 font-primary text-main mb-0.5">{plan?.title} Plan</h1>
+            <button
+              onClick={onClose}
+              className="bg-transparent border-none p-0 cursor-pointer pt-1.5"
+              aria-label="Close panel"
+            >
+              <X className="h-6 w-6 text-gray-500" />
+            </button>
+          </div>
+          <div className="text-base font-medium text-sub">by {plan?.vendor}</div>
       </div>
-      <div style={{ marginTop: 0 }}>
-        {/* Render rest of NextStepsContent except title */}
-        <div style={{ fontFamily: 'Poppins, sans-serif', color: '#222' }}>
-          <div style={{ fontSize: 16, fontWeight: 500, color: '#555', marginBottom: 2 }}>by {plan?.vendor}</div>
-          <div style={{ fontSize: 16, color: '#666', marginBottom: 18 }}>Eat well without deciding every day</div>
-          <div style={{ background: '#f7f7fa', borderRadius: 16, padding: 16, marginBottom: 16 }}>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>₹{plan?.price?.replace('/day','').replace('/week','')} / {plan?.price?.includes('week') ? 'week' : 'day'}</div>
-            <div style={{ fontSize: 15, color: '#444', marginBottom: 8 }}>{plan?.schedule} · Free delivery</div>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Select meals</div>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#e6f4ea', borderRadius: 8, padding: '4px 12px' }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Lunch</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#e6f4ea', borderRadius: 8, padding: '4px 12px' }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Dinner</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f0f0f0', borderRadius: 8, padding: '4px 12px', color: '#aaa' }}>□ Breakfast</div>
-            </div>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Select days</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              {['Mon','Tue','Wed','Thu','Fri','Sat'].map(day => (
-                <div key={day} style={{ background: '#fff', borderRadius: 8, padding: '4px 12px', border: '1px solid #eee', fontWeight: 500 }}>{day}</div>
-              ))}
-            </div>
-            <div style={{ color: '#888', fontSize: 14, marginBottom: 8 }}>○ Sunday – vendor closed</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 600 }}>Start from</div>
-              <div style={{ fontWeight: 500, color: '#222' }}>Tomorrow &gt;</div>
-            </div>
-            <div style={{ color: '#1BA672', fontWeight: 500, marginBottom: 8, cursor: 'pointer' }}>View sample weekly menu &gt;</div>
-          </div>
-          <div style={{ background: '#f7f7fa', borderRadius: 16, padding: 16, marginBottom: 16 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>What this plan includes</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Fresh daily meals</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Free delivery</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> Skip or pause anytime</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#1BA672', fontWeight: 700 }}>✓</span> No lock-in & cancel anytime</div>
-            </div>
-          </div>
-          <div style={{ background: '#f7f7fa', borderRadius: 16, padding: 16, marginBottom: 16, fontWeight: 500, color: '#222', cursor: 'pointer' }}>
-            Will I get the same food every day? &gt;
-          </div>
-          <button style={{ width: '100%', background: '#1BA672', color: '#fff', fontWeight: 600, fontSize: 20, borderRadius: 12, padding: '16px 0', border: 'none', marginTop: 8, marginBottom: 8, cursor: 'pointer' }}>
-            Continue &rarr;
+      <div 
+        className="flex-1 overflow-y-auto py-6 pt-2"
+        style={{ paddingLeft: '24px', paddingRight: '24px' }}
+      >
+        <NextStepsContent plan={plan} hideTitle={true} hideVendor={true} />
+      </div>
+        <div className="flex-none p-6 bg-gutzo-surface border-t border-gray-100 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <button className="w-full bg-brand text-white font-semibold text-lg rounded-gutzo-btn py-4 cursor-pointer hover:bg-brand-hover active:bg-brand-pressed transition-colors border-none shadow-lg shadow-green-900/10">
+            Continue →
           </button>
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  const BottomSheetNextSteps = ({ plan, onClose }: { plan: MealPlan, onClose: () => void }) => (
+    <>
+      <div 
+        className="fixed inset-0 bg-black/50 transition-opacity" 
+        style={{ zIndex: 1090 }}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div 
+        className="fixed left-0 bottom-0 w-full bg-gutzo-surface shadow-[0_-2px_8px_rgba(0,0,0,0.08)] rounded-t-3xl flex flex-col"
+        style={{ zIndex: 1100, top: '104px', height: 'calc(100vh - 104px)' }}
+      >
+        <div className="flex-none p-5 pb-2 bg-gutzo-surface rounded-t-3xl">
+          <div className="flex items-start justify-between">
+            <h1 className="text-2xl font-bold m-0 font-primary text-main mb-0.5">{plan?.title} Plan</h1>
+            <button
+              onClick={onClose}
+              className="bg-transparent border-none p-0 cursor-pointer ml-3 pt-1"
+              aria-label="Close panel"
+            >
+              <X className="h-6 w-6 text-gray-500" />
+            </button>
+          </div>
+          <div className="text-base font-medium text-sub">by {plan?.vendor}</div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 py-2 scrollbar-hide">
+          <NextStepsContent plan={plan} hideTitle={true} isMobile={true} hideVendor={true} />
+        </div>
+        <div className="flex-none p-5 pb-8 bg-gutzo-surface z-20">
+          <button className="w-full bg-brand text-white font-semibold text-lg rounded-gutzo-btn py-4 cursor-pointer hover:bg-brand-hover active:bg-brand-pressed transition-colors border-none shadow-lg shadow-green-900/10">
+            Continue →
+          </button>
+        </div>
+      </div>
+    </>
   );
 
   useEffect(() => {
@@ -295,19 +335,32 @@ function AppContent() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  // Consolidated Body Scroll Lock Effect
   useEffect(() => {
-    if (showLoginPanel || showProfilePanel || showCartPanel || showCheckoutPanel || showAddressPanel) {
+    const shouldLock = 
+      selectedMealPlan !== null || 
+      showLoginPanel || 
+      showProfilePanel || 
+      showCartPanel || 
+      showCheckoutPanel || 
+      showAddressPanel;
+
+    if (shouldLock) {
       document.body.style.overflow = 'hidden';
-      document.body.style.paddingRight = '0px';
+      // Only add padding right if it's a modal panel (not necessarily for meal plan if needed, but safe to add)
+      if (!selectedMealPlan) {
+         document.body.style.paddingRight = '0px'; 
+      }
     } else {
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
     }
+    
     return () => {
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
     };
-  }, [showLoginPanel, showProfilePanel, showCartPanel, showCheckoutPanel, showAddressPanel]);
+  }, [selectedMealPlan, showLoginPanel, showProfilePanel, showCartPanel, showCheckoutPanel, showAddressPanel]);
 
   useEffect(() => {
     //if (!locationLoading && !isInCoimbatore) {
@@ -321,163 +374,8 @@ function AppContent() {
 
   const availableCategories = extractCategoriesFromVendors(vendors);
   // Custom vendor data for Explore Delicious Choices
-  const customVendors = [
-    {
-      id: '1',
-      name: 'Zero cals',
-      description: 'Healthy low calorie meals',
-      location: 'Peelamedu',
-      rating: 4.2,
-        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '20-30 mins',
-      minimumOrder: 150,
-      deliveryFee: 20,
-      cuisineType: 'Balanced Diet',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['Balanced Diet', 'Low Calorie', 'High Protein'],
-    },
-    {
-      id: '2',
-      name: 'The fruit bowl co',
-      description: 'Fresh fruit bowls and vegan options',
-      location: 'Gandhipuram',
-      rating: 4.5,
-        image: 'https://images.unsplash.com/photo-1464306076886-debede6bbf94?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '25-35 mins',
-      minimumOrder: 120,
-      deliveryFee: 15,
-      cuisineType: 'Fruit Bowl',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['Fruit Bowl', 'Vegan', 'Fresh Fruits'],
-    },
-    {
-      id: '3',
-      name: 'The buddha bowl',
-      description: 'Balanced vegetarian buddha bowls',
-      location: 'Sitra',
-      rating: 4.3,
-        image: 'https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '20-30 mins',
-      minimumOrder: 130,
-      deliveryFee: 18,
-      cuisineType: 'Buddha Bowl',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['Buddha Bowl', 'Balanced Diet', 'Vegetarian'],
-    },
-    {
-      id: '4',
-      name: 'Daily grubs',
-      description: 'South Indian healthy meals',
-      location: 'Neelambur',
-      rating: 4.1,
-        image: 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '20-30 mins',
-      minimumOrder: 100,
-      deliveryFee: 10,
-      cuisineType: 'South Indian Diet',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['South Indian Diet', 'Balanced Diet'],
-    },
-    {
-      id: '5',
-      name: 'Mealzy',
-      description: 'Low carb, high protein meals',
-      location: 'Chinniampalayam',
-      rating: 4.0,
-        image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '20-30 mins',
-      minimumOrder: 110,
-      deliveryFee: 12,
-      cuisineType: 'Low Carb',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['Low Carb', 'High Protein', 'Balanced Diet'],
-    },
-    {
-      id: '6',
-      name: 'Incredibowl Coimbatore',
-      description: 'Bowl meals for every diet',
-      location: 'Gandhipuram',
-      rating: 4.4,
-        image: 'https://images.unsplash.com/photo-1506089676908-3592f7389d4d?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '25-35 mins',
-      minimumOrder: 140,
-      deliveryFee: 16,
-      cuisineType: 'Bowl Meals',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['Bowl Meals', 'Balanced Diet'],
-    },
-    {
-      id: '7',
-      name: 'Padayal NO OIL NO BOIL Restaurant',
-      description: 'No oil, healthy South Indian food',
-      location: 'Sitra',
-      rating: 4.3,
-      image: 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '20-30 mins',
-      minimumOrder: 125,
-      deliveryFee: 14,
-      cuisineType: 'South Indian Diet',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['South Indian Diet', 'No Oil', 'Healthy'],
-    },
-    {
-      id: '8',
-      name: 'FooDelights',
-      description: 'Balanced diet and low calorie meals',
-      location: 'Peelamedu',
-      rating: 4.2,
-      image: 'https://images.unsplash.com/photo-1464306076886-debede6bbf94?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '20-30 mins',
-      minimumOrder: 115,
-      deliveryFee: 13,
-      cuisineType: 'Balanced Diet',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['Balanced Diet', 'Low Calorie'],
-    },
-    {
-      id: '9',
-      name: 'food darzee',
-      description: 'High protein, low carb meals',
-      location: 'Neelambur',
-      rating: 4.5,
-      image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80',
-      deliveryTime: '25-35 mins',
-      minimumOrder: 135,
-      deliveryFee: 17,
-      cuisineType: 'High Protein',
-      phone: '',
-      isActive: true,
-      isFeatured: true,
-      created_at: '',
-      tags: ['High Protein', 'Low Carb', 'Balanced Diet'],
-    },
-  ];
-
-  let filteredVendors = customVendors;
+  // Use vendors fetched from API
+  let filteredVendors = vendors;
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
@@ -551,7 +449,7 @@ function AppContent() {
   };
   const handlePaymentSuccess = (paymentData: any) => {
     clearCart();
-    const mockPaymentData = {
+    const paymentSuccessPayload = {
       paymentDetails: {
         paymentId: `PAY_${Date.now()}`,
         subscriptionId: `ORD_${Date.now()}`,
@@ -567,7 +465,7 @@ function AppContent() {
         estimatedDelivery: paymentData?.estimatedDelivery || '05:30 pm'
       }
     };
-    setPaymentSuccessData(mockPaymentData);
+    setPaymentSuccessData(paymentSuccessPayload);
     setShowPaymentSuccess(true);
     setShowCheckoutPanel(false);
     setShowCartPanel(false);
@@ -657,8 +555,7 @@ function AppContent() {
       </div>
       {(showLoginPanel || showProfilePanel || showCartPanel || showCheckoutPanel || showAddressPanel) && (
         <div 
-          className="fixed inset-0 z-40 transition-all duration-300 ease-out"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          className="fixed inset-0 z-40 transition-all duration-300 ease-out bg-black-50"
           onClick={() => {
             if (showLoginPanel) handleCloseAuth();
             if (showProfilePanel) handleCloseProfile();
@@ -685,15 +582,7 @@ function AppContent() {
           {/* Overlay for right panel */}
           {isDesktop && (
             <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                background: 'rgba(0,0,0,0.5)',
-                zIndex: 49,
-              }}
+              className="fixed-full bg-black-50 z-49"
               onClick={() => setSelectedMealPlan(null)}
             />
           )}
@@ -706,15 +595,7 @@ function AppContent() {
             <>
               {/* Overlay for bottom sheet */}
               <div
-                style={{
-                  position: 'fixed',
-                  top: 0,
-                  left: 0,
-                  width: '100vw',
-                  height: '100vh',
-                  background: 'rgba(0,0,0,0.5)',
-                  zIndex: 999,
-                }}
+              className="fixed-full bg-black-50"
                 onClick={() => setSelectedMealPlan(null)}
               />
               <BottomSheetNextSteps
@@ -733,8 +614,7 @@ function AppContent() {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <h2
-                className="text-left font-semibold text-3xl md:text-4xl lg:text-5xl tracking-tight w-full"
-                style={{ fontFamily: 'Poppins', letterSpacing: '-0.01em', fontWeight: 500, color: '#111' }}
+                className="text-left font-semibold text-3xl md:text-4xl lg:text-5xl tracking-tight w-full font-primary text-main"
               >
                 {selectedCategory === "All" 
                   ? "Explore Delicious Choices Near You.." 

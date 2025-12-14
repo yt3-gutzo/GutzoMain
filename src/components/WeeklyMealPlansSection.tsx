@@ -1,6 +1,9 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { nodeApiService } from "../utils/nodeApi";
+import { toast } from "sonner";
 
 export type MealPlan = {
+	id: string; // Added ID for key
 	title: string;
 	vendor: string;
 	rating: number;
@@ -11,80 +14,58 @@ export type MealPlan = {
 };
 
 interface WeeklyMealPlansSectionProps {
-	noPadding?: boolean;
+	noPadding?: boolean; 
 	onMealPlanClick?: (plan: MealPlan) => void;
 }
 
-const mealPlans = [
-	{
-		title: "Protein Power",
-		vendor: "Daily Grub",
-		rating: 4.6,
-		price: "₹89/day",
-		schedule: "Mon – Sat · Lunch/Dinner",
-		features: [
-			"Curated, chef-cooked dishes",
-			"Daily menu variety",
-			"Free delivery on every order",
-		],
-		image: "/assets/mealplans/proteinpower.png",
-	},
-	{
-		title: "Balanced Meal",
-		vendor: "FitMeals",
-		rating: 4.8,
-		price: "₹89/day",
-		schedule: "Mon – Sat · Lunch/Dinner",
-		features: [
-			"Curated, chef-cooked dishes",
-			"Daily menu variety",
-			"Free delivery on every order",
-		],
-		image: "/assets/mealplans/balancedmeal.png",
-	},
-	{
-		title: "Veggie Delight",
-		vendor: "Green Eats",
-		rating: 4.5,
-		price: "₹85/day",
-		schedule: "Mon – Sat · Lunch/Dinner",
-		features: [
-			"Fresh vegetarian dishes",
-			"Daily menu variety",
-			"Free delivery on every order",
-		],
-		image: "/assets/mealplans/Veggiedelight.png",
-	},
-	{
-		title: "Mediterranean Medley",
-		vendor: "Olive Grove",
-		rating: 4.7,
-		price: "₹1100/week",
-		schedule: "Mon-Fri",
-		features: ["Falafel", "Hummus", "Fresh Salad"],
-		image: "/assets/mealplans/Mediterraneanmedley.png",
-	},
-	{
-		title: "Asian Fusion Feast",
-		vendor: "Wok Wonders",
-		rating: 4.6,
-		price: "₹1150/week",
-		schedule: "Mon-Sat",
-		features: ["Stir Fry", "Rice Bowls", "Seasonal Veggies"],
-		image: "/assets/mealplans/Asianfusionfeast.png",
-	},
-	{
-		title: "Hearty Homestyle Meals",
-		vendor: "Mom's Kitchen",
-		rating: 4.8,
-		price: "₹990/week",
-		schedule: "Mon-Fri",
-		features: ["Dal & Rice", "Sabzi", "Roti"],
-		image: "/assets/mealplans/Heartyhomestylemeals.png",
-	},
-];
-
 export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanClick }: WeeklyMealPlansSectionProps) {
+	const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		const fetchMealPlans = async () => {
+			try {
+				const response = await nodeApiService.getMealPlans();
+				if (response.success && Array.isArray(response.data)) {
+					const mappedPlans: MealPlan[] = response.data.map((plan: any) => ({
+						id: plan.id,
+						title: plan.title,
+						vendor: plan.vendor?.name || 'Unknown Vendor',
+						rating: Number(plan.rating) || 4.5, // Ensure number
+						price: plan.price_display || `₹${plan.price_per_day}/day`,
+						schedule: plan.schedule || 'Mon – Sat',
+						features: plan.features || [],
+						image: plan.thumbnail || plan.banner_url || '/assets/mealplans/proteinpower.png', // Fallback
+					}));
+					setMealPlans(mappedPlans);
+				}
+			} catch (error) {
+				console.error("Failed to fetch meal plans:", error);
+				// toast.error("Failed to load meal plans"); // Optional: silent fail is often better for initial loading sections
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchMealPlans();
+	}, []);
+
+	if (loading) {
+		return (
+			<section className="w-full bg-[#fafafa] pt-4 pb-8 md:pt-6 md:pb-12 lg:pt-8 lg:pb-16">
+				<div className={`w-full max-w-7xl mx-auto flex flex-col${noPadding ? '' : ' px-4 sm:px-6 lg:px-8'}`}>
+					<div className="animate-pulse flex gap-4 overflow-x-auto">
+						{[1, 2, 3, 4].map((i) => (
+							<div key={i} className="min-w-[220px] h-[340px] bg-gray-200 rounded-2xl"></div>
+						))}
+					</div>
+				</div>
+			</section>
+		);
+	}
+
+	if (mealPlans.length === 0) return null;
+
 	return (
 		<section className="w-full bg-[#fafafa] pt-4 pb-8 md:pt-6 md:pb-12 lg:pt-8 lg:pb-16">
 			<div className={`w-full max-w-7xl mx-auto flex flex-col${noPadding ? '' : ' px-4 sm:px-6 lg:px-8'}`}> 
@@ -95,19 +76,24 @@ export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanCl
 					Weekly Meal Plans
 				</h2>
 				<div
-					className="gutzo-desktop-scroll scrollbar-hide"
+					className="gutzo-desktop-scroll scrollbar-hide flex flex-row gap-4 overflow-x-auto"
 					style={{
-						width: window.innerWidth >= 1024 ? 'calc(220px * 4.5 + 24px * 4)' : '100%',
-						maxWidth: '100%',
-						overflowX: 'auto',
-						display: 'flex',
-						flexDirection: 'row',
-						gap: '24px',
+						width: window.innerWidth < 640 
+							? 'calc(100% + 16px)' 
+							: window.innerWidth < 1024 
+								? 'calc(100% + 24px)' 
+								: 'calc(220px * 4.5 + 64px)',
+						marginRight: window.innerWidth < 640 
+							? '-16px' 
+							: window.innerWidth < 1024 
+								? '-24px' 
+								: 0,
+            maxWidth: window.innerWidth < 1024 ? 'none' : '100%',
 					}}
 				>
 					{mealPlans.map((plan, idx) => (
 						<div
-							key={idx}
+							key={plan.id || idx}
 							className="gutzo-card-hover"
 							style={{
 								minWidth: window.innerWidth >= 1024 ? '220px' : '170px',
@@ -147,7 +133,7 @@ export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanCl
 									}}
 								/>
 							</div>
-							<div className="px-2 pt-2 pb-0 flex flex-col flex-1 md:px-3" style={{ flexGrow: 1 }}>
+							<div className="flex flex-col flex-1 md:px-3" style={{ flexGrow: 1 }}>
 								<h3
 									className="text-[13px] font-bold text-gray-900 mb-0.5"
 									style={{ fontFamily: 'Poppins', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}

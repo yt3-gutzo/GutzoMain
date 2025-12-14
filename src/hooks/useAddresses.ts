@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import { AddressApi } from '../utils/addressApi';
-import { 
-  UserAddress, 
-  AddressFormData, 
-  AddressType,
+import { useCallback, useEffect, useState } from "react";
+import { AddressApi } from "../utils/addressApi";
+import {
+  AddressFormData,
   AddressListApiResponse,
-  AvailableTypesApiResponse 
-} from '../types/address';
-import { useAuth } from '../contexts/AuthContext';
+  AddressType,
+  AvailableTypesApiResponse,
+  UserAddress,
+} from "../types/address";
+import { useAuth } from "../contexts/AuthContext";
 
 export function useAddresses() {
   const { isAuthenticated, user } = useAuth();
@@ -28,23 +28,23 @@ export function useAddresses() {
 
     try {
       const response = await AddressApi.getUserAddresses(user.phone);
-      
+
       if (response.success) {
-        setAddresses(response.data || []);
+        setAddresses(Array.isArray(response.data) ? response.data : []);
       } else {
         // If user not found, provide empty addresses (they're new)
-        if (response.error?.includes('User not found')) {
-          console.log('ℹ️ New user detected, starting with empty addresses');
+        if (response.error?.includes("User not found")) {
+          console.log("ℹ️ New user detected, starting with empty addresses");
           setAddresses([]);
           setError(null); // Don't show error for new users
         } else {
-          setError(response.error || 'Failed to fetch addresses');
+          setError(response.error || "Failed to fetch addresses");
           setAddresses([]);
         }
       }
     } catch (err) {
-      console.error('Error fetching addresses:', err);
-      setError('Failed to fetch addresses');
+      console.error("Error fetching addresses:", err);
+      setError("Failed to fetch addresses");
       setAddresses([]);
     } finally {
       setLoading(false);
@@ -54,7 +54,7 @@ export function useAddresses() {
   // Fetch available address types
   const fetchAvailableTypes = useCallback(async () => {
     if (!isAuthenticated || !user?.phone) {
-      setAvailableTypes(['home', 'work', 'other']);
+      setAvailableTypes(["home", "work", "other"]);
       return;
     }
 
@@ -62,19 +62,21 @@ export function useAddresses() {
       const response = await AddressApi.getAvailableAddressTypes(user.phone);
       let types = response.data;
       if (!Array.isArray(types)) {
-        types = ['home', 'work', 'other'];
+        types = ["home", "work", "other"];
       }
       setAvailableTypes(types);
     } catch (err) {
-      console.error('Error fetching available types:', err);
-      setAvailableTypes(['home', 'work', 'other']);
+      console.error("Error fetching available types:", err);
+      setAvailableTypes(["home", "work", "other"]);
     }
   }, [isAuthenticated, user]);
 
   // Create new address
-  const createAddress = async (addressData: AddressFormData): Promise<{ success: boolean; error?: string }> => {
+  const createAddress = async (
+    addressData: AddressFormData,
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAuthenticated || !user?.phone) {
-      return { success: false, error: 'User not authenticated' };
+      return { success: false, error: "User not authenticated" };
     }
 
     setLoading(true);
@@ -82,18 +84,18 @@ export function useAddresses() {
 
     try {
       const response = await AddressApi.createAddress(addressData, user.phone);
-      
+
       if (response.success) {
         // Refresh addresses and available types
         await Promise.all([fetchAddresses(), fetchAvailableTypes()]);
         return { success: true };
       } else {
-        setError(response.error || 'Failed to create address');
+        setError(response.error || "Failed to create address");
         return { success: false, error: response.error };
       }
     } catch (err) {
-      console.error('Error creating address:', err);
-      const errorMessage = 'Failed to create address';
+      console.error("Error creating address:", err);
+      const errorMessage = "Failed to create address";
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -102,28 +104,35 @@ export function useAddresses() {
   };
 
   // Update existing address
-  const updateAddress = async (addressId: string, addressData: Partial<AddressFormData>): Promise<{ success: boolean; error?: string }> => {
+  const updateAddress = async (
+    addressId: string,
+    addressData: Partial<AddressFormData>,
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAuthenticated || !user?.phone) {
-      return { success: false, error: 'User not authenticated' };
+      return { success: false, error: "User not authenticated" };
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await AddressApi.updateAddress(addressId, addressData, user.phone);
-      
+      const response = await AddressApi.updateAddress(
+        addressId,
+        addressData,
+        user.phone,
+      );
+
       if (response.success) {
         // Refresh addresses
         await fetchAddresses();
         return { success: true };
       } else {
-        setError(response.error || 'Failed to update address');
+        setError(response.error || "Failed to update address");
         return { success: false, error: response.error };
       }
     } catch (err) {
-      console.error('Error updating address:', err);
-      const errorMessage = 'Failed to update address';
+      console.error("Error updating address:", err);
+      const errorMessage = "Failed to update address";
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -132,28 +141,30 @@ export function useAddresses() {
   };
 
   // Delete address
-  const deleteAddress = async (addressId: string): Promise<{ success: boolean; error?: string }> => {
+  const deleteAddress = async (
+    addressId: string,
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAuthenticated) {
-      return { success: false, error: 'User not authenticated' };
+      return { success: false, error: "User not authenticated" };
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await AddressApi.deleteAddress(addressId);
-      
+      const response = await AddressApi.deleteAddress(addressId, user!.phone!);
+
       if (response.success) {
         // Refresh addresses and available types
         await Promise.all([fetchAddresses(), fetchAvailableTypes()]);
         return { success: true };
       } else {
-        setError(response.error || 'Failed to delete address');
+        setError(response.error || "Failed to delete address");
         return { success: false, error: response.error };
       }
     } catch (err) {
-      console.error('Error deleting address:', err);
-      const errorMessage = 'Failed to delete address';
+      console.error("Error deleting address:", err);
+      const errorMessage = "Failed to delete address";
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -162,28 +173,33 @@ export function useAddresses() {
   };
 
   // Set default address
-  const setDefaultAddress = async (addressId: string): Promise<{ success: boolean; error?: string }> => {
+  const setDefaultAddress = async (
+    addressId: string,
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAuthenticated || !user?.phone) {
-      return { success: false, error: 'User not authenticated' };
+      return { success: false, error: "User not authenticated" };
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await AddressApi.setDefaultAddress(addressId, user.phone);
-      
+      const response = await AddressApi.setDefaultAddress(
+        addressId,
+        user.phone,
+      );
+
       if (response.success) {
         // Refresh addresses
         await fetchAddresses();
         return { success: true };
       } else {
-        setError(response.error || 'Failed to set default address');
+        setError(response.error || "Failed to set default address");
         return { success: false, error: response.error };
       }
     } catch (err) {
-      console.error('Error setting default address:', err);
-      const errorMessage = 'Failed to set default address';
+      console.error("Error setting default address:", err);
+      const errorMessage = "Failed to set default address";
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -193,12 +209,12 @@ export function useAddresses() {
 
   // Get default address
   const getDefaultAddress = (): UserAddress | null => {
-    return addresses.find(addr => addr.is_default) || null;
+    return addresses.find((addr) => addr.is_default) || null;
   };
 
   // Get address by ID
   const getAddressById = (addressId: string): UserAddress | null => {
-    return addresses.find(addr => addr.id === addressId) || null;
+    return addresses.find((addr) => addr.id === addressId) || null;
   };
 
   // Get formatted address display text
@@ -223,7 +239,7 @@ export function useAddresses() {
     availableTypes,
     loading,
     error,
-    
+
     // Actions
     createAddress,
     updateAddress,
@@ -231,13 +247,13 @@ export function useAddresses() {
     setDefaultAddress,
     refreshAddresses: fetchAddresses,
     refreshAvailableTypes: fetchAvailableTypes,
-    
+
     // Getters
     getDefaultAddress,
     getAddressById,
     getAddressDisplayText,
     getAddressTypeInfo,
-    
+
     // Computed
     hasAddresses: addresses.length > 0,
     defaultAddress: getDefaultAddress(),
