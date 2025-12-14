@@ -698,7 +698,7 @@ export function InstantOrderPanel({
 
                     // Load Paytm JS Checkout and invoke payment
                     const script = document.createElement('script');
-                    script.src = `https://secure.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
+                    script.src = `https://securestage.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
                     script.async = true;
                     script.crossOrigin = "anonymous"; // Added as per docs
                     script.onload = () => {
@@ -710,7 +710,7 @@ export function InstantOrderPanel({
                          const checkoutJs = window.Paytm.CheckoutJS;
                          console.log('Hooking into checkoutJs.onLoad...');
 
-                         // Strict adherence to docs: Wrap init in onLoad
+                            // Strict adherence to docs: Wrap init in onLoad
                          checkoutJs.onLoad(() => {
                             console.log('Paytm CheckoutJS.onLoad callback fired. Initializing...');
                             const config = {
@@ -721,12 +721,7 @@ export function InstantOrderPanel({
                               },
                               flow: "DEFAULT",
                               data: {
-                                orderId: orderId, // Use order_number for Paytm display if preferred, or ID. Backend expects ID for validation? Backend initiate uses ID. 
-                                // WAIT: Backend initiate uses ID to look up order. But Paytm params use ORDER_ID.
-                                // If backend initiated with UUID, then Paytm expects UUID.
-                                // Let's check backend: router.post('/initiate'...) uses req.body.order_id to fetch order.
-                                // Then it sends ORDER_ID: order_id to Paytm.
-                                // So we MUST use the same ID we sent to /initiate.
+                                orderId: order.order_number, // Use GZ... order number to match backend token generation
                                 token: token,
                                 tokenType: "TXN_TOKEN",
                                 amount: String(amount) // Ensure string
