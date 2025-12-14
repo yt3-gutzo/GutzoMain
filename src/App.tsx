@@ -662,8 +662,8 @@ function AppContent() {
         onShowLogin={handleShowLogin}
         onShowCheckout={handleShowCheckout}
       />
-      {/* Show CartStrip only when cart panel is not open */}
-      {!showCartPanel && <CartStrip onShowCart={handleShowCart} />}
+      {/* Show CartStrip only when cart, profile, and login panels are not open */}
+      {!showCartPanel && !showProfilePanel && !showLoginPanel && <CartStrip onShowCart={handleShowCart} />}
       <InstantOrderPanel
         isOpen={showCheckoutPanel}
         onClose={handleCloseCheckout}
