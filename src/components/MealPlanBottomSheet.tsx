@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Sheet, SheetContent } from './ui/sheet'; // Adjust path if needed
 import { X, Check, CheckCircle2, ChevronRight, ChevronDown, Star, Calendar, Info, Clock, MapPin, Sun, Utensils, Moon, Coffee, ArrowRight, Lightbulb } from 'lucide-react';
 import { MealPlan } from './WeeklyMealPlansSection';
+
 import { nodeApiService } from '../utils/nodeApi';
+import { format, addDays, isTomorrow, getDay, isSameDay } from 'date-fns';
 
 interface MealPlanBottomSheetProps {
   plan: MealPlan | null;
@@ -20,10 +22,34 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
   
   // State for Full Menu View
   const [showFullMenu, setShowFullMenu] = useState(false);
+  
+  // State for Main Sheet Visibility (for Replace Pattern) - REMOVED
+  // const [isMainVisible, setIsMainVisible] = useState(true); 
+  
+  // Generate next 7 calendar days (to handle "Closed" states visually)
+  const generateDates = () => {
+    const dates: Date[] = [];
+    for (let i = 1; i <= 7; i++) {
+        dates.push(addDays(new Date(), i));
+    }
+    return dates;
+  };
 
-  // Force default selection on mount to override any persisted HMR state
+  const availableDates = generateDates();
+
+  // Find first valid date for default state
+  const getFirstValidDate = () => {
+    return availableDates.find(d => getDay(d) !== 0) || addDays(new Date(), 1);
+  };
+
+  // State for Start Date Picker
+  const [isDatePickerExpanded, setIsDatePickerExpanded] = useState(false);
+  const [startDate, setStartDate] = useState<Date>(getFirstValidDate());
+
+  // Force default selection logic only on mount
   React.useEffect(() => {
      setDuration('1 Week');
+     setStartDate(getFirstValidDate());
   }, []);
 
   // Constants
@@ -209,10 +235,10 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                  </div>
 
 
-                 <div className="mt-2 pt-3 border-t border-gray-100 flex justify-center">
+                 <div className="mt-0 pt-3 border-t border-gray-100 flex justify-center">
                      <button 
                         onClick={() => setShowFullMenu(true)}
-                        className="flex items-center gap-1 text-gray-500 text-[12px] font-medium hover:gap-2 transition-all"
+                        className="w-full flex items-center justify-center gap-1 text-gray-500 text-[12px] font-medium hover:gap-2 transition-all py-0.5"
                      >
                         View full menu <ArrowRight size={14} />
                      </button>
@@ -223,16 +249,82 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
               <div className="space-y-4">
                  <h3 className="text-lg font-bold text-gray-900">How do you want to start?</h3>
 
-                 {/* Starts From */}
-                 <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl">
-                    <div className="flex items-center gap-3">
-                       <Calendar className="text-gray-400" size={24} />
-                       <div>
-                          <p className="text-xs text-gray-500 font-medium">Starts from</p>
-                          <p className="text-sm font-bold text-gray-900">Tomorrow (Tuesday)</p>
+                 <div className="bg-gray-50 rounded-xl overflow-hidden transition-all duration-300">
+                    <div 
+                       onClick={() => setIsDatePickerExpanded(!isDatePickerExpanded)}
+                       className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                    >
+                       <div className="flex items-center gap-3">
+                          <Calendar className="text-gray-400" size={24} />
+                          <div>
+                             <p className="text-xs text-gray-500 font-medium">Starts from</p>
+                             <p className="text-sm font-bold text-gray-900">
+                                {isTomorrow(startDate) ? `Tomorrow (${format(startDate, 'EEEE')})` : format(startDate, 'EEE, d MMM')}
+                             </p>
+                          </div>
                        </div>
+                       <ChevronDown size={20} className={`text-gray-400 transition-transform duration-200 ${isDatePickerExpanded ? 'rotate-180' : ''}`} />
                     </div>
-                    <ChevronRight size={20} className="text-gray-400" />
+
+                    {/* Inline Date Picker */}
+                    {isDatePickerExpanded && (
+                       <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                          <p className="text-xs text-gray-400 mb-3">We'll start delivering from this day.</p>
+                          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                             {availableDates.map((date) => {
+                                const isSelected = isSameDay(date, startDate);
+                                const isClosed = getDay(date) === 0; // Sunday
+                                const dayName = format(date, 'EEE');
+                                const dateNum = format(date, 'd');
+                                const label = dayName; // Always show Day Name (Fri, Sat, etc) - No "Tomorrow" inside chip
+
+                                // STYLING LOGIC - Calendar Page Design
+                                let containerStyle = {};
+                                let headerStyle = { backgroundColor: '#F9FAFB', color: '#6B7280', lineHeight: '1.4' }; // gray-50 gray-500
+                                let bodyTextStyle = { color: '#111827' }; // gray-900
+                                let containerClassName = "bg-white border-gray-200 hover:border-gray-300";
+
+                                if (isSelected) {
+                                   containerClassName = "bg-white border-[#1BA672] shadow-sm overflow-hidden";
+                                   headerStyle = { backgroundColor: '#1BA672', color: 'white', lineHeight: '1.4' };
+                                   bodyTextStyle = { color: '#1BA672' };
+                                } else if (isClosed) {
+                                   containerClassName = "bg-gray-50 border-gray-200 opacity-60 cursor-default";
+                                   headerStyle = { backgroundColor: '#F3F4F6', color: '#9CA3AF', lineHeight: '1.4' }; // gray-100 gray-400
+                                   bodyTextStyle = { color: '#9CA3AF' };
+                                } else {
+                                   containerClassName = "bg-white border-gray-200 hover:border-gray-300 overflow-hidden";
+                                }
+
+                                return (
+                                   <button
+                                      key={date.toISOString()}
+                                      disabled={isClosed}
+                                      onClick={() => !isClosed && setStartDate(date)}
+                                      style={{ width: '60px', height: '62px', minWidth: '60px' }} 
+                                      className={`
+                                         flex flex-col items-stretch justify-start rounded-xl border transition-all shrink-0 p-0 overflow-hidden
+                                         ${containerClassName}
+                                      `}
+                                   >
+                                      {/* Header: Day Name */}
+                                      <div 
+                                         style={headerStyle}
+                                         className="h-[28px] flex items-center justify-center text-[11px] font-bold uppercase tracking-wide w-full border-b leading-[1.4]"
+                                      >
+                                         {label}
+                                      </div>
+                                      
+                                      {/* Body: Date Number */}
+                                      <div className={`flex-1 flex items-center justify-center w-full bg-white ${isClosed ? '!bg-transparent' : ''}`}>
+                                          <span className="text-lg font-bold" style={bodyTextStyle}>{dateNum}</span>
+                                      </div>
+                                   </button>
+                                );
+                             })}
+                          </div>
+                       </div>
+                    )}
                  </div>
 
                  {/* Select Meals Grid */}
@@ -460,9 +552,9 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                        let forcedStyle: React.CSSProperties = {};
                                        
                                        if (isActive) {
-                                          className += " shadow-md";
+                                          className += "";
                                           // Force Green styling inline to prevent white-on-white text issue
-                                          forcedStyle = { backgroundColor: '#1BA672', color: '#ffffff', borderColor: '#1BA672' };
+                                          forcedStyle = { backgroundColor: '#F2FBF6', color: '#1BA672', borderColor: '#CDEBDD' };
                                        } else if (isSunday) {
                                           className += " bg-gray-50 text-gray-300 border-gray-100 line-through decoration-gray-300 decoration-1"; 
                                        } else {
@@ -495,7 +587,7 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                  </div>
 
                                  {/* Helper Text */}
-                                 <p className="text-sm text-gray-500 font-medium">
+                                 <p className="text-gray-500 font-medium" style={{ fontSize: "12px" }}>
                                     {helperText}
                                  </p>
                               </div>
@@ -511,9 +603,7 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
           </div>
            {/* Sticky Bottom CTA */}
            <div className="flex-shrink-0 p-6 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-[1003]">
-              <button className="w-full bg-gutzo-primary hover:bg-gutzo-primary-hover text-white h-[42px] rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors">
-                 Continue <ArrowRight className="h-4 w-4" />
-              </button>
+              <button className="w-full bg-gutzo-primary hover:bg-gutzo-primary-hover text-white rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors" style={{ height: '42px' }}> Continue <ArrowRight className="h-4 w-4" /> </button>
                <div className={`flex justify-center pt-3 transition-opacity duration-200 ${isRoutine ? 'opacity-100' : 'opacity-0'}`}>
                   <p className="text-gray-400 flex items-center gap-1" style={{ fontSize: '11px' }}>
                      Cancel anytime.
