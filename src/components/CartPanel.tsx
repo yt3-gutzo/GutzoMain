@@ -124,14 +124,7 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
             <X className="h-5 w-5 text-gray-500" />
           </button>
         </div>
-        {totalItems > 0 && (
-          <button
-            onClick={handleClearCart}
-            className="text-red-600 hover:text-red-700 transition-colors text-sm"
-          >
-            Clear All
-          </button>
-        )}
+
       </div>
 
       {/* Content */}
@@ -258,9 +251,9 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
 
       {/* Footer with Order Summary */}
       {syncedItems.length > 0 && (
-        <div className="bg-white p-6 flex-shrink-0 space-y-4">
+        <div className="bg-white p-6 flex-shrink-0">
           {/* Order Summary */}
-          <div className="space-y-2 text-sm">
+          <div className="space-y-2 text-sm mb-4">
             {(() => {
               // Compute values once for clarity and consistency
               const subtotal = syncedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -301,7 +294,7 @@ export function CartPanel({ isOpen, onClose, isAuthenticated = false, onShowLogi
             <ArrowRight className="h-4 w-4" />
           </Button>
 
-          <p className="text-xs text-gray-500 text-center">
+          <p className="text-gray-500 text-center" style={{ fontSize: '11px', marginTop: '2px' }}>
             By placing this order, you agree to our Terms & Conditions
           </p>
         </div>

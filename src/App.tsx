@@ -161,6 +161,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { RouterProvider, useRouter } from "./components/Router";
 import { CartPanel } from "./components/CartPanel";
 import { InstantOrderPanel } from "./components/InstantOrderPanel";
+import MealPlanBottomSheet from "./components/MealPlanBottomSheet";
 import { TermsPage } from "./pages/TermsPage";
 import { RefundPage } from "./pages/RefundPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
@@ -604,19 +605,12 @@ function AppContent() {
               plan={selectedMealPlan}
               onClose={() => setSelectedMealPlan(null)}
             />
-          ) : (
-            <>
-              {/* Overlay for bottom sheet */}
-              <div
-              className="fixed-full bg-black-50"
-                onClick={() => setSelectedMealPlan(null)}
-              />
-              <BottomSheetNextSteps
-                plan={selectedMealPlan}
-                onClose={() => setSelectedMealPlan(null)}
-              />
-            </>
-          )}
+            ) : (
+             <MealPlanBottomSheet
+               plan={selectedMealPlan}
+               onClose={() => setSelectedMealPlan(null)}
+             />
+           )}
         </>
       )}
       <main
@@ -675,8 +669,8 @@ function AppContent() {
         onShowLogin={handleShowLogin}
         onShowCheckout={handleShowCheckout}
       />
-      {/* Show CartStrip only when cart, profile, and login panels are not open */}
-      {!showCartPanel && !showProfilePanel && !showLoginPanel && !showCheckoutPanel && <CartStrip onShowCart={handleShowCart} />}
+      {/* Show CartStrip only when cart, profile, and login panels are not open, and no meal plan is selected */}
+      {!showCartPanel && !showProfilePanel && !showLoginPanel && !showCheckoutPanel && !selectedMealPlan && <CartStrip onShowCart={handleShowCart} />}
       <InstantOrderPanel
         isOpen={showCheckoutPanel}
         onClose={handleCloseCheckout}
