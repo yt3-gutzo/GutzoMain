@@ -628,10 +628,10 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
       {/* Panel */}
       <div 
         className={isDesktop 
-          ? `fixed top-0 right-0 h-full w-[95%] max-w-[600px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
+          ? `fixed top-0 right-0 h-full w-[95%] max-w-[600px] bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${
               isOpen ? 'translate-x-0' : 'translate-x-full'
             }`
-          : `fixed bottom-0 left-0 w-full max-h-[85vh] bg-white shadow-2xl z-50 rounded-t-3xl border-t border-gray-100 transform transition-transform duration-300 ${
+          : `fixed bottom-0 left-0 w-full max-h-[85vh] bg-white shadow-2xl z-50 rounded-t-3xl border-t border-gray-100 transform transition-transform duration-300 overflow-hidden flex flex-col ${
               isOpen ? 'translate-y-0' : 'translate-y-full'
             }`
         }
@@ -648,7 +648,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
         </div>
 
         {/* Content */}
-        <div className="flex flex-col h-full pt-16 px-6 pb-6">
+        <div className="flex flex-col flex-1 min-h-0 pt-16 px-6 pb-6">
           {/* Header */}
           <div className="mb-6">
             <h2 className="font-semibold text-gray-900">
@@ -658,7 +658,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
           </div>
 
           {/* Dynamic Content */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0 scrollbar-hide">
             {/* Loading States */}
             {content === 'profile' && userDataLoading && !realUserData && (
               <div className="space-y-4">
