@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Sheet, SheetContent } from './ui/sheet'; // Adjust path if needed
-import { X, Check, CheckCircle2, ChevronRight, ChevronDown, Star, Calendar, Info, Clock, MapPin, Sun, Utensils, Moon, Coffee, ArrowRight, Lightbulb } from 'lucide-react';
+import { X, Check, CheckCircle2, ChevronRight, ChevronDown, Star, Calendar, Info, Clock, MapPin, Sun, Utensils, Moon, Coffee, ArrowRight, Lightbulb, Repeat } from 'lucide-react';
 import { MealPlan } from './WeeklyMealPlansSection';
 
 import { nodeApiService } from '../utils/nodeApi';
 import { format, addDays, isTomorrow, getDay, isSameDay } from 'date-fns';
+
+import { useMediaQuery } from '../hooks/use-media-query';
 
 interface MealPlanBottomSheetProps {
   plan: MealPlan | null;
@@ -12,6 +14,8 @@ interface MealPlanBottomSheetProps {
 }
 
 const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose }) => {
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  
   // State for Healthy Daily Logic (HMR Trigger 1)
   const [duration, setDuration] = useState<'Trial' | '1 Week' | 'Monthly'>('1 Week'); // Default to "Most Chosen"
   const [selectedMeals, setSelectedMeals] = useState<string[]>(['Breakfast', 'Lunch', 'Dinner']);
@@ -21,7 +25,12 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
   const [weekDays, setWeekDays] = useState<number[]>([1, 2, 3, 4, 5, 6]); // 1=Mon... 6=Sat
   
   // State for Full Menu View
-  const [showFullMenu, setShowFullMenu] = useState(false);
+   const [showFullMenu, setShowFullMenu] = useState(false);
+   
+   // Accordion States for Progressive Disclosure
+   const [isDeliveryExpanded, setIsDeliveryExpanded] = useState(false);
+   const [isMealsExpanded, setIsMealsExpanded] = useState(false);
+   const [isRoutineDetailsExpanded, setIsRoutineDetailsExpanded] = useState(false);
   
   // State for Main Sheet Visibility (for Replace Pattern) - REMOVED
   // const [isMainVisible, setIsMainVisible] = useState(true); 
@@ -47,10 +56,12 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
   const [startDate, setStartDate] = useState<Date>(getFirstValidDate());
 
   // Force default selection logic only on mount
-  React.useEffect(() => {
-     setDuration('1 Week');
-     setStartDate(getFirstValidDate());
-  }, []);
+   React.useEffect(() => {
+      setDuration('1 Week');
+      setStartDate(getFirstValidDate());
+   }, []);
+
+
 
   // Constants
   const weeklyPrice = plan ? parseInt(plan.price.replace(/[^\d]/g, '')) || 89 : 89;
@@ -80,6 +91,8 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
 
   if (!plan) return null;
 
+  if (!plan) return null;
+
   return (
     <Sheet open={!!plan} onOpenChange={(open) => {
       if (!open) {
@@ -88,9 +101,17 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
       }
     }}>
       <SheetContent 
-        side="bottom" 
-        className="gap-0 rounded-t-3xl p-0 w-full max-w-full left-0 right-0 transition-transform duration-300 ease-in-out flex flex-col"
-        style={{ top: '104px', bottom: 0, height: 'calc(100vh - 104px)', zIndex: 1002 }}
+        side={isDesktop ? "right" : "bottom"}
+        className={`
+          flex flex-col gap-0 p-0 transition-transform duration-300 ease-in-out
+          ${isDesktop 
+            ? 'h-full border-l shadow-2xl' 
+            : 'w-full max-w-full rounded-t-3xl left-0 right-0 overflow-hidden'}
+        `}
+        style={isDesktop 
+           ? { width: '600px', maxWidth: '600px', zIndex: 1002 } 
+           : { top: '104px', bottom: 0, height: 'calc(100vh - 104px)', zIndex: 1002 }
+        }
       >
         <style>{`
            [data-slot="sheet-content"] > button[class*="absolute"] {
@@ -101,7 +122,8 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
              background-color: #FFF3E6 !important;
            }
         `}</style>
-
+        
+        {/* Content Wrapper */}
         <div className="flex flex-col h-full relative bg-white">
            {/* ----------------------------------------------------------------------
                PERSISTENT HEADER (Plan Info + Close)
@@ -144,7 +166,7 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                      <div key={day} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                         <div className="flex justify-between items-center mb-3">
                            <h3 className="font-bold text-gray-900">{day}</h3>
-                           {day === 'Tuesday' && <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">TOMORROW</span>}
+                           {day === 'Tuesday' && <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#E8F6F1', color: '#1BA672' }}>TOMORROW</span>}
                         </div>
                         <div className="space-y-3">
                            <div className="flex gap-3">
@@ -191,7 +213,7 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
            // ----------------------------------------------------------------------
         <div className="flex flex-col flex-1 overflow-hidden">
            {/* Scrollable Content */}
-           <div className="overflow-y-auto flex-1 px-6 pb-6 pt-2">
+           <div className="overflow-y-auto flex-1 bg-[#F5F6F8] px-4 py-4 scrollbar-hide">
             
             <div className="space-y-2">
 
@@ -201,9 +223,12 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
               </div>
 
               {/* 2️⃣ Menu Card */}
-              <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-gray-100 p-3">
+              <div 
+                 onClick={() => setShowFullMenu(true)}
+                 className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-gray-100 p-3 cursor-pointer group hover:border-[#CDEBDD] hover:shadow-[0_4px_16px_rgba(27,166,114,0.1)] transition-all duration-200"
+              >
                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg font-bold text-gray-900">Tuesday <span className="text-orange-500 font-medium">(Tomorrow)</span></h3>
+                     <h3 className="text-lg font-bold text-gray-900 group-hover:text-gutzo-primary transition-colors">Tuesday <span className="text-orange-500 font-medium">(Tomorrow)</span></h3>
                  </div>
                  
                  <div className="flex gap-3 items-center">
@@ -225,7 +250,7 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                     </div>
 
                     {/* Right: Image */}
-                    <div className="w-[100px] h-[100px] min-w-[100px] min-h-[100px] rounded-xl overflow-hidden bg-gray-100 shrink-0" style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}>
+                    <div className="w-[100px] h-[100px] min-w-[100px] min-h-[100px] rounded-xl overflow-hidden bg-gray-100 shrink-0 group-hover:opacity-90 transition-opacity" style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}>
                        <img 
                           src={plan.image || '/assets/mealplans/proteinpower.png'} 
                           alt="Meal"
@@ -237,8 +262,7 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
 
                  <div className="mt-0 pt-3 border-t border-gray-100 flex justify-center">
                      <button 
-                        onClick={() => setShowFullMenu(true)}
-                        className="w-full flex items-center justify-center gap-1 text-gray-500 text-[12px] font-medium hover:gap-2 transition-all py-0.5"
+                        className="w-full flex items-center justify-center gap-1 text-gray-500 text-[12px] font-medium group-hover:text-gutzo-primary group-hover:gap-2 transition-all py-0.5"
                      >
                         View full menu <ArrowRight size={14} />
                      </button>
@@ -246,14 +270,201 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
               </div>
 
               {/* 3️⃣ Plan Configuration */}
-              <div className="space-y-4">
-                 <h3 className="text-lg font-bold text-gray-900">How do you want to start?</h3>
+              <div className="mt-4">
+                  {/* Duration - Always visible */}
+                  <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-3">
+                     <h3 className="!text-[14px] md:!text-base !font-normal text-gray-900 mb-2" style={{ fontSize: '14px', fontWeight: 400 }}>How do you want to start?</h3>
+                       {/* Card 1: Trial */}
+                       <button
+                          onClick={() => setDuration('Trial')}
+                           style={{
+                              borderWidth: isTrial ? '2px' : '1px',
+                              borderColor: isTrial ? '#1BA672' : '#F3F4F6', // #F3F4F6 is gray-100
+                              backgroundColor: isTrial ? '#F2FBF6' : 'white'
+                           }}
+                           className={`
+                              relative flex items-center gap-3 p-3 rounded-2xl text-left transition-all min-h-[80px] cursor-pointer w-full
+                              ${isTrial 
+                                 ? 'shadow-[0_4px_12px_rgba(27,166,114,0.15)] ring-1 ring-green-100' 
+                                 : 'hover:border-green-300 hover:shadow-sm'}
+                           `}
+                        >
+                           <div 
+                              style={{ 
+                                 backgroundColor: isTrial ? '#E8F6F1' : '#F3F4F6', 
+                                 color: isTrial ? '#1BA672' : '#6B7280' 
+                              }}
+                              className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+                           >
+                              <Calendar size={24} strokeWidth={2} />
+                           </div>
+                          <div className="flex-1">
+                             <div className="flex items-center justify-between pr-6">
+                                <h4 className="text-base font-bold text-gray-900">Try for 3 days</h4>
+                             </div>
+                             <p className="text-xs text-gray-500 mt-1 font-medium leading-relaxed">Just try it. No pressure.</p>
+                          </div>
+                          {isTrial ? (
+                             <div 
+                                style={{
+                                   position: 'absolute',
+                                   top: '50%',
+                                   transform: 'translateY(-50%)',
+                                   right: '16px',
+                                   width: '20px',
+                                   height: '20px',
+                                   backgroundColor: 'white',
+                                   borderRadius: '50%',
+                                   display: 'flex',
+                                   alignItems: 'center',
+                                   justifyContent: 'center',
+                                   zIndex: 50
+                                }}
+                             >
+                                <Check size={12} strokeWidth={3} color="#1BA672" />
+                             </div>
+                          ) : (
+                             <div 
+                                style={{
+                                   position: 'absolute',
+                                   top: '50%',
+                                   transform: 'translateY(-50%)',
+                                   right: '16px',
+                                   width: '20px',
+                                   height: '20px',
+                                   border: '2px solid #E5E7EB',
+                                   borderRadius: '50%',
+                                   zIndex: 50
+                                }}
+                             />
+                          )}
+                       </button>
 
-                 <div className="bg-gray-50 rounded-xl overflow-hidden transition-all duration-300">
-                    <div 
-                       onClick={() => setIsDatePickerExpanded(!isDatePickerExpanded)}
-                       className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100 transition-colors"
-                    >
+                       {/* Card 2: Routine (Mapped to '1 Week') */}
+                       <button
+                          onClick={() => setDuration('1 Week')}
+                           style={{
+                              borderWidth: isRoutine ? '2px' : '1px',
+                              borderColor: isRoutine ? '#1BA672' : '#F3F4F6',
+                              backgroundColor: isRoutine ? '#F2FBF6' : 'white'
+                           }}
+                           className={`
+                              relative flex items-center gap-3 p-3 rounded-2xl text-left transition-all min-h-[80px] cursor-pointer w-full
+                              ${isRoutine 
+                                 ? 'shadow-[0_4px_12px_rgba(27,166,114,0.15)] ring-1 ring-green-100' 
+                                 : 'hover:border-green-300 hover:shadow-sm'}
+                           `}
+                        >
+                           <div 
+                              style={{ 
+                                 backgroundColor: isRoutine ? '#E8F6F1' : '#F3F4F6', 
+                                 color: isRoutine ? '#1BA672' : '#6B7280' 
+                              }}
+                              className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+                           >
+                              <Utensils size={24} strokeWidth={2} />
+                           </div>
+                          <div className="flex-1">
+                             <div className="flex items-center justify-between pr-6">
+                                <h4 className="text-base font-bold text-gray-900">Set a routine</h4>
+                             </div>
+                             <p className="text-xs text-gray-500 mt-1 font-medium leading-relaxed">Eat on days you choose.</p>
+                          </div>
+                          {isRoutine ? (
+                             <div 
+                                style={{
+                                   position: 'absolute',
+                                   top: '50%',
+                                   transform: 'translateY(-50%)',
+                                   right: '16px',
+                                   width: '20px',
+                                   height: '20px',
+                                   backgroundColor: 'white',
+                                   borderRadius: '50%',
+                                   display: 'flex',
+                                   alignItems: 'center',
+                                   justifyContent: 'center',
+                                   zIndex: 50
+                                }}
+                             >
+                                <Check size={12} strokeWidth={3} color="#1BA672" />
+                             </div>
+                          ) : (
+                             <div 
+                                style={{
+                                   position: 'absolute',
+                                   top: '50%',
+                                   transform: 'translateY(-50%)',
+                                   right: '16px',
+                                   width: '20px',
+                                   height: '20px',
+                                   border: '2px solid #E5E7EB',
+                                   borderRadius: '50%',
+                                   zIndex: 50
+                                }}
+                             />
+                          )}
+                       </button>
+
+                        {/* Banner */}
+                        {/* Insight Strip */}
+                        <div 
+                            style={{ marginTop: '-10px' }}
+                            className="flex items-center gap-2.5 p-2 px-3 rounded-xl bg-white/50"
+                        >
+                           <Lightbulb size={16} className="text-gray-400 shrink-0" />
+                           <p 
+                               style={{ fontSize: '12px' }}
+                               className="text-gray-500 font-medium leading-relaxed"
+                            >
+                               Most people choose this
+                            </p>
+                        </div>
+                  </div>
+
+
+
+                  {/* Section Title */}
+                  <div className="mt-6 mb-3">
+                     <h2 className="text-base font-bold text-gray-900 leading-tight">Your routine</h2>
+                     <p className="text-xs text-gray-500 font-medium mt-0.5">You can change this anytime</p>
+                  </div>
+
+                  {/* Routine Details (Summary or Full) */}
+                  {!isRoutineDetailsExpanded ? (
+                     <>
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center justify-between shadow-sm cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => setIsRoutineDetailsExpanded(!isRoutineDetailsExpanded)}>
+                           <div className="flex-1">
+                              {(() => {
+                                 const startStr = isTomorrow(startDate) ? 'Starts tomorrow' : `Starts ${format(startDate, 'EEE, d MMM')}`;
+                                 const days = isTrial ? "3 days" : "Mon-Sat"; 
+                                 const meals = selectedMeals.length === 4 ? "All meals" : (selectedMeals.length === 1 ? selectedMeals[0] : `${selectedMeals.length} meals`);
+                                 
+                                 return (
+                                    <div className="flex flex-col items-start gap-0.5">
+                                       <p className="text-sm font-semibold text-gray-900 leading-tight">
+                                          {startStr}
+                                       </p>
+                                       <p className="text-xs text-gray-500 font-medium">
+                                          {days} • {meals}
+                                       </p>
+                                    </div>
+                                 );
+                              })()}
+                           </div>
+                           <span className="text-sm font-medium text-green-600 hover:text-green-700 hover:underline pl-3">
+                              Change
+                           </span>
+                        </div>
+                     </>
+                  ) : (
+                     <div className="animate-in fade-in zoom-in-95 duration-300 space-y-4">
+                        {/* Start Date - Primary Priority */}
+                  <div className="bg-white rounded-xl overflow-hidden border border-gray-100 transition-all duration-300">
+                        <div 
+                           onClick={() => { setIsDatePickerExpanded(!isDatePickerExpanded); setIsDeliveryExpanded(false); setIsMealsExpanded(false); }}
+                           className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                        >
                        <div className="flex items-center gap-3">
                           <Calendar className="text-gray-400" size={24} />
                           <div>
@@ -310,14 +521,14 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                       {/* Header: Day Name */}
                                       <div 
                                          style={headerStyle}
-                                         className="h-[28px] flex items-center justify-center text-[11px] font-bold uppercase tracking-wide w-full border-b leading-[1.4]"
+                                         className="h-[28px] flex items-center justify-center text-[11px] font-medium uppercase tracking-wide w-full border-b leading-[1.4]"
                                       >
                                          {label}
                                       </div>
                                       
                                       {/* Body: Date Number */}
                                       <div className={`flex-1 flex items-center justify-center w-full bg-white ${isClosed ? '!bg-transparent' : ''}`}>
-                                          <span className="text-lg font-bold" style={bodyTextStyle}>{dateNum}</span>
+                                          <span className="text-lg font-medium" style={bodyTextStyle}>{dateNum}</span>
                                       </div>
                                    </button>
                                 );
@@ -325,286 +536,187 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                           </div>
                        </div>
                     )}
-                 </div>
+                  </div>
+     {/* Dynamic Delivery Details */}
 
-                 {/* Select Meals Grid */}
-                 <div className="space-y-2">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">SELECT MEALS</p>
-                    <div className="grid grid-cols-2 gap-3">
-                       {[
-                          { id: 'Breakfast', icon: <Sun size={18} /> },
-                          { id: 'Lunch', icon: <Utensils size={18} /> },
-                          { id: 'Snacks', icon: <Coffee size={18} /> }, // Using Coffee for Snacks
-                          { id: 'Dinner', icon: <Moon size={18} /> }
-                       ].map((meal) => (
-                          <button
-                             key={meal.id}
-                             onClick={() => toggleMeal(meal.id)}
-                             className={`
-                                flex items-center gap-3 p-3 rounded-xl border transition-all text-left
-                                ${selectedMeals.includes(meal.id)
-                                   ? 'bg-green-50 border-green-200 text-gray-900'
-                                   : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'}
-                             `}
-                          >
-                             <div className={`${selectedMeals.includes(meal.id) ? 'text-gray-800' : 'text-gray-400'}`}>
-                                {meal.icon}
-                             </div>
-                             <span className="text-sm font-semibold flex-1">{meal.id}</span>
-                             {selectedMeals.includes(meal.id) && (
-                                <div className="w-2 h-2 rounded-full bg-gutzo-primary" />
-                             )}
-                          </button>
-                       ))}
-                    </div>
-                 </div>
-
-                 {/* Duration */}
-                 <div className="space-y-3">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">DURATION</p>
-                    
-                     <div className="flex flex-col gap-3">
-                       {/* Card 1: Trial */}
-                       <button
-                          onClick={() => setDuration('Trial')}
-                           style={{
-                              borderWidth: isTrial ? '2px' : '1px',
-                              borderColor: isTrial ? '#1BA672' : '#F3F4F6', // #F3F4F6 is gray-100
-                              backgroundColor: isTrial ? '#F2FBF6' : 'white'
-                           }}
-                           className={`
-                              relative flex items-center gap-4 p-4 rounded-2xl text-left transition-all
-                              ${isTrial 
-                                 ? 'shadow-[0_4px_12px_rgba(27,166,114,0.15)]' 
-                                 : 'hover:border-gray-200'}
-                           `}
-                        >
-                           <div 
-                              style={{ 
-                                 backgroundColor: isTrial ? '#E8F6F1' : '#F3F4F6', 
-                                 color: isTrial ? '#1BA672' : '#6B7280' 
-                              }}
-                              className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-                           >
-                              <Calendar size={24} strokeWidth={2} />
-                           </div>
-                          <div className="flex-1">
-                             <div className="flex items-center justify-between pr-8">
-                                <h4 className="text-base font-bold text-gray-900">Try for 3 days</h4>
-                             </div>
-                             <p className="text-xs text-gray-500 mt-1 font-medium leading-relaxed">Just try it. No pressure.</p>
-                          </div>
-                          {isTrial ? (
-                             <div 
-                                style={{
-                                   position: 'absolute',
-                                   top: '16px',
-                                   right: '16px',
-                                   width: '20px',
-                                   height: '20px',
-                                   backgroundColor: 'white',
-                                   borderRadius: '50%',
-                                   display: 'flex',
-                                   alignItems: 'center',
-                                   justifyContent: 'center',
-                                   zIndex: 50
-                                }}
-                             >
-                                <Check size={12} strokeWidth={3} color="#1BA672" />
-                             </div>
-                          ) : (
-                             <div 
-                                style={{
-                                   position: 'absolute',
-                                   top: '16px',
-                                   right: '16px',
-                                   width: '20px',
-                                   height: '20px',
-                                   border: '2px solid #E5E7EB',
-                                   borderRadius: '50%',
-                                   zIndex: 50
-                                }}
-                             />
-                          )}
-                       </button>
-
-                       {/* Card 2: Routine (Mapped to '1 Week') */}
-                       <button
-                          onClick={() => setDuration('1 Week')}
-                           style={{
-                              borderWidth: isRoutine ? '2px' : '1px',
-                              borderColor: isRoutine ? '#1BA672' : '#F3F4F6',
-                              backgroundColor: isRoutine ? '#F2FBF6' : 'white'
-                           }}
-                           className={`
-                              relative flex items-center gap-4 p-4 rounded-2xl text-left transition-all
-                              ${isRoutine 
-                                 ? 'shadow-[0_4px_12px_rgba(27,166,114,0.15)]' 
-                                 : 'hover:border-gray-200'}
-                           `}
-                        >
-                           <div 
-                              style={{ 
-                                 backgroundColor: isRoutine ? '#E8F6F1' : '#F3F4F6', 
-                                 color: isRoutine ? '#1BA672' : '#6B7280' 
-                              }}
-                              className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-                           >
-                              <Utensils size={24} strokeWidth={2} />
-                           </div>
-                          <div className="flex-1">
-                             <div className="flex items-center justify-between pr-8">
-                                <h4 className="text-base font-bold text-gray-900">Set a routine</h4>
-                             </div>
-                             <p className="text-xs text-gray-500 mt-1 font-medium leading-relaxed">Eat on days you choose.</p>
-                          </div>
-                          {isRoutine ? (
-                             <div 
-                                style={{
-                                   position: 'absolute',
-                                   top: '16px',
-                                   right: '16px',
-                                   width: '20px',
-                                   height: '20px',
-                                   backgroundColor: 'white',
-                                   borderRadius: '50%',
-                                   display: 'flex',
-                                   alignItems: 'center',
-                                   justifyContent: 'center',
-                                   zIndex: 50
-                                }}
-                             >
-                                <Check size={12} strokeWidth={3} color="#1BA672" />
-                             </div>
-                          ) : (
-                             <div 
-                                style={{
-                                   position: 'absolute',
-                                   top: '16px',
-                                   right: '16px',
-                                   width: '20px',
-                                   height: '20px',
-                                   border: '2px solid #E5E7EB',
-                                   borderRadius: '50%',
-                                   zIndex: 50
-                                }}
-                             />
-                          )}
-                       </button>
-
-                       {/* Banner */}
-                       {/* Insight Strip */}
-                       <div 
-                           style={{ marginTop: '-12px' }}
-                           className="flex items-center gap-2.5 p-2 px-3 rounded-xl bg-[#F7FAF8]"
-                       >
-                          <Lightbulb size={16} className="text-gray-400 shrink-0" />
-                          <p 
-                              style={{ fontSize: '12px' }}
-                              className="text-gray-500 font-medium leading-relaxed"
-                           >
-                              Most Gutzo users stick to a routine
-                           </p>
-                       </div>
-                    </div>
-
-                     {/* Dynamic Delivery Details */}
-                     <div className="mt-5">
+                     
+                     <div className="mt-4 space-y-1">
                         {(() => {
                            // Define configuration based on Plan Duration
-                           let headerText = "Delivery days";
-                           let helperText = "";
-                           let isLocked = false;
                            let activeDays: number[] = [];
                            let interactionHandler: ((d: number) => void) | undefined = undefined;
 
                            // Logic per plan
                            if (isTrial) {
-                              headerText = "Delivery days";
-                              helperText = "We picked the next 3 delivery days for you."; 
-                              isLocked = true;
-                              // Trial is fixed 3 days starting tomorrow (Tuesday) -> Tue, Wed, Thu (Days 2,3,4)
-                              activeDays = [2, 3, 4]; 
-                           } else { // Routine (1 Week / Monthly)
-                              headerText = "Choose delivery days";
-                              helperText = "Repeats every week. You can change anytime.";
-                              isLocked = false; // UNLOCKED for Routine
+                              // Calculate next 3 valid days (excluding Sunday)
+                              const days: number[] = [];
+                              let count = 0;
+                              let d = startDate;
+                              while(count < 3) {
+                                  if (getDay(d) !== 0) {
+                                      days.push(getDay(d));
+                                      count++;
+                                  }
+                                  d = addDays(d, 1);
+                              }
+                              activeDays = days;
+                           } else { // Routine
                               activeDays = weekDays;
                               interactionHandler = (d) => toggleWeekDay(d);
                            }
+                           
+                           // Summary Text Generator
+                           const getDaySummary = () => {
+                              const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                              let text = "";
+                              if (activeDays.length === 6 && !activeDays.includes(0)) text = "Mon - Sat";
+                              else if (activeDays.length === 0) text = "Select days";
+                              else text = activeDays.map(d => DAY_NAMES[d]).join(', ');
+                              
+                              
+                              return {
+                                 days: text,
+                                 frequency: !isTrial ? "Repeats weekly" : ""
+                              };
+                           };
 
                            return (
-                              <div className="space-y-3">
-                                 {/* Header Row */}
-                                 <div className="flex justify-between items-end">
-                                    <h4 className="text-base font-bold text-gray-900">{headerText}</h4>
+                              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                                 <div 
+                                    onClick={() => { setIsDeliveryExpanded(!isDeliveryExpanded); setIsDatePickerExpanded(false); setIsMealsExpanded(false); }}
+                                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                                 >
+                                    <div className="flex items-center gap-3">
+                                       <Repeat className="text-gray-400" size={20} strokeWidth={2} />
+                                       <div>
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                           <p className="text-xs text-gray-500 font-medium">Delivery schedule</p>
+                                        </div>
+                                        <div className="flex flex-col">
+                                           <p className="text-[14px] font-semibold text-gray-900 leading-tight">
+                                              {getDaySummary().days}
+                                           </p>
+                                        </div>
+                                       </div>
+                                    </div>
+                                    <ChevronDown size={20} className={`text-gray-400 transition-transform ${isDeliveryExpanded ? 'rotate-180' : ''}`} />
                                  </div>
 
-                                 {/* Universal Day Grid Component */}
-                                 <div className="flex gap-3 flex-wrap">
-                                    {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((dayLabel, idx) => {
-                                       const dayNum = idx === 6 ? 0 : idx + 1;
-                                       
-                                       const isSunday = dayNum === 0; 
-                                       const isActive = activeDays.includes(dayNum);
+                                 {/* Expandable Content */}
+                                 {isDeliveryExpanded && (
+                                     <div className="px-4 pb-4 animate-in slide-in-from-top-2">
+                                        {!isTrial && (
+                                           <p className="text-xs text-gray-400 mb-3">Repeats every week. Change anytime.</p>
+                                        )}
+                                        <div className="grid grid-cols-7 gap-1 w-full place-items-center mt-2">
+                                          {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((dayLabel, idx) => {
+                                             const dayNum = idx === 6 ? 0 : idx + 1;
+                                             const isSunday = dayNum === 0; 
+                                             const isActive = activeDays.includes(dayNum);
+                                             const isLocked = isTrial; // Lock in trial mode
 
-                                       let className = "w-11 h-11 rounded-full text-sm font-bold border transition-all flex items-center justify-center";
-                                       let forcedStyle: React.CSSProperties = {};
-                                       
-                                       if (isActive) {
-                                          className += "";
-                                          // Force Green styling inline to prevent white-on-white text issue
-                                          forcedStyle = { backgroundColor: '#F2FBF6', color: '#1BA672', borderColor: '#CDEBDD' };
-                                       } else if (isSunday) {
-                                          className += " bg-gray-50 text-gray-300 border-gray-100 line-through decoration-gray-300 decoration-1"; 
-                                       } else {
-                                          // INACTIVE STATE HANDLING
-                                          if (isLocked) {
-                                             // TRIAL MODE: Non-selected days should look "skipped/ghosted" (Gray)
-                                             className += " bg-white border-gray-200 text-gray-300";
-                                          } else {
-                                             // ROUTINE MODE: Non-selected days should look "selectable" (Black/White)
-                                             className += " bg-white border-gray-200 hover:border-gray-300";
-                                             forcedStyle = { color: '#000000' };
-                                          }
-                                       }
-                                       
-                                       if (isLocked || isSunday) className += " cursor-default";
-                                       else className += " cursor-pointer";
-
-                                       return (
-                                          <button
-                                             key={dayLabel}
-                                             disabled={isSunday || isLocked}
-                                             onClick={() => interactionHandler && interactionHandler(dayNum)}
-                                             className={className}
-                                             style={forcedStyle}
-                                          >
-                                             {dayLabel}
-                                          </button>
-                                       );
-                                    })}
-                                 </div>
-
-                                 {/* Helper Text */}
-                                 <p className="text-gray-500 font-medium" style={{ fontSize: "12px" }}>
-                                    {helperText}
-                                 </p>
+                                             let className = "w-9 h-9 md:w-11 md:h-11 rounded-full text-[12px] md:text-sm font-medium border transition-all flex items-center justify-center shrink-0 p-0 leading-none";
+                                             let forcedStyle: React.CSSProperties = {};
+                                             
+                                             if (isActive) {
+                                                forcedStyle = { backgroundColor: '#F2FBF6', color: '#1BA672', borderColor: '#CDEBDD' };
+                                             } else if (isSunday) {
+                                                className += " bg-gray-50 text-gray-300 border-gray-100 line-through decoration-gray-300 decoration-1"; 
+                                             } else {
+                                                if (isLocked) className += " bg-white border-gray-200 text-gray-300";
+                                                else {
+                                                   className += " bg-white border-gray-200 hover:border-gray-300";
+                                                   forcedStyle = { color: '#000000' };
+                                                }
+                                             }
+                                             
+                                             return (
+                                                <button
+                                                   key={dayLabel}
+                                                   disabled={isSunday || isLocked}
+                                                   onClick={(e) => { e.stopPropagation(); interactionHandler && interactionHandler(dayNum); }}
+                                                   className={className}
+                                                   style={forcedStyle}
+                                                >
+                                                   {dayLabel}
+                                                </button>
+                                             );
+                                          })}
+                                       </div>
+                                    </div>
+                                 )}
                               </div>
                            );
                         })()}
+                         
+                        {/* Meals Accordion */}
+                        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mt-4">
+                           <div 
+                              onClick={() => { setIsMealsExpanded(!isMealsExpanded); setIsDatePickerExpanded(false); setIsDeliveryExpanded(false); }}
+                              className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                           >
+                              <div className="flex items-center gap-3">
+                                 <Utensils className="text-gray-400" size={20} strokeWidth={2} />
+                                 <div>
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                     <p className="text-xs text-gray-500 font-medium">Meals</p>
+                                  </div>
+                                  <p className="text-[14px] font-semibold text-gray-900">
+                                     {selectedMeals.join(' · ')}
+                                  </p>
+                                 </div>
+                              </div>
+                              <ChevronDown size={20} className={`text-gray-400 transition-transform ${isMealsExpanded ? 'rotate-180' : ''}`} />
+                           </div>
+
+                           {isMealsExpanded && (
+                              <div className="px-4 pb-4 animate-in slide-in-from-top-2">
+                                 <div className="grid grid-cols-2 gap-3 mt-1">
+                                    {[
+                                       { id: 'Breakfast', icon: <Sun size={18} /> },
+                                       { id: 'Lunch', icon: <Utensils size={18} /> },
+                                       { id: 'Snacks', icon: <Coffee size={18} /> },
+                                       { id: 'Dinner', icon: <Moon size={18} /> }
+                                    ].map((meal) => (
+                                       <button
+                                          key={meal.id}
+                                          onClick={(e) => { e.stopPropagation(); toggleMeal(meal.id); }}
+                                          className={`
+                                             flex items-center gap-3 p-3 rounded-xl border transition-all text-left cursor-pointer
+                                             ${selectedMeals.includes(meal.id)
+                                                ? 'bg-green-50 border-green-200 text-gray-900'
+                                                : 'bg-white border-gray-100 text-gray-500 hover:border-green-200 hover:bg-green-50/30'}
+                                          `}
+                                       >
+                                          <div className={`${selectedMeals.includes(meal.id) ? 'text-gray-800' : 'text-gray-400'}`}>
+                                             {meal.icon}
+                                          </div>
+                                          <span className="text-sm font-semibold flex-1">{meal.id}</span>
+                                          {selectedMeals.includes(meal.id) && (
+                                             <div className="w-2 h-2 rounded-full bg-gutzo-primary" />
+                                          )}
+                                       </button>
+                                    ))}
+                                 </div>
+                              </div>
+                           )}
                      </div>
-                 </div>
+                  </div>
+               </div>
+            )}
+
+
 
 
 
               </div>
-           </div>
-          </div>
+            </div>
+            </div>
+
            {/* Sticky Bottom CTA */}
            <div className="flex-shrink-0 p-6 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-[1003]">
               <button className="w-full bg-gutzo-primary hover:bg-gutzo-primary-hover text-white rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors" style={{ height: '42px' }}> Continue <ArrowRight className="h-4 w-4" /> </button>
-               <div className={`flex justify-center pt-3 transition-opacity duration-200 ${isRoutine ? 'opacity-100' : 'opacity-0'}`}>
+               <div className={`flex justify-center pt-1.5 transition-opacity duration-200 ${isRoutine ? 'opacity-100' : 'opacity-0'}`}>
                   <p className="text-gray-400 flex items-center gap-1" style={{ fontSize: '11px' }}>
                      Cancel anytime.
                   </p>

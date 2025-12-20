@@ -2,132 +2,7 @@
 import type { MealPlan } from "./components/WeeklyMealPlansSection";
 import { MealPlanMenuPreview } from "./components/MealPlanMenuPreview";
 
-const NextStepsContent = ({ plan, hideTitle = false, isMobile = false, hideVendor = false }: { plan: MealPlan; hideTitle?: boolean; isMobile?: boolean; hideVendor?: boolean }) => (
-  <div className="font-primary text-main">
-    {/* 1. Plan Title */}
-    {!hideTitle && <h1 className="text-2xl font-bold mb-1">{plan?.title} Plan</h1>}
-    
-    {/* 2. Vendor Name */}
-    {!hideVendor && <div className="text-base font-medium text-sub mb-0.5">by {plan?.vendor}</div>}
-    
-
-    
-    {/* 4. Weekly Menu Preview (3 days) */}
-    <MealPlanMenuPreview removePadding={isMobile} />
-
-
-
-    <div className="bg-gutzo-bg rounded-gutzo-panel p-4 mb-4">
-
-
-      {/* 7. Price Section */}
-      <div className="text-lg font-medium mb-2">
-        ₹{plan?.price?.includes('week') 
-          ? Math.round(parseInt(plan.price.replace(/[^\d]/g, '')) / 6) 
-          : plan?.price?.replace('/day','').replace('/week','')} / day
-      </div>
-
-      {/* 6. Social Proof Badge (Moved) */}
-      <div className="inline-flex items-center gap-1.5 bg-white text-main text-xs font-bold px-3 py-1.5 mb-2 rounded-full border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)]">
-        <Zap className="w-3.5 h-3.5 fill-main text-main" />
-        <span>Most chosen · 72% continue after week 1</span>
-      </div>
-      <div className="text-xs text-[#9A9A9A] mb-3">Cheaper than home cooking • No delivery fees • Daily variety</div>
-
-      
-      <hr className="border-gray-100 my-4" />
-
-      {/* 8. Customize Your Plan */}
-      <h3 className="font-semibold text-base mb-3 text-main">Customize Your Plan</h3>
-      
-      <div className="space-y-4">
-        {/* Included Daily (Meals) */}
-        <div>
-          <div className="text-sm text-sub mb-2 font-medium">Included Daily:</div>
-          <div className="flex flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 bg-brand-light border border-transparent rounded-gutzo-badge px-3 py-2 cursor-pointer transition-all hover:border-brand">
-               <div className="w-4 h-4 rounded-full bg-brand flex items-center justify-center">
-                 <span className="text-white text-xs font-bold">✓</span>
-               </div>
-               <span className="text-main font-medium text-sm">Lunch</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-brand-light border border-transparent rounded-gutzo-badge px-3 py-2 cursor-pointer transition-all hover:border-brand">
-               <div className="w-4 h-4 rounded-full bg-brand flex items-center justify-center">
-                 <span className="text-white text-xs font-bold">✓</span>
-               </div>
-               <span className="text-main font-medium text-sm">Dinner</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-white border border-main rounded-gutzo-badge px-3 py-2 cursor-pointer transition-all hover:border-gray-400 opacity-60">
-               <div className="w-4 h-4 rounded-full border border-gray-400"></div>
-               <span className="text-sub font-medium text-sm">Breakfast (+₹39)</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Delivery Days */}
-        <div>
-          <div className="text-sm text-sub mb-2 font-medium">Delivery Days:</div>
-          <div className="flex flex-wrap gap-1.5">
-            {['Mon','Tue','Wed','Thu','Fri','Sat'].map(day => (
-              <div key={day} className="bg-brand text-white rounded-gutzo-badge w-10 h-8 flex items-center justify-center font-medium text-xs shadow-sm">
-                {day}
-              </div>
-            ))}
-             <div className="bg-gray-100 text-disabled rounded-gutzo-badge w-10 h-8 flex items-center justify-center font-medium text-xs opacity-50">
-                Sun
-              </div>
-          </div>
-          <div className="text-brand text-xs mt-2 font-medium flex items-center gap-0.5">
-             <span className="w-1.5 h-1.5 rounded-full bg-brand"></span>
-             Sunday is a rest day (Vendor closed)
-          </div>
-        </div>
-      </div>
-
-      <div className="h-px bg-gray-200 my-4"></div>
-      
-      {/* Starting From */}
-      <div className="flex justify-between items-center bg-white p-3 rounded-gutzo-badge border border-gray-100">
-        <div className="flex flex-col">
-          <span className="text-xs text-sub font-medium">Starting From</span>
-          <span className="font-semibold text-main text-sm">Tomorrow, Lunch</span>
-        </div>
-        <span className="text-brand font-medium text-sm">Change &gt;</span>
-      </div>
-    </div>
-
-    {/* 9. Plan Benefits */}
-    <div className="bg-gutzo-bg rounded-gutzo-panel p-4 mb-4">
-      <div className="font-semibold mb-3">Plan Benefits</div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex items-start gap-2">
-          <span className="text-brand font-bold text-lg leading-none">✓</span>
-          <span className="text-sm text-sub leading-tight">Fresh menu every day</span>
-        </div>
-        <div className="flex items-start gap-2">
-          <span className="text-brand font-bold text-lg leading-none">✓</span>
-          <span className="text-sm text-sub leading-tight">Pause/skip anytime</span>
-        </div>
-        <div className="flex items-start gap-2">
-          <span className="text-brand font-bold text-lg leading-none">✓</span>
-          <span className="text-sm text-sub leading-tight">Cancel anytime</span>
-        </div>
-      </div>
-    </div>
-
-    {/* 10. FAQ Section */}
-    <div className="space-y-3 mb-6">
-      <div className="bg-gutzo-bg rounded-gutzo-panel p-4 font-medium text-main cursor-pointer flex justify-between items-center transition-colors hover:bg-gray-100">
-        <span className="text-sm font-medium">Will I get the same food every day?</span>
-        <span className="text-sub">&gt;</span>
-      </div>
-      <div className="bg-gutzo-bg rounded-gutzo-panel p-4 font-medium text-main cursor-pointer flex justify-between items-center transition-colors hover:bg-gray-100">
-        <span className="text-sm font-medium">Can I cancel my plan?</span>
-        <span className="text-sub">&gt;</span>
-      </div>
-    </div>
-  </div>
-);
+// 1-130: Removed Legacy NextStepsContent
 import { useState, useRef, useEffect } from "react";
 // Responsive hook for media queries
 function useMediaQuery(query: string) {
@@ -249,85 +124,7 @@ function AppContent() {
   // Meal plan scroll lock handled in consolidated effect below
 
   // Right panel and bottom sheet components (reuse from VendorDetailsPage)
-  const RightPanelNextSteps = ({ plan, onClose }: { plan: MealPlan, onClose: () => void }) => (
-    <>
-      <div 
-        className="fixed inset-0 bg-black/50 transition-opacity" 
-        style={{ zIndex: 1090 }}
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div 
-        className="fixed top-0 right-0 h-full w-full bg-gutzo-surface shadow-modal flex flex-col items-stretch"
-        style={{ zIndex: 1100, maxWidth: '600px' }}
-      >
-        <div 
-          className="flex-none py-6 pb-2 bg-gutzo-surface z-10"
-          style={{ paddingLeft: '24px', paddingRight: '24px' }}
-        >
-          <div className="flex items-start justify-between">
-            <h1 className="text-3xl font-bold m-0 font-primary text-main mb-0.5">{plan?.title} Plan</h1>
-            <button
-              onClick={onClose}
-              className="bg-transparent border-none p-0 cursor-pointer pt-1.5"
-              aria-label="Close panel"
-            >
-              <X className="h-6 w-6 text-gray-500" />
-            </button>
-          </div>
-          <div className="text-base font-medium text-sub">by {plan?.vendor}</div>
-      </div>
-      <div 
-        className="flex-1 overflow-y-auto py-6 pt-2"
-        style={{ paddingLeft: '24px', paddingRight: '24px' }}
-      >
-        <NextStepsContent plan={plan} hideTitle={true} hideVendor={true} />
-      </div>
-        <div className="flex-none p-6 bg-gutzo-surface border-t border-gray-100 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-          <button className="w-full bg-brand text-white font-semibold text-lg rounded-gutzo-btn py-4 cursor-pointer hover:bg-brand-hover active:bg-brand-pressed transition-colors border-none shadow-lg shadow-green-900/10">
-            Continue →
-          </button>
-        </div>
-      </div>
-    </>
-  );
-
-  const BottomSheetNextSteps = ({ plan, onClose }: { plan: MealPlan, onClose: () => void }) => (
-    <>
-      <div 
-        className="fixed inset-0 bg-black/50 transition-opacity" 
-        style={{ zIndex: 1090 }}
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div 
-        className="fixed left-0 bottom-0 w-full bg-gutzo-surface shadow-[0_-2px_8px_rgba(0,0,0,0.08)] rounded-t-3xl flex flex-col"
-        style={{ zIndex: 1100, top: '104px', height: 'calc(100vh - 104px)' }}
-      >
-        <div className="flex-none p-5 pb-2 bg-gutzo-surface rounded-t-3xl">
-          <div className="flex items-start justify-between">
-            <h1 className="text-2xl font-bold m-0 font-primary text-main mb-0.5">{plan?.title} Plan</h1>
-            <button
-              onClick={onClose}
-              className="bg-transparent border-none p-0 cursor-pointer ml-3 pt-1"
-              aria-label="Close panel"
-            >
-              <X className="h-6 w-6 text-gray-500" />
-            </button>
-          </div>
-          <div className="text-base font-medium text-sub">by {plan?.vendor}</div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 py-2 scrollbar-hide">
-          <NextStepsContent plan={plan} hideTitle={true} isMobile={true} hideVendor={true} />
-        </div>
-        <div className="flex-none p-5 pb-8 bg-gutzo-surface z-20">
-          <button className="w-full bg-brand text-white font-semibold text-lg rounded-gutzo-btn py-4 cursor-pointer hover:bg-brand-hover active:bg-brand-pressed transition-colors border-none shadow-lg shadow-green-900/10">
-            Continue →
-          </button>
-        </div>
-      </div>
-    </>
-  );
+// 252-330: Removed Legacy RightPanelNextSteps and BottomSheetNextSteps
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -594,23 +391,11 @@ function AppContent() {
       {selectedMealPlan && (
         <>
           {/* Overlay for right panel */}
-          {isDesktop && (
-            <div
-              className="fixed-full bg-black-50 z-49"
-              onClick={() => setSelectedMealPlan(null)}
-            />
-          )}
-          {isDesktop ? (
-            <RightPanelNextSteps
-              plan={selectedMealPlan}
-              onClose={() => setSelectedMealPlan(null)}
-            />
-            ) : (
-             <MealPlanBottomSheet
-               plan={selectedMealPlan}
-               onClose={() => setSelectedMealPlan(null)}
-             />
-           )}
+
+          <MealPlanBottomSheet
+            plan={selectedMealPlan}
+            onClose={() => setSelectedMealPlan(null)}
+          />
         </>
       )}
       <main
