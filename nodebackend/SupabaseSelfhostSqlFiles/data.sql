@@ -788,8 +788,8 @@ COPY public.support_tickets (id, user_id, order_id, subject, description, catego
 --
 
 COPY public.user_addresses (id, user_id, type, label, street, area, landmark, full_address, city, state, country, postal_code, latitude, longitude, delivery_instructions, is_default, created_at, updated_at, custom_label, zipcode, delivery_notes) FROM stdin;
-89f62abd-e306-4ea6-9df7-22f2901578a9	f4cc81c0-3c55-4a03-9f6c-05b7bcd37d6c	home	\N	3328+XVJ	Teachers Colony	\N	3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India	Coimbra	Coimbra	Portugal	\N	11.05262343	77.06713907	\N	f	2025-12-06 22:26:50.400874+00	2025-12-06 22:26:50.400874+00	\N	\N	\N
-77a8467f-8c55-4f67-9893-0780915efb58	b59be4e6-cc63-4f38-895f-c73e813f973c	home	\N	3328+XVJ	Teachers Colony	\N	3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India	Coimbra	Coimbra	Portugal	\N	11.05270191	77.06718831	\N	f	2025-12-06 23:09:36.461593+00	2025-12-06 23:09:36.461593+00	\N	\N	\N
+89f62abd-e306-4ea6-9df7-22f2901578a9	f4cc81c0-3c55-4a03-9f6c-05b7bcd37d6c	home	\N	3328+XVJ	Teachers Colony	\N	3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India	Coimbatore	Tamil Nadu	India	\N	11.05262343	77.06713907	\N	f	2025-12-06 22:26:50.400874+00	2025-12-06 22:26:50.400874+00	\N	\N	\N
+77a8467f-8c55-4f67-9893-0780915efb58	b59be4e6-cc63-4f38-895f-c73e813f973c	home	\N	3328+XVJ	Teachers Colony	\N	3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India	Coimbatore	Tamil Nadu	India	\N	11.05270191	77.06718831	\N	f	2025-12-06 23:09:36.461593+00	2025-12-06 23:09:36.461593+00	\N	\N	\N
 \.
 
 

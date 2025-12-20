@@ -61,8 +61,8 @@ export function GoogleMapPicker({
   const [addressForm, setAddressForm] = useState({
     street: "",
     area: "",
-    city: "Coimbatore",
-    state: "Tamil Nadu",
+    city: "",
+    state: "",
     pincode: "",
     landmark: ""
   });

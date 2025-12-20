@@ -8,6 +8,9 @@ import { UserAddress } from '../../types/address';
 import { AddressModal } from "./AddressModal";
 import { OrdersPanel } from "../OrdersPanel";
 import { nodeApiService as apiService } from '../../utils/nodeApi';
+import { AddressApi } from '../../utils/addressApi';
+import { useAuth } from '../../contexts/AuthContext';
+import { useLocation } from '../../contexts/LocationContext';
 
 type ProfilePanelContent = 'profile' | 'orders' | 'address';
 
@@ -56,6 +59,9 @@ function useMediaQuery(query: string) {
 export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onViewOrderDetails, recentOrderData }: ProfilePanelProps) {
   // Check for desktop view
   const isDesktop = useMediaQuery('(min-width: 850px)');
+  
+  const { user } = useAuth();
+  const { refreshLocation } = useLocation();
   
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   
@@ -280,12 +286,43 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
   const handleDeleteAddress = async (addressId: string) => {
     if (!userData.phone) return;
     setDeletingAddressId(addressId);
+    
+    // Check if the address being deleted is the default one
+    const addressToDelete = realAddresses.find(addr => addr.id === addressId);
+    const isDeletingDefault = addressToDelete?.is_default;
+
     try {
       console.log('🗑️ Deleting address via API service:', addressId);
       await apiService.deleteAddress(userData.phone, addressId);
-      // Remove from local state
+      
+      // Update local state by removing deleted address
       const updatedAddresses = realAddresses.filter(addr => addr.id !== addressId);
       setRealAddresses(updatedAddresses);
+
+      // If we deleted the default address, try to find a new default
+      if (isDeletingDefault) {
+        // Priority: Home -> Work -> Any (first one)
+        let newDefault = updatedAddresses.find(addr => addr.type.toLowerCase() === 'home');
+        
+        if (!newDefault) {
+          newDefault = updatedAddresses.find(addr => addr.type.toLowerCase() === 'work');
+        }
+        
+        if (!newDefault && updatedAddresses.length > 0) {
+          newDefault = updatedAddresses[0];
+        }
+
+        if (newDefault) {
+          console.log(`📍 Priority Fallback: Setting ${newDefault.type} (${newDefault.custom_label || ''}) as new default`);
+          const setDefaultResult = await AddressApi.setDefaultAddress(newDefault.id, userData.phone);
+          if (setDefaultResult.success) {
+            handleSetDefaultAddress(newDefault.id);
+          }
+        } else {
+             // No addresses left, refresh to clear header (will revert to GPS)
+             refreshLocation();
+        }
+      }
     } catch (error) {
       console.error('❌ Error deleting address via API service:', error);
       // toast.error("Failed to delete address");
@@ -477,6 +514,26 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
     );
   };
 
+
+
+  const handleSetDefaultAddress = async (addressId: string) => {
+    if (!user?.phone) return;
+
+    try {
+      const result = await AddressApi.setDefaultAddress(addressId, user.phone);
+      if (result.success) {
+        // Refresh addresses list
+        fetchUserAddresses();
+        // Refresh global location context to update header
+        refreshLocation();
+      } else {
+        console.error('Failed to set default address:', result.error);
+      }
+    } catch (error) {
+      console.error('Error setting default address:', error);
+    }
+  };
+
   const renderOrdersContent = () => {
     if (ordersLoading) {
       return (
@@ -559,7 +616,7 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
                     <div className="flex items-center space-x-2 mb-2">
                       {getAddressIcon(address.type)}
                       <span className="font-medium text-sm text-gutzo-primary capitalize">
-                        {address.type}
+                        {address.type === 'other' && address.custom_label ? address.custom_label : address.type}
                       </span>
                       {address.is_default && (
                         <span className="px-2 py-1 bg-gutzo-selected text-white text-xs rounded-full">
@@ -570,16 +627,39 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
 
                     {/* Address Details */}
                     <div className="text-sm text-gray-700 space-y-1">
-                      <p className="font-medium">{address.street}{address.area ? `, ${address.area}` : ''}{address.city ? `, ${address.city}` : ''}{address.state ? `, ${address.state}` : ''}{address.country ? `, ${address.country}` : ''}</p>
-                      {address.landmark && (
-                        <p className="text-gray-600">Landmark: {address.landmark}</p>
-                      )}
-                      <p className="text-gray-600">{address.full_address}</p>
+                      {(() => {
+                        const displayText = AddressApi.getAddressDisplayText(address);
+                        // Clean up full address only if it starts with the display text (case-insensitive check might be safer but strict is okay for same source)
+                        let cleanFullAddress = address.full_address;
+                        if (cleanFullAddress && cleanFullAddress.startsWith(displayText)) {
+                          cleanFullAddress = cleanFullAddress.substring(displayText.length).replace(/^[\s,]+/, '').trim();
+                        }
+                        
+                        return (
+                          <>
+                            <p className="font-medium">{displayText}</p>
+                            {address.landmark && (
+                              <p className="text-gray-600">Landmark: {address.landmark}</p>
+                            )}
+                            {cleanFullAddress && <p className="text-gray-600">{cleanFullAddress}</p>}
+                          </>
+                        );
+                      })()}
                       {address.postal_code && (
                         <p className="text-gray-600">Postal Code: {address.postal_code}</p>
                       )}
                       {address.delivery_instructions && (
                         <p className="text-gray-600">Instructions: {address.delivery_instructions}</p>
+                      )}
+                      
+                      {/* Set Default Option */}
+                      {!address.is_default && (
+                        <button
+                          onClick={() => handleSetDefaultAddress(address.id)}
+                          className="mt-3 text-xs font-semibold text-gutzo-primary hover:text-gutzo-primary-hover flex items-center transition-opacity hover:opacity-80 px-0 bg-transparent border-none cursor-pointer"
+                        >
+                           Make Default
+                        </button>
                       )}
                     </div>
                   </div>

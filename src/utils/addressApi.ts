@@ -117,10 +117,36 @@ export class AddressApi {
   }
 
   static getAddressDisplayText(address: UserAddress): string {
-    const parts = [address.street, address.area, address.full_address].filter(
-      Boolean,
-    );
-    return parts.join(", ");
+    const parts = [];
+
+    // 1. Street (e.g., "2/287" or "Flat 4B")
+    if (address.street) {
+      parts.push(address.street);
+    }
+
+    // 2. Area (e.g., "Teachers Colony")
+    // Only add if it's not identical to street and not contained in street
+    if (
+      address.area && address.area !== address.street &&
+      !address.street.includes(address.area)
+    ) {
+      parts.push(address.area);
+    }
+
+    // 3. City (e.g., "Coimbatore")
+    // Always good to have for context, unless it's already in the area (rare but possible)
+    if (
+      address.city &&
+      !parts.some((p) => p.toLowerCase().includes(address.city.toLowerCase()))
+    ) {
+      parts.push(address.city);
+    }
+
+    if (parts.length > 0) {
+      return parts.join(", ");
+    }
+
+    return address.full_address || "";
   }
 
   static getAddressTypeInfo(type: AddressType, customTag?: string) {

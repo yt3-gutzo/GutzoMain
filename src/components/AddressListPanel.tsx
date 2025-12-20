@@ -129,19 +129,7 @@ export function AddressListPanel({
     }
   };
 
-  // Unified address display - clean and concise for all screen sizes
-  const getAddressDisplayText = (address: UserAddress): string => {
-    const parts = [
-      address.street,
-      address.area
-    ].filter(Boolean);
-    // If no street or area, use first part of full_address
-    if (parts.length === 0) {
-      const firstPart = address.full_address?.split(',')[0]?.trim();
-      return firstPart || 'Address';
-    }
-    return parts.join(', ');
-  };
+
 
   if (!isOpen) return null;
 
@@ -221,7 +209,7 @@ export function AddressListPanel({
                           
                           {/* Clean address display - no city/pincode clutter */}
                           <p className="text-gray-600 leading-relaxed">
-                            {getAddressDisplayText(address)}
+                            {AddressApi.getAddressDisplayText(address)}
                           </p>
                         </div>
                       </div>

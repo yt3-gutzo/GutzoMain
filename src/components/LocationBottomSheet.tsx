@@ -12,7 +12,7 @@ interface LocationBottomSheetProps {
 }
 
 export function LocationBottomSheet({ isOpen, onClose, onShowAddressList }: LocationBottomSheetProps) {
-  const { locationDisplay, isLoading, error, refreshLocation, isInCoimbatore } = useLocation();
+  const { locationDisplay, isLoading, error, refreshLocation, isInCoimbatore, isDefaultAddress, locationLabel } = useLocation();
   const { isAuthenticated } = useAuth();
 
   const handleDetectLocation = () => {
@@ -74,21 +74,30 @@ export function LocationBottomSheet({ isOpen, onClose, onShowAddressList }: Loca
           {/* Current Location Display */}
           <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-[0.8rem] border border-gray-200">
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-gray-400 flex-shrink-0 mt-0.5" />
-            ) : error ? (
-              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#E74C3C' }} />
+               <div className="flex items-center gap-3 w-full">
+                 <div className="h-5 w-5 rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
+                 <div className="flex-1 space-y-2">
+                   <div className="h-4 bg-gray-200 rounded animate-pulse w-1/3"></div>
+                   <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
+                 </div>
+               </div>
             ) : (
-              <MapPin className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: colors.info }} />
+              <>
+                {error ? (
+                  <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#E74C3C' }} />
+                ) : (
+                  <MapPin className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: colors.info }} />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-900">
+                    {error ? "Location Error" : locationLabel ? locationLabel : isDefaultAddress ? "Default Address" : "Current Location"}
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    {error ? error : locationDisplay}
+                  </div>
+                </div>
+              </>
             )}
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-gray-900">
-                {isLoading ? "Detecting location..." : error ? "Location Error" : "Current Location"}
-              </div>
-              <div className="text-sm text-gray-600 mt-1">
-                {isLoading ? "Please wait..." : error ? error : locationDisplay}
-              </div>
-
-            </div>
           </div>
 
           {/* Detect Current Location Button */}

@@ -25,9 +25,10 @@ const inspirationOptions = [
 
 interface InspirationProps {
   onOptionClick?: (label: string) => void;
+  loading?: boolean;
 }
 
-export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
+export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading = false }) => {
   return (
   <section className="w-full bg-[#fafafa] pt-4 pb-8 md:pt-6 md:pb-12 lg:pt-8 lg:pb-16">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col">
@@ -39,6 +40,28 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
         </h2>
         <div className="mt-2" />
         {/* Mobile: double-lined horizontal scroll (both rows scroll together) */}
+        {loading ? (
+           <div className="sm:hidden overflow-x-auto scrollbar-hide pb-2 -mr-4" style={{ width: 'calc(100% + 16px)' }}>
+             <div className="flex flex-col min-w-max">
+               <div className="flex gap-2 mb-2">
+                 {[...Array(9)].map((_, i) => (
+                    <div key={i} className="flex flex-col items-center flex-shrink-0 min-w-[90px] animate-pulse">
+                      <div className="w-[80px] h-[80px] rounded-full bg-gray-200 mb-1"></div>
+                      <div className="w-16 h-3 rounded bg-gray-200 mt-1"></div>
+                    </div>
+                 ))}
+               </div>
+               <div className="flex gap-2">
+                 {[...Array(9)].map((_, i) => (
+                    <div key={i} className="flex flex-col items-center flex-shrink-0 min-w-[90px] animate-pulse">
+                      <div className="w-[80px] h-[80px] rounded-full bg-gray-200 mb-1"></div>
+                      <div className="w-16 h-3 rounded bg-gray-200 mt-1"></div>
+                    </div>
+                 ))}
+               </div>
+             </div>
+           </div>
+        ) : (
         <div className="sm:hidden overflow-x-auto scrollbar-hide pb-2 -mr-4" style={{ width: 'calc(100% + 16px)' }}>
           <div className="flex flex-col min-w-max">
             <div className="flex gap-2 mb-2">
@@ -109,8 +132,19 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Tablet/Desktop: horizontal scrollable row */}
+        {loading ? (
+             <div className="hidden sm:flex w-full overflow-x-auto scrollbar-hide items-end gap-3 md:gap-4 lg:gap-6 pb-2 animate-pulse">
+               {[...Array(10)].map((_, i) => (
+                  <div key={i} className="flex flex-col items-center flex-shrink-0 min-w-[90px]">
+                    <div className="rounded-full bg-gray-200 mb-0.5" style={{ width: 'clamp(70px, 10vw, 140px)', height: 'clamp(70px, 10vw, 140px)' }}></div>
+                    <div className="w-20 h-4 rounded bg-gray-200 mt-1"></div>
+                  </div>
+               ))}
+             </div>
+        ) : (
         <div className="hidden sm:flex w-full overflow-x-auto scrollbar-hide items-end gap-3 md:gap-4 lg:gap-6 pb-2">
           {inspirationOptions.map((option) => (
             <button
@@ -142,6 +176,7 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick }) => {
             </button>
           ))}
         </div>
+        )}
       </div>
     </section>
   );

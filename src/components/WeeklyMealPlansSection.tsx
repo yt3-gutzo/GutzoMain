@@ -75,9 +75,22 @@ export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanCl
 		return (
 			<section className="w-full bg-[#fafafa] pt-4 pb-8 md:pt-6 md:pb-12 lg:pt-8 lg:pb-16">
 				<div className={`w-full max-w-7xl mx-auto flex flex-col${noPadding ? '' : ' px-4 sm:px-6 lg:px-8'}`}>
-					<div className="animate-pulse flex gap-4 overflow-x-auto">
+					<div className="animate-pulse flex gap-4 overflow-x-auto pb-4">
 						{[1, 2, 3, 4].map((i) => (
-							<div key={i} className="min-w-[220px] h-[340px] bg-gray-200 rounded-2xl"></div>
+							<div key={i} className="min-w-[220px] h-[340px] bg-[#fafafa] rounded-2xl flex flex-col">
+                {/* Image Skeleton */}
+                <div className="w-full h-[180px] bg-gray-200 rounded-2xl mb-3"></div>
+                {/* Content Skeleton */}
+                <div className="flex flex-col flex-1 px-1">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div> {/* Title */}
+                  <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div> {/* Vendor */}
+                  <div className="h-3 bg-gray-200 rounded w-1/3 mb-3"></div> {/* Schedule */}
+                  <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div> {/* Price */}
+                  <div className="flex items-center gap-2">
+                     <div className="h-3 bg-gray-200 rounded w-20"></div> {/* View Plan */}
+                  </div>
+                </div>
+              </div>
 						))}
 					</div>
 				</div>

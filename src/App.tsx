@@ -311,7 +311,7 @@ function AppContent() {
   };
   const handleShowAddressList = () => {
     if (isAuthenticated) {
-      setShowAddressPanel(true);
+      handleShowProfile('address');
     } else {
       handleShowLogin();
     }
@@ -385,7 +385,7 @@ function AppContent() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
-      <Inspiration onOptionClick={setSelectedCategory} />
+      <Inspiration onOptionClick={setSelectedCategory} loading={loading} />
       <WeeklyMealPlansSection onMealPlanClick={plan => setSelectedMealPlan(plan)} />
       {/* Show next steps UI when a meal plan is selected */}
       {selectedMealPlan && (
@@ -416,14 +416,23 @@ function AppContent() {
             </div>
           </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-full mx-auto w-full">
-              {filteredVendors.map((vendor) => (
+              {loading ? (
+                // Show 4 skeletons while loading
+                [...Array(4)].map((_, i) => (
+                  <div key={i} className="w-full h-full">
+                    <VendorSkeleton />
+                  </div>
+                ))
+              ) : (
+                filteredVendors.map((vendor) => (
                 <div key={vendor.id} className="flex justify-center items-stretch w-full h-full">
                   <VendorCard
                     vendor={vendor}
                     onClick={handleVendorClick}
                   />
                 </div>
-              ))}
+              ))
+              )}
             </div>
         </div>
       </main>

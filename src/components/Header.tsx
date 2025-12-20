@@ -37,7 +37,7 @@ interface HeaderProps {
 
 export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onShowAddressList, searchQuery = '', onSearchChange, hideInteractive = false, pageLabel }: HeaderProps) {
   const { navigate } = useRouter();
-  const { locationDisplay, isLoading, error, refreshLocation, isInCoimbatore } = useLocation();
+  const { locationDisplay, isLoading, error, refreshLocation, isInCoimbatore, locationLabel } = useLocation();
   const { totalItems } = useCart();
   const { isAuthenticated, user, isLoading: authLoading } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -120,15 +120,37 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
                     title="Click to select location"
                   >
                     {isLoading ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-gray-400 flex-shrink-0" />
-                    ) : error ? (
-                      <AlertCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#E74C3C' }} />
+                      <div className="flex flex-col gap-1 w-full max-w-[140px] py-1">
+                        <div className="h-2.5 bg-gray-200 rounded animate-pulse w-1/3"></div>
+                        <div className="h-3.5 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                      </div>
                     ) : (
-                      <MapPin className="h-5 w-5 text-gutzo-primary flex-shrink-0" />
+                      <>
+                        {error ? (
+                          <AlertCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#E74C3C' }} />
+                        ) : (
+                          <MapPin className="h-5 w-5 text-gutzo-primary flex-shrink-0" />
+                        )}
+                        <div className="flex flex-col min-w-0 justify-center">
+                          {error ? (
+                            <span className="truncate font-medium text-gray-900 whitespace-nowrap">Location Error</span>
+                          ) : locationLabel ? (
+                            <>
+                              <span className="text-[11px] font-bold text-gray-900 leading-tight uppercase tracking-wide">
+                                {locationLabel}
+                              </span>
+                              <span className="truncate text-sm font-medium text-gray-600 leading-tight max-w-[200px]">
+                                {locationDisplay}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="truncate font-medium text-gray-900 whitespace-nowrap">
+                              {locationDisplay}
+                            </span>
+                          )}
+                        </div>
+                      </>
                     )}
-                    <span className="truncate font-medium text-gray-900 whitespace-nowrap">
-                      {isLoading ? "Detecting..." : error ? "Location Error" : locationDisplay}
-                    </span>
                     <ChevronDown className={`h-4 w-4 text-gray-500 flex-shrink-0 transition-transform ${showLocationDropdown ? 'rotate-180' : ''}`} />
                   </div>
 
@@ -274,9 +296,22 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
               ) : (
                 <MapPin className="h-4 w-4 text-gutzo-primary flex-shrink-0" />
               )}
-              <span className="truncate text-sm text-gray-900 font-medium">
-                {isLoading ? "Detecting..." : error ? "Error" : locationDisplay}
-              </span>
+              <div className="flex flex-col min-w-0 text-left">
+                {locationLabel && !isLoading && !error ? (
+                  <>
+                    <span className="text-[10px] font-bold text-gray-900 leading-tight uppercase tracking-wide">
+                      {locationLabel}
+                    </span>
+                    <span className="truncate text-xs text-gray-600 font-medium leading-tight max-w-[150px]">
+                      {locationDisplay}
+                    </span>
+                  </>
+                ) : (
+                  <span className="truncate text-sm text-gray-900 font-medium">
+                    {isLoading ? <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"/> : error ? "Error" : locationDisplay}
+                  </span>
+                )}
+              </div>
               <ChevronDown className="h-3.5 w-3.5 text-gray-600 flex-shrink-0" />
             </button>
 
