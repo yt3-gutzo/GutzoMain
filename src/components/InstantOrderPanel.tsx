@@ -119,7 +119,7 @@ export function InstantOrderPanel({
   const ITEMS_GST_RATE = 0.05; // 5%
   const FEES_GST_RATE = 0.18; // 18%
   const DELIVERY_FEE = 1;
-  const PLATFORM_FEE = 1;
+  const PLATFORM_FEE = 5;
 
   // Digital wallet options
   const digitalWallets = [
@@ -130,6 +130,12 @@ export function InstantOrderPanel({
     { id: 'googlepay', name: 'Google Pay', icon: '🎯', color: 'bg-blue-600' }
   ];
 
+  // Dynamic Delivery Fee State
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const [isServiceable, setIsServiceable] = useState<boolean>(true);
+  const [loadingFee, setLoadingFee] = useState<boolean>(false);
+  const [serviceabilityError, setServiceabilityError] = useState<string | null>(null);
+
   // Initialize cart when data changes
   useEffect(() => {
     if (isOpen) {
@@ -138,25 +144,66 @@ export function InstantOrderPanel({
         setCartItems(initialCartItems);
         // Get vendor from first cart item
         const firstItem = initialCartItems[0];
-        setCurrentVendor({
-          id: firstItem.vendorId,
-          name: firstItem.vendor.name,
-          image: firstItem.vendor.image,
-          description: '',
-          location: '',
-          rating: 0,
-          deliveryTime: '',
-          minimumOrder: 0,
-          deliveryFee: 0,
-          cuisineType: '',
-          phone: '',
-          isActive: true,
-          isFeatured: false,
-          created_at: new Date().toISOString(),
-          tags: []
-        } as Vendor);
+        
+        // If vendor details are incomplete (e.g. missing location), fetch full details
+        // Cast to any to access potential extra properties not in rigid type
+        const vendorData = firstItem.vendor as any;
+        
+        if (!vendorData.location && firstItem.vendorId) {
+             apiService.getVendor(firstItem.vendorId).then(res => {
+                if (res.success && res.data) {
+                    console.log('✅ [InstantOrderPanel] Fetched full vendor details:', res.data);
+                    setCurrentVendor(res.data);
+                } else {
+                    // Fallback to partial data if fetch fails
+                    setCurrentVendor({
+                      id: firstItem.vendorId,
+                      name: firstItem.vendor.name,
+                      image: firstItem.vendor.image,
+                      // placeholders
+                      location: '',
+                      rating: 0,
+                      deliveryTime: '',
+                      minimumOrder: 0,
+                      deliveryFee: 0,
+                      cuisineType: '',
+                      phone: '',
+                      description: '', // Added missing field
+                      isActive: true,
+                      isFeatured: false,
+                      created_at: new Date().toISOString(),
+                      tags: []
+                    } as Vendor);
+                }
+             }).catch(err => {
+                 console.error('❌ [InstantOrderPanel] Failed to fetch vendor:', err);
+             });
+        } else {
+             // Use existing data
+             setCurrentVendor({
+               id: firstItem.vendorId,
+               name: firstItem.vendor.name,
+               image: firstItem.vendor.image,
+               location: vendorData.location || '',
+               latitude: vendorData.latitude,
+               longitude: vendorData.longitude,
+               description: '', // Default if missing
+               rating: vendorData.rating || 0,
+               deliveryTime: vendorData.deliveryTime || '',
+               minimumOrder: vendorData.minimumOrder || 0,
+               deliveryFee: vendorData.deliveryFee || 0,
+               cuisineType: vendorData.cuisineType || '',
+               phone: vendorData.phone || '',
+               isActive: true,
+               isFeatured: false,
+               created_at: new Date().toISOString(),
+               tags: [],
+               ...(firstItem.vendor as any) // Spread to catch others, cast to avoid type conflicts
+             } as Vendor);
+        }
+
       } else if (product && vendor) {
-        // Single product order
+        // Single product order - vendor object passed in usually full
         setCartItems([{ 
           id: product.id,
           productId: product.id,
@@ -249,6 +296,77 @@ export function InstantOrderPanel({
     }
   }, [isOpen, refreshTrigger, user?.phone, newAddressId]);
 
+  // Calculate Delivery Fee
+  useEffect(() => {
+    async function fetchDeliveryFee() {
+        if (!isOpen || !selectedAddress || !currentVendor) {
+            return;
+        }
+
+        // We need vendor location to calculate fee
+        if (!currentVendor.location && !currentVendor.latitude) {
+            console.warn('⚠️ [InstantOrderPanel] Vendor location missing, skipping fee calculation');
+            return;
+        }
+
+        setLoadingFee(true);
+        setServiceabilityError(null);
+        
+        try {
+            const pickup = {
+                address: currentVendor.location || "Vendor Location",
+                latitude: currentVendor.latitude,
+                longitude: currentVendor.longitude
+            };
+            
+            // selectedAddress usually has these, but good to ensure
+            const drop = {
+                address: selectedAddress.full_address || selectedAddress.street,
+                latitude: selectedAddress.latitude,
+                longitude: selectedAddress.longitude
+            };
+
+            if (!pickup.latitude || !drop.latitude) {
+                 console.warn('⚠️ [InstantOrderPanel] Missing coordinates for pickup/drop', { pickup, drop });
+                 // Can't calculate without coords usually
+            }
+
+            console.log('🛵 [InstantOrderPanel] Checking serviceability...', { pickup, drop });
+            const res = await apiService.getDeliveryServiceability(pickup, drop);
+            
+            if (res.success && res.data) {
+                // Check is_serviceable flag
+                const serviceable = res.data.is_serviceable ?? true; // Default to true if missing? detailed check needed
+                setIsServiceable(serviceable);
+                
+                if (serviceable) {
+                    // Use total_amount as the delivery fee (cost of task)
+                    // Or delivery_fee if explicitly provided
+                    const fee = res.data.total_amount || res.data.delivery_fee || 50; // Fallback 50
+                    setDeliveryFee(fee);
+                } else {
+                    setServiceabilityError(res.data.reason || "Location not serviceable from this vendor.");
+                    setDeliveryFee(0);
+                }
+            } else {
+                 console.error('❌ [InstantOrderPanel] Serviceability check failed', res);
+                 setDeliveryFee(50); // Fallback? Or error?
+                 // Let's fallback to standard fee but maybe warn?
+            }
+        } catch (err: any) {
+            console.error('❌ [InstantOrderPanel] Error fetching delivery fee:', err);
+            // On error within serviceability check, maybe set default but don't block?
+            // Or block if strict. For now, constant fee fallback.
+            setDeliveryFee(50);
+        } finally {
+            setLoadingFee(false);
+        }
+    }
+
+    fetchDeliveryFee();
+  }, [isOpen, selectedAddress, currentVendor?.id, currentVendor?.location]); // Dep on vendor ID/Loc to re-trigger
+
+
   if (!isOpen) return null;
 
   const displayVendor = currentVendor || vendor;
@@ -256,9 +374,10 @@ export function InstantOrderPanel({
   const estimatedDelivery = new Date(Date.now() + 45 * 60 * 1000); // 45 minutes from now
 
   // Included GST computations
-  const deliveryFee = DELIVERY_FEE;
+  // deliveryFee is now dynamic (set by state)
   const platformFee = PLATFORM_FEE;
   const includedGstItems = totalPrice - (totalPrice / (1 + ITEMS_GST_RATE));
+  // Use state deliveryFee
   const includedGstDelivery = deliveryFee - (deliveryFee / (1 + FEES_GST_RATE));
   const includedGstPlatform = platformFee - (platformFee / (1 + FEES_GST_RATE));
   const includedGstFees = includedGstDelivery + includedGstPlatform;
@@ -599,8 +718,15 @@ export function InstantOrderPanel({
               </div>
             ))}
             <div className="flex justify-between">
-              <span className="text-gray-600">Delivery fee (incl. 18% GST)</span>
-              <span className="font-medium text-gray-900">₹{deliveryFee.toFixed(2)}</span>
+              <span className="text-gray-600">
+                  Delivery fee (incl. 18% GST)
+                  {loadingFee && <span className="ml-2 inline-block animate-spin">⌛</span>}
+              </span>
+              <span className={`font-medium ${!isServiceable ? 'text-red-500' : 'text-gray-900'}`}>
+                  {loadingFee ? '...' : 
+                   !isServiceable ? 'Not serviceable' : 
+                   `₹${deliveryFee.toFixed(2)}`}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Platform fee (incl. 18% GST)</span>
@@ -617,6 +743,12 @@ export function InstantOrderPanel({
               <span>GST included in fees @18%</span>
               <span>₹{includedGstFees.toFixed(2)}</span>
             </div>
+            
+            {!isServiceable && serviceabilityError && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-xs font-medium">
+                    {serviceabilityError}
+                </div>
+            )}
 
             <div className="flex justify-between items-center pt-2">
               <span className="font-medium text-gray-900">Total Amount:</span>
@@ -635,7 +767,7 @@ export function InstantOrderPanel({
       <div className="p-6 border-t border-gray-200 bg-gray-50/50">
         <Button
           onClick={async () => {
-            if (cartItems.length === 0 || isProcessing) return;
+            if (cartItems.length === 0 || isProcessing || !isServiceable) return;
             
             if (!selectedAddress) {
               toast.error('Please select a delivery address');
@@ -747,7 +879,7 @@ export function InstantOrderPanel({
                                  
                                  document.body.appendChild(form);
                                  form.submit();
-                              } else {
+                               } else {
                                  // Handle failure via callback redirect too? Or just toast
                                  // Ideally redirect to retain robust flow
                                  const form = document.createElement('form');
@@ -796,7 +928,7 @@ export function InstantOrderPanel({
               setIsProcessing(false);
             }
           }}
-          disabled={cartItems.length === 0 || isProcessing || !selectedAddress}
+          disabled={cartItems.length === 0 || isProcessing || !selectedAddress || loadingFee || !isServiceable}
           className="w-full bg-gradient-to-r from-gutzo-primary to-gutzo-primary-hover text-white font-medium py-4 rounded-xl hover:shadow-lg transition-all disabled:opacity-50"
         >
           {isProcessing ? (
