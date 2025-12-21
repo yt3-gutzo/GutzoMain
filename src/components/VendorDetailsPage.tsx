@@ -258,7 +258,8 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId }) => {
               setProfilePanelContent('address');
               setShowProfilePanel(true);
             }}
-            tags={["Vegan Friendly", "High Protein", "Fresh Daily"]}
+            cuisineType={vendor.cuisineType}
+            tags={vendor.tags || []}
             onBack={handleClose}
           />
           {/* Weekly Meal Plans section replaces Select your plans section */}

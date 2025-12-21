@@ -8,13 +8,20 @@ interface VendorHeaderProps {
   location: string;
   deliveryTime: string;
   tags: string[];
+  cuisineType?: string;
   userAddressLabel?: string;
   onAddressClick?: () => void;
   onBack?: () => void;
 }
 
 
-const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, location, deliveryTime, tags, userAddressLabel, onAddressClick, onBack }) => {
+const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, location, deliveryTime, tags, cuisineType, userAddressLabel, onAddressClick, onBack }) => {
+  // Construct dynamic tagline: "Cuisine · First Tag"
+  const tagline = [
+    cuisineType,
+    tags && tags.length > 0 ? tags[0] : null
+  ].filter(Boolean).join(' · ') || "Fresh Bowls · Wholesome Meals";
+
   return (
     <>
       {/* Header Section (outside card) */}
@@ -57,7 +64,7 @@ const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, loca
         </div>
         {/* Cuisine Row */}
         <div style={{ color: '#1BA672', fontWeight: 600, fontSize: '0.95rem', marginBottom: 6 }}>
-          Fresh Bowls · Wholesome Meals
+          {tagline}
         </div>
         {/* Outlet Row */}
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
