@@ -1,34 +1,57 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "../utils/supabase/client";
 
-
-// Gutzo core categories with content-based images (replace with your actual images)
-const inspirationOptions = [
-  { label: "Salads", img: "/assets/inspiration/salads.png" },
-  { label: "Smoothies", img: "/assets/inspiration/smoothies.png" },
-  { label: "Bowls", img: "/assets/inspiration/bowls.png" },
-  { label: "Protein", img: "/assets/inspiration/protein.png" },
-  { label: "Wraps", img: "/assets/inspiration/wraps.png" },
-  { label: "Juices", img: "/assets/inspiration/juices.png" },
-  { label: "Oats", img: "/assets/inspiration/oats.png" },
-  { label: "Breakfast", img: "/assets/inspiration/breakfast.png" },
-  { label: "Low-Cal", img: "/assets/inspiration/lowcal.png" },
-  { label: "Soups", img: "/assets/inspiration/soups.png" },
-  { label: "Snacks", img: "/assets/inspiration/snacks.png" },
-  { label: "Fruits", img: "/assets/inspiration/fruits.png" },
-  { label: "Detox", img: "/assets/inspiration/detox.png" },
-  { label: "Fit Meals", img: "/assets/inspiration/fitmeals.png" },
-  { label: "Keto", img: "/assets/inspiration/keto.png" },
-  { label: "Vegan", img: "/assets/inspiration/vegan.png" },
-  { label: "Specials", img: "/assets/inspiration/specials.png" },
-  { label: "Combos", img: "/assets/inspiration/combos.png" },
-];
+interface InspirationOption {
+  label: string;
+  img: string | null;
+}
 
 interface InspirationProps {
   onOptionClick?: (label: string) => void;
   loading?: boolean;
 }
 
-export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading = false }) => {
+export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading: parentLoading = false }) => {
+  const [inspirationOptions, setInspirationOptions] = useState<InspirationOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('name, image_url')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching categories:', error);
+          setErrorState(error);
+          return;
+        }
+
+        if (data) {
+          console.log('Fetched inspiration categories:', data);
+          const mappedData = data.map((item) => ({
+            label: item.name,
+            img: item.image_url,
+          }));
+          setInspirationOptions(mappedData);
+          setErrorState(null); // Clear error if success
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching categories:', err);
+        setErrorState(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  const isLoading = parentLoading || loading;
   return (
   <section className="w-full bg-[#fafafa] pt-4 pb-8 md:pt-6 md:pb-12 lg:pt-8 lg:pb-16">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col">
@@ -39,8 +62,23 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading
           Start Your Gutzo Journey Here
         </h2>
         <div className="mt-2" />
+        {/* Error/Empty State Debugging */}
+        {!isLoading && (
+          <>
+             {errorState && (
+              <div className="p-4 bg-red-50 text-red-600 rounded-lg text-sm mb-4">
+                <strong>Supabase Error:</strong> {JSON.stringify(errorState)}
+              </div>
+             )}
+             {!errorState && inspirationOptions.length === 0 && (
+              <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm mb-4">
+                <strong>Data is empty.</strong> The query returned 0 rows.
+              </div>
+             )}
+          </>
+        )}
         {/* Mobile: double-lined horizontal scroll (both rows scroll together) */}
-        {loading ? (
+        {isLoading ? (
            <div className="sm:hidden overflow-x-auto scrollbar-hide pb-2 -mr-4" style={{ width: 'calc(100% + 16px)' }}>
              <div className="flex flex-col min-w-max">
                <div className="flex gap-2 mb-2">
@@ -135,7 +173,7 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading
         )}
 
         {/* Tablet/Desktop: horizontal scrollable row */}
-        {loading ? (
+        {isLoading ? (
              <div className="hidden sm:flex w-full overflow-x-auto scrollbar-hide items-end gap-3 md:gap-4 lg:gap-6 pb-2 animate-pulse">
                {[...Array(10)].map((_, i) => (
                   <div key={i} className="flex flex-col items-center flex-shrink-0 min-w-[90px]">
