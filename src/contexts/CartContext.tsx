@@ -1056,7 +1056,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // -------------------------------------------------------------------------
     const currentVendor = getCurrentVendor();
     if (currentVendor && currentVendor.id !== vendor.id && state.items.length > 0) {
-       console.warn("Vendor conflict detected in addItem");
        setPendingItem({ product, vendor, quantity });
        setReplaceModalOpen(true);
        return; // STOP here
@@ -1214,6 +1213,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   return (
     <CartContext.Provider value={value}>
       {children}
+      <ReplaceCartModal 
+        isOpen={isReplaceModalOpen}
+        onClose={closeReplaceModal}
+        onConfirm={confirmReplaceCart}
+        oldVendorName={getCurrentVendor()?.name || 'Existing Vendor'}
+        newVendorName={pendingItem?.vendor.name || 'New Vendor'}
+      />
     </CartContext.Provider>
   );
 }
