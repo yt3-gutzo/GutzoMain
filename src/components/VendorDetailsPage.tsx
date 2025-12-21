@@ -94,7 +94,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId }) => {
   const [showCartPanel, setShowCartPanel] = useState(false);
   const { vendors, loading } = useVendors();
 
-  const { addItem, getItemQuantity, isItemInCart, items: cartItems } = useCart();
+  const { addItem, getItemQuantity, isItemInCart, items: cartItems, totalItems } = useCart();
   const { currentRoute, navigate } = useRouter();
   const location = useLocation();
   const { location: userLocation, locationLabel, locationDisplay } = useUserLocation();
@@ -275,6 +275,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId }) => {
             margin: '0 auto',
             paddingLeft: window.innerWidth >= 1024 ? 0 : 16,
             paddingRight: window.innerWidth >= 1024 ? 0 : 16,
+            paddingBottom: (totalItems > 0 && !showCartPanel && !showCheckoutPanel) ? 120 : 40,
           }}
         >
           {/* Header Section: back arrow and vendor name, outside card */}
