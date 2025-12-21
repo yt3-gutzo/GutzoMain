@@ -22,6 +22,7 @@ export interface Vendor {
   products?: Product[];
   latitude?: number;
   longitude?: number;
+  isBlacklisted?: boolean;
 }
 
 export interface Product {

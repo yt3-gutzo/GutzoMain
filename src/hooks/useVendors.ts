@@ -52,9 +52,17 @@ export const useVendors = () => {
 
       const processedVendors: Vendor[] = vendorList.map(processVendorData);
 
+      // Filter out blacklisted vendors immediately
+      const validVendors = processedVendors.filter((vendor) =>
+        !vendor.isBlacklisted
+      );
+      console.log(
+        `Filtering vendors: ${processedVendors.length} found, ${validVendors.length} visible (after blacklist check)`,
+      );
+
       // Load products for each vendor
       const vendorsWithProducts = await Promise.all(
-        processedVendors.map(async (vendor) => {
+        validVendors.map(async (vendor) => {
           try {
             const products = await loadVendorProducts(vendor.id);
             return { ...vendor, products };

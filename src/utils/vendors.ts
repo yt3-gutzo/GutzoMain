@@ -44,6 +44,7 @@ export const processVendorData = (vendor: any): Vendor => ({
   tags: vendor.tags || generateTagsFromDescription(vendor.description || ""),
   latitude: vendor.latitude ? parseFloat(vendor.latitude) : undefined,
   longitude: vendor.longitude ? parseFloat(vendor.longitude) : undefined,
+  isBlacklisted: vendor.is_blacklisted || false,
 });
 
 // Keep exact category names without normalization
