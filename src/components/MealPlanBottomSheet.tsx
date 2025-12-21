@@ -7,6 +7,7 @@ import { nodeApiService } from '../utils/nodeApi';
 import { format, addDays, isTomorrow, getDay, isSameDay } from 'date-fns';
 
 import { useMediaQuery } from '../hooks/use-media-query';
+import { useCart } from '../contexts/CartContext';
 
 interface MealPlanBottomSheetProps {
   plan: MealPlan | null;
@@ -15,6 +16,7 @@ interface MealPlanBottomSheetProps {
 
 const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose }) => {
   const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const { addItem, hasItemsFromDifferentVendor, clearCart } = useCart();
   
   // State for Healthy Daily Logic (HMR Trigger 1)
   const [duration, setDuration] = useState<'Trial' | '1 Week' | 'Monthly'>('1 Week'); // Default to "Most Chosen"
@@ -822,7 +824,50 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
 
            {/* Sticky Bottom CTA */}
            <div className="flex-shrink-0 p-6 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-[1003]">
-              <button className="w-full bg-gutzo-primary hover:bg-gutzo-primary-hover text-white rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors" style={{ height: '42px' }}> Continue <ArrowRight className="h-4 w-4" /> </button>
+              <button 
+                onClick={() => {
+                  if (!plan) return;
+                  const vendorId = plan.vendorId || 'v1'; // Fallback
+                  
+                  // Construct Product object from Plan
+                  const productToAdd = {
+                      id: plan.id,
+                      name: plan.title,
+                      price: weeklyPrice, // Note: This is base price, logic might need refinement for duration
+                      image: plan.image,
+                      description: `${duration} Plan - ${selectedMeals.join(', ')}`,
+                      category: 'Meal Plan',
+                      vendor_id: vendorId,
+                      rating: plan.rating,
+                      review_count: 0,
+                      is_available: true,
+                      is_veg: isVeg, // Use the state variable
+                      created_at: new Date().toISOString()
+                  };
+
+                  const vendorObj = {
+                      id: vendorId,
+                      name: plan.vendor || 'Vendor',
+                      image: plan.vendorLogo || '',
+                      rating: plan.rating || 0,
+                      // Minimal vendor details as plan might not have all
+                      description: '',
+                      location: '',
+                      deliveryTime: '',
+                      minimumOrder: 0, 
+                      deliveryFee: 0,
+                      cuisineType: '',
+                      phone: '',
+                      isActive: true,
+                      isFeatured: false,
+                      created_at: new Date().toISOString(),
+                      tags: []
+                  };
+
+                  addItem(productToAdd, vendorObj, 1);
+                  onClose(); // Close sheet after adding
+                }}
+                className="w-full bg-gutzo-primary hover:bg-gutzo-primary-hover text-white rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors" style={{ height: '42px' }}> Continue <ArrowRight className="h-4 w-4" /> </button>
                <div className={`flex justify-center pt-1.5 transition-opacity duration-200 ${isRoutine ? 'opacity-100' : 'opacity-0'}`}>
                   <p className="text-gray-400 flex items-center gap-1" style={{ fontSize: '11px' }}>
                      Cancel anytime.

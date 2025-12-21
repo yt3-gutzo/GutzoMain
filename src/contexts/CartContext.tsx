@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useState, useRef } from 'react';
 import { Product, Vendor } from '../types';
 import { toast } from 'sonner';
 import { nodeApiService as apiService } from '../utils/nodeApi';
 import { useAuth } from './AuthContext';
+import ReplaceCartModal from '../components/ReplaceCartModal';
 
 export interface CartItem {
   id: string;
@@ -65,11 +66,15 @@ interface CartContextType extends CartState {
   updateQuantityOptimistic: (productId: string, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
   clearGuestCart: () => void;
+  // For internal/debug use
+  clearCartReset: () => void; // Synchronous clear for replace logic
   getItemQuantity: (productId: string) => number;
   isItemInCart: (productId: string) => boolean;
   getVendorItems: (vendorId: string) => CartItem[];
   getCurrentVendor: () => { id: string; name: string } | null;
   hasItemsFromDifferentVendor: (vendorId: string) => boolean;
+  // Modal State Exposer
+  isReplaceModalOpen: boolean;
   // Guest cart system
   migrateGuestCartOnLogin: (userId: string) => Promise<void>;
   loadUserCartFromDB: (userId: string) => Promise<void>;
@@ -994,7 +999,69 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, user, state.items]);
 
   // Optimistic item addition with background sync
+  // ---------------------------------------------------------------------------
+  // Replace Cart Logic
+  // ---------------------------------------------------------------------------
+  const [isReplaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [pendingItem, setPendingItem] = useState<{product: Product, vendor: Vendor, quantity: number} | null>(null);
+  
+  const closeReplaceModal = () => {
+    setReplaceModalOpen(false);
+    setPendingItem(null);
+  }
+
+  const confirmReplaceCart = () => {
+    if (pendingItem) {
+      // 1. Clear existing cart (UI first)
+      dispatch({ type: 'CLEAR_CART' });
+      
+      // 2. Add the new item
+      dispatch({ 
+        type: 'ADD_ITEM', 
+        payload: { 
+          product: pendingItem.product, 
+          vendor: pendingItem.vendor, 
+          quantity: pendingItem.quantity 
+        } 
+      });
+
+      // 3. Sync with backend (optional: force full sync or just add new item)
+      // Since we clear locally, the next sync call in addItemOptimistic logic below might be tricky.
+      // So we call the internal logic of addItem here.
+      
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('cart'); // Hard clear storage too
+      }
+      
+      // Re-trigger the optimistic add (this will now pass the check as cart is empty)
+      // Actually, we can just call our internal sync logic if we want, or just let the dispatch handle UI
+      // and let the next effect cycle handle persistence if we persist via effects.
+      
+      // Better approach: Call our sync API to clear backend, then add.
+      if (isAuthenticated && user) {
+        apiService.clearUserCart(user.phone)
+            .then(() => apiService.addToCart(user.phone, { product_id: pendingItem.product.id, quantity: pendingItem.quantity, vendor_id: pendingItem.vendor.id }))
+            .catch(err => console.error("Sync error during replace", err));
+      }
+
+      closeReplaceModal();
+      toast.success(`Cart replaced with items from ${pendingItem.vendor.name}`);
+    }
+  };
+
+
   const addItemOptimistic = useCallback(async (product: Product, vendor: Vendor, quantity: number = 1) => {
+    // -------------------------------------------------------------------------
+    // VENDOR CONFLICT CHECK
+    // -------------------------------------------------------------------------
+    const currentVendor = getCurrentVendor();
+    if (currentVendor && currentVendor.id !== vendor.id && state.items.length > 0) {
+       console.warn("Vendor conflict detected in addItem");
+       setPendingItem({ product, vendor, quantity });
+       setReplaceModalOpen(true);
+       return; // STOP here
+    }
+
     console.log('🔄 Adding item optimistically:', { productId: product.id, quantity });
 
     // Apply optimistic addition immediately
@@ -1005,7 +1072,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const existingItem = state.items.find(item => item.productId === product.id);
       
       try {
-        if (existingItem && existingItem.id && !existingItem.id.endsWith('_api')) {
+        if (existingItem && existingItem.id && !existingItem.id.includes('_')) { // Changed from endsWith('_api') to includes('_') for consistency
              // Case 1: Item exists and has a real DB ID -> Update Quantity
              const newQuantity = existingItem.quantity + quantity;
              const success = await apiService.updateCartItem(user.phone, existingItem.id, { quantity: newQuantity });
@@ -1131,12 +1198,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     updateQuantity,
     updateQuantityOptimistic,
     clearCart: handleClearCart,
+    clearCartReset: () => dispatch({ type: 'CLEAR_CART' }),
     clearGuestCart,
     getItemQuantity,
     isItemInCart,
     getVendorItems,
     getCurrentVendor,
     hasItemsFromDifferentVendor,
+    isReplaceModalOpen,
     migrateGuestCartOnLogin,
     loadUserCartFromDB,
     forceCartReload

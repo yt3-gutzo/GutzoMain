@@ -21,7 +21,7 @@ interface InstantPicksProps {
 }
 
 const InstantPicksItem: React.FC<{ product: Product; isLast: boolean; noPadding: boolean; disabled?: boolean }> = ({ product, isLast, noPadding, disabled }) => {
-  const { addItem, updateQuantity, getItemQuantity } = useCart();
+  const { addItem, updateQuantity, getItemQuantity, hasItemsFromDifferentVendor, clearCart } = useCart();
   const quantity = getItemQuantity(product.id);
 
   return (
@@ -47,11 +47,15 @@ const InstantPicksItem: React.FC<{ product: Product; isLast: boolean; noPadding:
                 <button
                   className={`instant-picks-btn ${disabled ? 'instant-picks-btn-gray' : 'instant-picks-btn-green'}`}
                   disabled={disabled}
-                  onClick={() =>
-                    !disabled && addItem(
+                  onClick={() => {
+                    if (disabled) return;
+                    
+                    const vendorId = product.vendor?.id || product.vendor_id || 'v1';
+                    
+                    addItem(
                       product,
                       {
-                        id: product.vendor?.id || product.vendor_id || 'v1',
+                        id: vendorId,
                         name: product.vendor?.name || 'Vendor',
                         description: product.vendor?.description || '',
                         location: product.vendor?.location || '',
@@ -68,8 +72,8 @@ const InstantPicksItem: React.FC<{ product: Product; isLast: boolean; noPadding:
                         tags: product.vendor?.tags || []
                       },
                       1
-                    )
-                  }
+                    );
+                  }}
                 >{'ADD'}</button>
               ) : (
                 <div className="qty-selector">
