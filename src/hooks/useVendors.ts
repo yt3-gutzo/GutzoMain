@@ -3,16 +3,19 @@ import { toast } from "sonner";
 import { Product, Vendor } from "../types";
 import { nodeApiService as apiService } from "../utils/nodeApi";
 import { processVendorData } from "../utils/vendors";
+import { useLocation } from "../contexts/LocationContext";
 
 export const useVendors = () => {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
+  const { location: userLocation, locationDisplay } = useLocation();
 
   const initializeApp = async () => {
     try {
-      console.log("Testing API connection...");
-      await apiService.testConnection();
-      console.log("API connection successful, loading vendors...");
+      // console.log("Testing API connection...");
+      // await apiService.testConnection();
+      // console.log("API connection successful, loading vendors...");
+      // We can skip explicit connection test to save time, loadVendors will fail if API is down
       await loadVendors();
     } catch (error) {
       console.error("Failed to initialize app:", error);
@@ -26,10 +29,9 @@ export const useVendors = () => {
 
   const loadVendors = async () => {
     try {
-      console.log("Starting to load vendors from database...");
-      console.log("Calling apiService.getVendors()...");
+      setLoading(true);
+      console.log("Starting to load vendors...");
       const response: any = await apiService.getVendors();
-      console.log("Loaded vendors from API (raw):", response);
 
       let vendorList: any[] = [];
       if (Array.isArray(response)) {
@@ -42,25 +44,79 @@ export const useVendors = () => {
         vendorList = response.vendors;
       }
 
-      console.log("Extracted vendor list length:", vendorList.length);
-
       if (vendorList.length === 0) {
-        console.log("No vendors found in response");
         setVendors([]);
         return;
       }
 
       const processedVendors: Vendor[] = vendorList.map(processVendorData);
 
-      // Filter out blacklisted vendors immediately
-      const validVendors = processedVendors.filter((vendor) =>
+      // 1. Filter blacklist
+      let validVendors = processedVendors.filter((vendor) =>
         !vendor.isBlacklisted
       );
-      console.log(
-        `Filtering vendors: ${processedVendors.length} found, ${validVendors.length} visible (after blacklist check)`,
-      );
 
-      // Load products for each vendor
+      // 2. Filter by Serviceability (if location available)
+      if (userLocation && userLocation.coordinates) {
+        console.log("Checking serviceability for vendors...");
+        const servicedVendors: Vendor[] = [];
+
+        await Promise.all(validVendors.map(async (vendor) => {
+          // If vendor doesn't have location, skip or keep? Assuming keep if data missing, but robust check needs coords.
+          if (!vendor.latitude || !vendor.longitude) {
+            // servicedVendors.push(vendor); // Policy: if missing coords, maybe hide?
+            return;
+          }
+
+          try {
+            const pickup = {
+              address: vendor.location || "Vendor Location",
+              latitude: vendor.latitude,
+              longitude: vendor.longitude,
+            };
+            const drop = {
+              address: locationDisplay || "User Location",
+              latitude: userLocation.coordinates.latitude,
+              longitude: userLocation.coordinates.longitude,
+            };
+
+            const res = await apiService.getDeliveryServiceability(
+              pickup,
+              drop,
+            );
+
+            // Check implicit or explicit serviceability
+            const isServiceable = res.data &&
+              (res.data.is_serviceable !== undefined
+                ? res.data.is_serviceable
+                : (res.data.value?.is_serviceable ?? true));
+
+            if (isServiceable) {
+              servicedVendors.push(vendor);
+            } else {
+              console.log(
+                `Vendor ${vendor.name} is not serviceable at current location.`,
+              );
+            }
+          } catch (err) {
+            console.error(
+              `Serviceability check failed for ${vendor.name}`,
+              err,
+            );
+            // On error, do we hide? Safe default is hide to prevent ordering issues.
+          }
+        }));
+
+        validVendors = servicedVendors;
+      } else {
+        console.log(
+          "No user location found, skipping serviceability check (showing all non-blacklisted).",
+        );
+      }
+
+      console.log(`Vendors after filtering: ${validVendors.length}`);
+
+      // Load products for valid vendors
       const vendorsWithProducts = await Promise.all(
         validVendors.map(async (vendor) => {
           try {
@@ -76,26 +132,10 @@ export const useVendors = () => {
         }),
       );
 
-      console.log("Vendors with products loaded:", vendorsWithProducts);
-
-      // Debug each vendor's products for categories
-      vendorsWithProducts.forEach((vendor) => {
-        const categories = vendor.products?.map((p) =>
-          p.category
-        ).filter(Boolean) || [];
-        console.log(
-          `Vendor: ${vendor.name} - Categories: [${categories.join(", ")}]`,
-        );
-      });
-
       setVendors(vendorsWithProducts);
     } catch (error) {
       console.error("Failed to load vendors:", error);
-      toast.error(
-        `Failed to load vendors: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-      );
+      toast.error("Failed to load vendors.");
       setVendors([]);
     } finally {
       setLoading(false);
@@ -104,9 +144,7 @@ export const useVendors = () => {
 
   const loadVendorProducts = async (vendorId: string): Promise<Product[]> => {
     try {
-      console.log(`Loading products for vendor ${vendorId} from database...`);
       const response: any = await apiService.getVendorProducts(vendorId);
-
       let products: Product[] = [];
 
       if (Array.isArray(response)) {
@@ -114,7 +152,6 @@ export const useVendors = () => {
       } else if (
         response && response.data && Array.isArray(response.data.products)
       ) {
-        // Structure: { success: true, data: { products: [...], grouped: ... } }
         products = response.data.products;
       } else if (response && Array.isArray(response.products)) {
         products = response.products;
@@ -122,28 +159,15 @@ export const useVendors = () => {
         products = response.data;
       }
 
-      console.log(
-        `Extracted ${products.length} products for vendor ${vendorId}`,
-      );
-
-      if (!products || products.length === 0) {
-        console.log(`No products found for vendor ${vendorId}`);
-      }
-
       return products || [];
     } catch (error) {
-      console.error(`Failed to load products for vendor ${vendorId}:`, error);
-      console.error(
-        "Error details:",
-        error instanceof Error ? error.message : String(error),
-      );
       return [];
     }
   };
 
   useEffect(() => {
     initializeApp();
-  }, []);
+  }, [userLocation]); // Re-run when location changes
 
   return {
     vendors,

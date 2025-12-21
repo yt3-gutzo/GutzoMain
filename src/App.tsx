@@ -423,15 +423,32 @@ function AppContent() {
                     <VendorSkeleton />
                   </div>
                 ))
-              ) : (
+              ) : filteredVendors.length > 0 ? (
                 filteredVendors.map((vendor) => (
-                <div key={vendor.id} className="flex justify-center items-stretch w-full h-full">
-                  <VendorCard
-                    vendor={vendor}
-                    onClick={handleVendorClick}
-                  />
+                  <div key={vendor.id} className="flex justify-center items-stretch w-full h-full">
+                    <VendorCard
+                      vendor={vendor}
+                      onClick={handleVendorClick}
+                    />
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-4 flex flex-col items-center justify-center py-12 text-center">
+                   <div className="bg-gray-100 p-6 rounded-full mb-4">
+                     <MapPin className="h-10 w-10 text-gray-400" />
+                   </div>
+                   <h3 className="text-xl font-semibold text-gray-900 mb-2">No Service Available Here</h3>
+                   <p className="text-gray-500 max-w-md mx-auto mb-6">
+                     We couldn't find any vendors delivering to your current location. 
+                     Try searching for "Bangalore" or changing your delivery address.
+                   </p>
+                   <Button 
+                     onClick={() => handleShowProfile('address')}
+                     className="bg-gutzo-brand hover:bg-gutzo-brand-hover text-white px-6 py-2 rounded-lg font-medium"
+                   >
+                     Change Location
+                   </Button>
                 </div>
-              ))
               )}
             </div>
         </div>

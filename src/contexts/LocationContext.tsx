@@ -90,7 +90,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
     const updateDisplay = async () => {
       // Base display from GPS location
       let display = location ? LocationService.getLocationDisplay(location) : 'Location Unknown';
-      let isDefault = false;
+      let isDefaultAddressFound = false;
 
       // If user is authenticated, try to get default address
       if (isAuthenticated && user?.phone) {
@@ -111,9 +111,39 @@ export function LocationProvider({ children }: LocationProviderProps) {
                 label = result.data.type ? result.data.type.charAt(0).toUpperCase() + result.data.type.slice(1) : null;
             }
             setLocationLabel(label);
+            setLocationLabel(label);
             
-            isDefault = true;
+            isDefaultAddressFound = true;
             console.log('📍 Using default address for location display:', display, 'Label:', label);
+
+            // CRITICAL FIX: Update the main location object if coordinates exist
+            // This ensures hooks like useVendors use the correct override location
+            if (result.data.latitude && result.data.longitude) {
+               // Verify if we actually need to update to avoid infinite loops if objects are different but values same
+               const newLat = result.data.latitude;
+               const newLng = result.data.longitude;
+               
+               // Only update if coords differ significantly from current location state
+               // or if current location is null (though we fetched GPS, maybe it failed)
+               const currentLat = location?.coordinates?.latitude;
+               const currentLng = location?.coordinates?.longitude;
+
+               // Simple epsilon check or direct comparison
+               if (currentLat !== newLat || currentLng !== newLng) {
+                   console.log('🔄 Syncing Location Context with Default Address Coordinates:', { newLat, newLng });
+                   setLocation({
+                       city: result.data.city,
+                       state: result.data.state,
+                       country: 'India', // Defaulting as assumed
+                       coordinates: {
+                           latitude: newLat,
+                           longitude: newLng
+                       },
+                       timestamp: Date.now()
+                   });
+               }
+            }
+
           } else {
             setLocationLabel(null);
           }
@@ -126,7 +156,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
       }
 
       setLocationDisplay(display);
-      setIsDefaultAddress(isDefault);
+      setIsDefaultAddress(isDefaultAddressFound);
     };
 
     updateDisplay();
