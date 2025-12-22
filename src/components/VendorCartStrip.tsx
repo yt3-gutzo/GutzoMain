@@ -13,8 +13,10 @@ interface VendorCartStripProps {
 }
 
 import { X } from "lucide-react";
+import { useRouter } from "./Router";
 
 export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart, isDrawerOpen = false, isCartOpen = false }: VendorCartStripProps) {
+  const { navigate } = useRouter();
   const { getVendorItems, clearCart } = useCart();
   const vendorItems = getVendorItems(vendorId);
   const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -65,7 +67,7 @@ export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart,
                 {vendorName}
               </span>
               <button 
-                onClick={() => window.location.href=`/vendor/${vendorId}`} // Simple navigation for "View Full Menu"
+                onClick={() => navigate(`/vendor/${vendorId}`)} // Simple navigation for "View Full Menu"
                 className="text-left text-sm text-gray-500 underline decoration-gray-400 underline-offset-2 hover:text-gray-800 transition-colors mt-0.5 font-medium"
               >
                 View Full Menu

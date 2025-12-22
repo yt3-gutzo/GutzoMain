@@ -88,11 +88,13 @@ function getVendorIdFromRoute(route: string) {
 interface VendorDetailsPageProps {
   vendorId?: string;
   onShowCart?: () => void;
+  vendors: any[];
+  loading: boolean;
 }
 
-const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId }) => {
+const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors, loading }) => {
   const [showCartPanel, setShowCartPanel] = useState(false);
-  const { vendors, loading } = useVendors();
+  // const { vendors, loading } = useVendors(); // Removed internal fetching
 
   const { addItem, getItemQuantity, isItemInCart, items: cartItems, totalItems } = useCart();
   const { currentRoute, navigate } = useRouter();

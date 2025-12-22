@@ -339,7 +339,7 @@ function AppContent() {
     );
   }
   if (typeof currentRoute === 'string' && currentRoute.startsWith('/vendor/')) {
-    return <VendorDetailsPage onShowCart={handleShowCart} />;
+    return <VendorDetailsPage onShowCart={handleShowCart} vendors={vendors} loading={loading} />;
   }
   if (typeof currentRoute === 'string' && ['/T&C','/refund_policy','/privacy_policy','/payment-status','/phonepe-soon','/contact','/about'].includes(currentRoute)) {
     switch(currentRoute) {

@@ -65,7 +65,7 @@ describe('VendorDetailsPage', () => {
   });
 
   it('renders vendor details and products', () => {
-    render(<VendorDetailsPage vendorId="v1" />);
+    render(<VendorDetailsPage vendorId="v1" vendors={[mockVendor]} loading={false} />);
     expect(screen.getByText('Test Vendor')).toBeInTheDocument();
     expect(screen.getByText('Salad Bowl')).toBeInTheDocument();
     expect(screen.getByText('Add to Cart')).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('VendorDetailsPage', () => {
       getItemQuantity: () => 0,
       isItemInCart: () => false
     });
-    render(<VendorDetailsPage vendorId="v1" />);
+    render(<VendorDetailsPage vendorId="v1" vendors={[mockVendor]} loading={false} />);
     fireEvent.click(screen.getByText('Add to Cart'));
     expect(addItemMock).toHaveBeenCalledWith(mockVendor.products[0], mockVendor, 1);
   });
