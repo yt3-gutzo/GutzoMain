@@ -175,8 +175,19 @@ class NodeApiService {
         return response;
     }
 
-    async getfeaturedVendors() {
-        return this.request("/vendors/featured");
+    async createVendorLead(data: any) {
+        return this.request("/vendor-leads", {
+            method: "POST",
+            body: data,
+        });
+    }
+
+    async createVendor(data: any) {
+        // Fallback or explicit method if needed
+        return this.request("/vendors", {
+            method: "POST",
+            body: data,
+        });
     }
 
     async getVendor(id: string) {
@@ -848,12 +859,6 @@ class NodeApiService {
     }
 
     // --- Vendors ---
-    async createVendor(vendorData: any) {
-        return this.request("/vendors", {
-            method: "POST",
-            body: vendorData,
-        });
-    }
 
     async createProduct(vendorId: string, productData: any) {
         return this.request(`/vendors/${vendorId}/products`, {

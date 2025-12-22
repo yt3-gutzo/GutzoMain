@@ -44,6 +44,7 @@ import { ContactPage } from "./pages/ContactPage";
 import { AboutPage } from "./pages/AboutPage";
 import PaymentStatusPage from "./pages/PaymentStatusPage";
 import PhonePeComingSoon from "./pages/PaytmComingSoon";
+import { PartnerPage } from "./pages/PartnerPage";
 import { Toaster } from "./components/ui/sonner";
 import { Loader2, MapPin, Plus, X, Zap } from "lucide-react";
 import { Vendor } from "./types/index";
@@ -341,7 +342,7 @@ function AppContent() {
   if (typeof currentRoute === 'string' && currentRoute.startsWith('/vendor/')) {
     return <VendorDetailsPage onShowCart={handleShowCart} vendors={vendors} loading={loading} />;
   }
-  if (typeof currentRoute === 'string' && ['/T&C','/refund_policy','/privacy_policy','/payment-status','/phonepe-soon','/contact','/about'].includes(currentRoute)) {
+  if (typeof currentRoute === 'string' && ['/T&C','/refund_policy','/privacy_policy','/payment-status','/phonepe-soon','/contact','/about', '/partner'].includes(currentRoute)) {
     switch(currentRoute) {
       case '/T&C': return <TermsPage />;
       case '/refund_policy': return <RefundPage />;
@@ -350,6 +351,7 @@ function AppContent() {
       case '/phonepe-soon': return <PhonePeComingSoon />;
       case '/contact': return <ContactPage />;
       case '/about': return <AboutPage />;
+      case '/partner': return <PartnerPage />;
       default: break;
     }
   }

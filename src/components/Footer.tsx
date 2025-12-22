@@ -48,6 +48,18 @@ export function Footer() {
           </div>
           
           <div className="w-full sm:w-[calc(50%-1.5rem)] lg:w-auto lg:flex-1">
+             <h3 className="font-medium text-white mb-3 sm:mb-4 text-base">For Kitchens</h3>
+             <div className="space-y-2 sm:space-y-3">
+               <button 
+                 onClick={() => navigate('/partner')}
+                 className="block text-[#1BA672] hover:text-[#2FCC5A] transition-colors text-sm text-left whitespace-nowrap interactive font-medium"
+               >
+                 Partner with Gutzo
+               </button>
+             </div>
+           </div>
+
+          <div className="w-full sm:w-[calc(50%-1.5rem)] lg:w-auto lg:flex-1">
             <h3 className="font-medium text-white mb-3 sm:mb-4 text-base">Legal</h3>
             <div className="space-y-2 sm:space-y-3">
               <button 

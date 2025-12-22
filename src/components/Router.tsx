@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
-type Route = '/' | '/T&C' | '/refund_policy' | '/privacy_policy' | '/payment-status' | '/contact' | '/about' | '/phonepe-soon' | `/vendor/${string}`;
+type Route = '/' | '/T&C' | '/refund_policy' | '/privacy_policy' | '/payment-status' | '/contact' | '/about' | '/partner' | '/phonepe-soon' | `/vendor/${string}`;
 
 interface RouterContextType {
   currentRoute: Route;
@@ -22,17 +22,24 @@ export function RouterProvider({ children }: { children: ReactNode }) {
       '/payment-status': 'Payment Status - Gutzo',
       '/contact': 'Contact Us - Gutzo',
       '/about': 'About Us - Gutzo',
+      '/partner': 'Partner with Gutzo',
       '/phonepe-soon': 'PhonePe Integration - Gutzo'
     };
-    document.title = titles[route];
+    // Handle vendor route explicitly as it's dynamic
+    if (route.startsWith('/vendor/')) {
+       document.title = 'Gutzo - Healthy Kitchen';
+    } else {
+       document.title = titles[route] || 'Gutzo';
+    }
   }, []);
 
   // Initialize route from browser URL
   useEffect(() => {
   const path = window.location.pathname as Route;
-  const validRoutes: Route[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/phonepe-soon'];
+  const validRoutes: Route[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/partner', '/phonepe-soon'];
     
-    if (validRoutes.includes(path)) {
+    // Check if it's a valid static route OR a vendor route
+    if (validRoutes.includes(path) || path.startsWith('/vendor/')) {
       // Scroll to top immediately on initial load if not on homepage
       if (path !== '/') {
         window.scrollTo(0, 0);
@@ -73,10 +80,10 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
-  const path = window.location.pathname as Route;
-  const validRoutes: Route[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/phonepe-soon'];
+    const path = window.location.pathname as Route;
+    const validRoutes: Route[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/partner', '/phonepe-soon'];
       
-      if (validRoutes.includes(path)) {
+      if (validRoutes.includes(path) || path.startsWith('/vendor/')) {
         window.scrollTo(0, 0);
         setCurrentRoute(path);
         updateDocumentTitle(path);

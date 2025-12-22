@@ -27,6 +27,8 @@ import searchRoutes from './routes/search.js';
 import deliveryZoneRoutes from './routes/deliveryZones.js';
 import bannerRoutes from './routes/banners.js';
 import deliveryRoutes from './routes/delivery.js';
+import vendorLeadsRoutes from './routes/vendorLeads.js';
+
 
 // Import middleware
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -134,6 +136,8 @@ app.use('/api/search', searchRoutes);
 app.use('/api/delivery-zones', deliveryZoneRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/delivery', deliveryRoutes);
+app.use('/api/vendor-leads', vendorLeadsRoutes);
+
 
 // 404 handler
 app.use(notFound);
