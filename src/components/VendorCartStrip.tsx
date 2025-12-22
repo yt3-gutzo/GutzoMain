@@ -14,6 +14,7 @@ interface VendorCartStripProps {
 
 import { X } from "lucide-react";
 import { useRouter } from "./Router";
+import ClearCartModal from "./ClearCartModal";
 
 export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart, isDrawerOpen = false, isCartOpen = false }: VendorCartStripProps) {
   const { navigate } = useRouter();
@@ -25,6 +26,7 @@ export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart,
   const [prevItemCount, setPrevItemCount] = useState(itemCount);
   const [prevTotalAmount, setPrevTotalAmount] = useState(totalAmount);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
 
   // Trigger animation when numbers change
   useEffect(() => {
@@ -80,31 +82,36 @@ export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart,
             {/* Green Checkout Button */}
             <button
                onClick={onViewCart}
-               className="bg-[#1BA672] hover:bg-[#14885E] text-white rounded-lg px-6 py-2 flex flex-col items-center justify-center min-w-[150px] transition-colors relative overflow-hidden group active:scale-95 duration-200 flex-shrink-0"
+               className="bg-[#1BA672] hover:bg-[#14885E] text-white rounded-lg px-6 py-3 flex flex-col items-center justify-center min-w-[150px] transition-colors relative overflow-hidden group active:scale-95 duration-200 flex-shrink-0"
                style={{ backgroundColor: '#1BA672' }}
             >
                <div className="text-lg font-normal opacity-95 leading-tight mb-0.5">
                  {itemCount} item{itemCount !== 1 ? 's' : ''} | ₹{totalAmount}
                </div>
-               <div className="text-sm font-extrabold uppercase tracking-wide leading-tight opacity-90">
+               <div className="text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90">
                  Checkout
                </div>
             </button>
 
             {/* Remove / Close Button */}
             <button
-              onClick={() => {
-                if(window.confirm('Clear cart and remove items?')) {
-                   clearCart();
-                }
-              }}
+              onClick={() => setShowClearModal(true)}
               className="bg-red-50 hover:bg-red-100 text-red-500 rounded-full w-8 h-8 flex items-center justify-center transition-colors active:scale-95 duration-200 flex-shrink-0"
               aria-label="Remove items"
             >
               <X size={18} strokeWidth={2.5} />
             </button>
         </div>
-      </div>
+       </div>
+      <ClearCartModal 
+        isOpen={showClearModal}
+        onClose={() => setShowClearModal(false)}
+        onConfirm={() => {
+          clearCart();
+          setShowClearModal(false);
+        }}
+        vendorName={vendorName}
+      />
     </div>
   );
 }

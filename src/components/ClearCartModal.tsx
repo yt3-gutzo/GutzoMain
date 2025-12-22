@@ -1,24 +1,16 @@
 import React from 'react';
-import { useMediaQuery } from '../hooks/use-media-query'; // Assuming this hook exists in the project
 import { X } from 'lucide-react';
 
-interface ReplaceCartModalProps {
+interface ClearCartModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  oldVendorName: string;
-  newVendorName: string;
+  vendorName: string;
 }
 
-const ReplaceCartModal: React.FC<ReplaceCartModalProps> = ({ isOpen, onClose, onConfirm, oldVendorName, newVendorName }) => {
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
-
+const ClearCartModal: React.FC<ClearCartModalProps> = ({ isOpen, onClose, onConfirm, vendorName }) => {
   if (!isOpen) return null;
 
-  /* 
-   * SWIGGY-LIKE UI IMPLEMENTATION 
-   * Matches the visual style of the reference image provided.
-   */
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 p-4">
       {/* Overlay click to close */}
@@ -42,12 +34,12 @@ const ReplaceCartModal: React.FC<ReplaceCartModalProps> = ({ isOpen, onClose, on
             className="text-[#1A1A1A] leading-tight text-left font-primary"
             style={{ fontSize: '20px', fontWeight: 600 }}
           >
-             Replace cart item?
+             Clear cart?
           </h3>
 
           {/* Body Text */}
           <p className="text-[14px] leading-relaxed text-[#6B6B6B] text-left px-1 mt-2 mb-6">
-             Your cart has dishes from {oldVendorName}. Do you want to clear it and add dishes from {newVendorName}?
+             Are you sure you want to clear your cart from {vendorName}?
           </p>
 
           {/* Action Buttons */}
@@ -61,13 +53,13 @@ const ReplaceCartModal: React.FC<ReplaceCartModalProps> = ({ isOpen, onClose, on
                 NO
              </button>
              
-             {/* Primary Action: REPLACE */}
+             {/* Primary Action: YES - Orange for Destructive */}
              <button 
                 onClick={onConfirm}
                 className="w-full h-12 flex items-center justify-center text-white font-bold text-[16px] uppercase tracking-wide shadow-md transition-transform active:scale-95"
-                style={{ backgroundColor: '#1BA672', color: '#ffffff', borderRadius: '10px' }}
+                style={{ backgroundColor: '#1BA672', color: '#ffffff', borderRadius: '10px' }} 
              >
-                REPLACE
+                YES
              </button>
           </div>
         </div>
@@ -76,4 +68,4 @@ const ReplaceCartModal: React.FC<ReplaceCartModalProps> = ({ isOpen, onClose, on
   );
 };
 
-export default ReplaceCartModal;
+export default ClearCartModal;
