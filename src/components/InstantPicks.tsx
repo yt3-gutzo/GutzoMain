@@ -101,6 +101,7 @@ const InstantPicks: React.FC<InstantPicksProps> = ({ noPadding = false, vendorId
   React.useEffect(() => {
     const loadProducts = async () => {
       try {
+        setLoading(true); // Reset loading state on vendor change
         let response;
         if (vendorId) {
           console.log(`Fetching products for vendor ${vendorId}...`);
@@ -128,14 +129,16 @@ const InstantPicks: React.FC<InstantPicksProps> = ({ noPadding = false, vendorId
             setProducts(mappedProducts);
           } else {
              console.log('No products found in response');
+             setProducts([]); // Clear products if none found
           }
         } else {
             console.error('Failed to load products:', response);
-            // Fallback or empty state
+            setProducts([]); // Clear on error/failure
         }
       } catch (error) {
         console.error('Error fetching instant picks:', error);
         toast.error('Failed to load instant picks');
+        setProducts([]); // Clear on exception
       } finally {
         setLoading(false);
       }

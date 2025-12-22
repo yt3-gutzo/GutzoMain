@@ -22,14 +22,14 @@ const CartStrip: React.FC<CartStripProps> = ({ onShowCart }) => {
           position: fixed;
           left: 0;
           right: 0;
-          bottom: 0;
+          bottom: 16px; 
           z-index: 100;
           display: flex;
           justify-content: center;
           pointer-events: none;
         }
         .gutzo-cart-strip-inner {
-          background: #219653;
+          background: #1BA672;
           color: #fff;
           padding: 14px 24px;
           display: flex;
@@ -37,39 +37,34 @@ const CartStrip: React.FC<CartStripProps> = ({ onShowCart }) => {
           justify-content: space-between;
           font-weight: 600;
           font-size: 1rem;
-          box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
-          border-radius: 0;
-          width: 100%;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          border-radius: 12px;
+          width: calc(100% - 32px);
           max-width: 800px;
           margin: 0 auto;
           pointer-events: auto;
         }
-        @media (max-width: 767px) {
-          .gutzo-cart-strip-inner {
-            max-width: 100vw;
-            border-radius: 0;
-          }
-        }
+        /* No media query override needed for radius, keeping consistent style */
       `}</style>
       <div className="gutzo-cart-strip-fixed">
         <div className="gutzo-cart-strip-inner">
-          <span>{totalItems} item{totalItems > 1 ? 's' : ''} added</span>
+          <span style={{ fontSize: '15px' }}>{totalItems} item{totalItems > 1 ? 's' : ''} added</span>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              fontWeight: 500,
-              fontSize: 18,
+              fontWeight: 600,
+              fontSize: '15px',
               cursor: 'pointer',
               letterSpacing: 'normal',
-              textTransform: 'uppercase',
+              textTransform: 'none', 
               color: '#fff',
-              gap: 0,
+              gap: 4,
             }}
             onClick={onShowCart}
           >
-            VIEW CART
-            <ShoppingBag size={24} strokeWidth={1} style={{ marginLeft: 2 }} />
+            View Cart
+            <span style={{ fontSize: '18px', fontWeight: 'bold' }}>&gt;</span>
           </div>
         </div>
       </div>

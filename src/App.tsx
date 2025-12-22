@@ -56,7 +56,7 @@ import { Button } from "./components/ui/button";
 import AddToHomeScreenPrompt from "./components/AddToHomeScreenPrompt";
 import { BrowserRouter } from 'react-router-dom';
 import VendorDetailsPage from './components/VendorDetailsPage';
-import CartStrip from "./components/CartStrip";
+
 
 function AppContent() {
     // Use responsive hook for desktop detection
@@ -482,8 +482,15 @@ function AppContent() {
         onShowLogin={handleShowLogin}
         onShowCheckout={handleShowCheckout}
       />
-      {/* Show CartStrip only when cart, profile, and login panels are not open, and no meal plan is selected */}
-      {!showCartPanel && !showProfilePanel && !showLoginPanel && !showCheckoutPanel && !selectedMealPlan && <CartStrip onShowCart={handleShowCart} />}
+      {/* Show VendorCartStrip (Detailed) only when cart, profile, and login panels are not open, and no meal plan is selected */}
+      {!showCartPanel && !showProfilePanel && !showLoginPanel && !showCheckoutPanel && !selectedMealPlan && cartItems.length > 0 && (
+         <VendorCartStrip 
+            vendorId={cartItems[0].vendorId || cartItems[0].vendor?.id || 'v1'} // Fallback safely
+            vendorName={cartItems[0].vendor?.name || 'Vendor'}
+            vendorImage={cartItems[0].vendor?.image}
+            onViewCart={handleShowCart} 
+         />
+      )}
       <InstantOrderPanel
         isOpen={showCheckoutPanel}
         onClose={handleCloseCheckout}

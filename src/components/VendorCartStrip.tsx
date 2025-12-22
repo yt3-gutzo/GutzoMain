@@ -6,13 +6,16 @@ import { useState, useEffect } from "react";
 interface VendorCartStripProps {
   vendorId: string;
   vendorName: string;
+  vendorImage?: string;
   onViewCart: () => void;
   isDrawerOpen?: boolean;
   isCartOpen?: boolean;
 }
 
-export function VendorCartStrip({ vendorId, vendorName, onViewCart, isDrawerOpen = false, isCartOpen = false }: VendorCartStripProps) {
-  const { getVendorItems } = useCart();
+import { X } from "lucide-react";
+
+export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart, isDrawerOpen = false, isCartOpen = false }: VendorCartStripProps) {
+  const { getVendorItems, clearCart } = useCart();
   const vendorItems = getVendorItems(vendorId);
   const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalAmount = vendorItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -35,46 +38,69 @@ export function VendorCartStrip({ vendorId, vendorName, onViewCart, isDrawerOpen
   if (itemCount === 0 || isCartOpen) return null;
 
   return (
-    <div className={`fixed bottom-0 z-50 bg-gutzo-selected text-white shadow-lg border-t border-gutzo-selected-hover cart-strip-enter cart-strip-transition
-      ${/* Mobile: Always full width and centered */ ''}
-      w-full left-0 right-0
-      ${/* Desktop: Dynamic positioning */ ''}
-      ${isDrawerOpen 
-        ? 'lg:right-0 lg:w-[40%] lg:min-w-[400px] lg:max-w-[600px] xl:min-w-[480px] lg:left-auto' 
-        : 'lg:left-1/2 lg:transform lg:-translate-x-1/2 lg:w-full lg:max-w-4xl lg:right-auto'
-      }`}>
-      <div className={`transition-all duration-500 ease-in-out px-4 py-3 ${
-        isDrawerOpen 
-          ? 'max-w-[90%] lg:max-w-[85%] mx-auto' 
-          : 'max-w-[85%] lg:max-w-[75%] mx-auto'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-              <ShoppingCart className="h-4 w-4" />
+    <div 
+      className={`fixed bottom-4 z-50 transition-all duration-300 ease-in-out
+        ${/* Mobile: Always centered with margin */ ''}
+        left-4 right-4
+        ${/* Desktop: Dynamic positioning */ ''}
+        ${isDrawerOpen 
+          ? 'lg:left-auto lg:right-4 lg:w-[400px]' 
+          : 'lg:left-1/2 lg:-translate-x-1/2 lg:w-full lg:max-w-3xl'
+        }`}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-xl flex items-center justify-between p-3 border border-gray-100"
+      >
+        {/* Left Section: Image + Info */}
+        <div className="flex items-center gap-3 overflow-hidden">
+            {vendorImage ? (
+               <img src={vendorImage} alt={vendorName} className="w-16 h-16 rounded-full object-cover border border-gray-100 flex-shrink-0" />
+            ) : (
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-xl font-bold text-gray-400">{vendorName.charAt(0)}</span>
+                </div>
+            )}
+            <div className="flex flex-col overflow-hidden">
+              <span className="font-bold text-gray-900 text-lg truncate pr-2 leading-tight">
+                {vendorName}
+              </span>
+              <button 
+                onClick={() => window.location.href=`/vendor/${vendorId}`} // Simple navigation for "View Full Menu"
+                className="text-left text-sm text-gray-500 underline decoration-gray-400 underline-offset-2 hover:text-gray-800 transition-colors mt-0.5 font-medium"
+              >
+                View Full Menu
+              </button>
             </div>
-            <div>
-              <div className={`font-medium transition-all duration-300 ease-out ${isAnimating ? 'number-change' : ''}`}>
-                {itemCount} item{itemCount !== 1 ? 's' : ''} added
-              </div>
-              <div className="text-xs text-white/80 transition-all duration-300 ease-out">
-                from {vendorName}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className={`font-bold transition-all duration-300 ease-out ${isAnimating ? 'number-change' : ''}`}>₹{totalAmount}</div>
-              <div className="text-xs text-white/80 transition-all duration-300 ease-out">Total</div>
-            </div>
-            <Button
-              onClick={onViewCart}
-              className="bg-white text-gutzo-selected hover:bg-gray-100 font-medium px-6 py-2 rounded-lg"
+        </div>
+
+        {/* Right Section: Actions */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Green Checkout Button */}
+            <button
+               onClick={onViewCart}
+               className="bg-[#1BA672] hover:bg-[#14885E] text-white rounded-lg px-6 py-2 flex flex-col items-center justify-center min-w-[150px] transition-colors relative overflow-hidden group active:scale-95 duration-200 flex-shrink-0"
+               style={{ backgroundColor: '#1BA672' }}
             >
-              VIEW CART
-            </Button>
-          </div>
+               <div className="text-lg font-normal opacity-95 leading-tight mb-0.5">
+                 {itemCount} item{itemCount !== 1 ? 's' : ''} | ₹{totalAmount}
+               </div>
+               <div className="text-sm font-extrabold uppercase tracking-wide leading-tight opacity-90">
+                 Checkout
+               </div>
+            </button>
+
+            {/* Remove / Close Button */}
+            <button
+              onClick={() => {
+                if(window.confirm('Clear cart and remove items?')) {
+                   clearCart();
+                }
+              }}
+              className="bg-red-50 hover:bg-red-100 text-red-500 rounded-full w-8 h-8 flex items-center justify-center transition-colors active:scale-95 duration-200 flex-shrink-0"
+              aria-label="Remove items"
+            >
+              <X size={18} strokeWidth={2.5} />
+            </button>
         </div>
       </div>
     </div>
