@@ -9,6 +9,7 @@ import { AddressModal } from "./auth/AddressModal";
 import { AddressApi } from "../utils/addressApi";
 import { nodeApiService as apiService } from "../utils/nodeApi";
 import { DistanceService } from "../utils/distanceService";
+import { processVendorData } from "../utils/vendors";
 import React, { useState, useEffect } from "react";
 
 // Simple right panel for desktop
@@ -102,7 +103,8 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
   const { location: userLocation, locationLabel, locationDisplay } = useUserLocation();
   const vendorFromState = location.state?.vendor;
   const id = vendorId || getVendorIdFromRoute(currentRoute);
-  const vendor = vendorFromState || vendors.find(v => v.id === id);
+  const [fetchedVendor, setFetchedVendor] = useState<any>(null);
+  const vendor = vendorFromState || vendors.find(v => v.id === id) || fetchedVendor;
   const [showVendorDetails, setShowVendorDetails] = useState(true);
   const [selectedMealPlan, setSelectedMealPlan] = useState<any | null>(null);
   const { isAuthenticated, user, login, logout } = useAuth();
@@ -118,6 +120,25 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
   const [profilePanelContent, setProfilePanelContent] = useState<'profile' | 'orders' | 'address'>('profile');
   const [dynamicEta, setDynamicEta] = useState<string | null>(null);
   const [isServiceable, setIsServiceable] = useState<boolean>(true);
+
+  // Fallback: Fetch vendor if not found in list (e.g. refresh or deep link)
+  useEffect(() => {
+    if (id && !vendor && !loading) {
+      const fetchVendor = async () => {
+        try {
+          const res = await apiService.getVendor(id);
+          if (res.success && res.data) {
+             setFetchedVendor(processVendorData(res.data));
+          } else if (res.vendor) {
+             setFetchedVendor(processVendorData(res.vendor));
+          }
+        } catch (e) {
+          console.error("Failed to fetch vendor details", e);
+        }
+      };
+      fetchVendor();
+    }
+  }, [id, vendor, loading]);
 
   useEffect(() => {
     const fetchEta = async () => {
@@ -229,8 +250,9 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
   };
 
   const handleShowCheckout = () => {
-    setShowCartPanel(false);
-    setShowCheckoutPanel(true);
+    // setShowCartPanel(false);
+    // setShowCheckoutPanel(true);
+    navigate('/checkout');
   };
 
   const handlePaymentSuccess = (data: any) => {
@@ -265,7 +287,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
         {/* Always render header; use CSS for responsive visibility */}
         <div className="hidden lg:block">
           <Header 
-            onShowCart={() => setShowCartPanel(true)} 
+            onShowCart={() => navigate('/checkout')} 
             onShowLogin={handleShowLogin}
             onShowProfile={handleShowProfile}
             onLogout={handleLogout}
@@ -319,7 +341,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
           {/* Today's best picks section inside same container */}
           <InstantPicks noPadding vendorId={vendor.id} disabled={!isServiceable} />
         </div>
-      {(!showCartPanel && !showCheckoutPanel) && <CartStrip onShowCart={() => setShowCartPanel(true)} />}
+      {(!showCartPanel && !showCheckoutPanel) && <CartStrip onShowCart={() => navigate('/checkout')} />}
       <CartPanel
         isOpen={showCartPanel}
         onClose={() => setShowCartPanel(false)}

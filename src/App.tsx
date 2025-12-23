@@ -45,6 +45,7 @@ import { AboutPage } from "./pages/AboutPage";
 import PaymentStatusPage from "./pages/PaymentStatusPage";
 import PhonePeComingSoon from "./pages/PaytmComingSoon";
 import { PartnerPage } from "./pages/PartnerPage";
+import { CheckoutPage } from "./pages/CheckoutPage"; // Added CheckoutPage import
 import { Toaster } from "./components/ui/sonner";
 import { Loader2, MapPin, Plus, X, Zap } from "lucide-react";
 import { Vendor } from "./types/index";
@@ -222,12 +223,15 @@ function AppContent() {
     }
   };
   const handleShowCart = () => {
-    setShowCartPanel(true);
+    // Updated to navigate to CheckoutPage
+    navigate('/checkout');
+    // setShowCartPanel(true); // Old logic
   };
   const handleCloseCart = () => {
     setShowCartPanel(false);
   };
   const handleShowCheckout = () => {
+    // This might not be needed if we route to /checkout, but keeping for compatibility
     setShowCartPanel(false);
     setShowCheckoutPanel(true);
   };
@@ -342,8 +346,10 @@ function AppContent() {
   if (typeof currentRoute === 'string' && currentRoute.startsWith('/vendor/')) {
     return <VendorDetailsPage onShowCart={handleShowCart} vendors={vendors} loading={loading} />;
   }
-  if (typeof currentRoute === 'string' && ['/T&C','/refund_policy','/privacy_policy','/payment-status','/phonepe-soon','/contact','/about', '/partner'].includes(currentRoute)) {
+  // Added /checkout to the route list
+  if (typeof currentRoute === 'string' && ['/T&C','/refund_policy','/privacy_policy','/payment-status','/phonepe-soon','/contact','/about', '/partner', '/checkout'].includes(currentRoute)) {
     switch(currentRoute) {
+      case '/checkout': return <CheckoutPage onShowAddressList={handleShowAddressList} />;
       case '/T&C': return <TermsPage />;
       case '/refund_policy': return <RefundPage />;
       case '/privacy_policy': return <PrivacyPage />;
@@ -359,7 +365,7 @@ function AppContent() {
     return <LocationGate onLocationApproved={handleLocationApproved} />;
   }
   return (
-    <div className="min-h-screen bg-gray-50 relative">
+    <div className="min-h-screen bg-gray-50 relative overflow-x-hidden">
       <div className="sm:hidden">
         <AddToHomeScreenPrompt
           onAddToHomeScreen={handleAddToHomeScreen}
@@ -404,10 +410,10 @@ function AppContent() {
         </>
       )}
       <main
-          className="max-w-7xl mx-auto py-6 md:py-8"
+          className="w-full py-6 md:py-8"
         ref={listingsRef}
       >
-          <div className="px-4 sm:px-6 lg:px-8">
+          <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <h2

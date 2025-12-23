@@ -1,13 +1,25 @@
 import { VendorInterestForm } from "../components/VendorInterestForm";
-import { Header } from "../components/Header";
-import { Footer } from "../components/Footer";
+import { ArrowLeft } from "lucide-react";
+import { useRouter } from "../components/Router";
 
 export function PartnerPage() {
+  const { navigate } = useRouter();
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
-      <main className="flex-grow container mx-auto px-4 py-8 sm:py-12">
-        <div className="max-w-2xl mx-auto mb-8 text-center">
+      <main className="flex-grow container mx-auto px-4 sm:px-4">
+        {/* Exact match of VendorHeader back button styling */}
+        <div style={{ padding: '20px 0px 0 0px', background: 'transparent' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <button
+              onClick={() => navigate('/')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1A1A1A', fontSize: 24, lineHeight: 1 }}>
+              &larr;
+            </button>
+          </div>
+        </div>
+
+        <div className="max-w-2xl mx-auto mb-8 text-center pt-4">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             Grow Your Kitchen with Gutzo
           </h1>
@@ -19,7 +31,7 @@ export function PartnerPage() {
         
         <VendorInterestForm />
         
-        <div className="max-w-4xl mx-auto mt-16 grid md:grid-cols-3 gap-8">
+        <div className="max-w-4xl mx-auto mt-16 grid md:grid-cols-3 gap-8 pb-12">
           <Feature 
             title="Zero Tech Hassle" 
             desc="No app to manage. No complex dashboards. We send you orders daily via WhatsApp." 
@@ -34,7 +46,6 @@ export function PartnerPage() {
           />
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

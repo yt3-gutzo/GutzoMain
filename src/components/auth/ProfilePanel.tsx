@@ -711,16 +711,25 @@ export function ProfilePanel({ isOpen, onClose, onLogout, content, userInfo, onV
 
   return (
     <>
+      {/* Background Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 transition-opacity duration-300"
+          onClick={onClose}
+        />
+      )}
+      
       {/* Panel */}
       <div 
         className={isDesktop 
           ? `fixed top-0 right-0 h-full w-[95%] max-w-[600px] bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${
               isOpen ? 'translate-x-0' : 'translate-x-full'
             }`
-          : `fixed bottom-0 left-0 w-full max-h-[85vh] bg-white shadow-2xl z-50 rounded-t-3xl border-t border-gray-100 transform transition-transform duration-300 overflow-hidden flex flex-col ${
+          : `fixed left-0 w-full bg-white shadow-2xl z-50 rounded-t-3xl border-t border-gray-100 transform transition-transform duration-300 overflow-hidden flex flex-col ${
               isOpen ? 'translate-y-0' : 'translate-y-full'
             }`
         }
+        style={!isDesktop ? { top: '104px', bottom: 0, height: 'calc(100vh - 104px)' } : undefined}
       >
         {/* Close Button */}
         <div className="absolute top-4 right-4 z-10">

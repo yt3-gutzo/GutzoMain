@@ -438,7 +438,7 @@ export function ResponsiveProductDetails({
     return (
       <>
         <Drawer open={isOpen} onOpenChange={onClose}>
-          <DrawerContent className="max-h-[80vh] flex flex-col mobile-safe-area mobile-product-scroll">
+          <DrawerContent className="max-h-[65vh] flex flex-col mobile-safe-area mobile-product-scroll">
             <DrawerHeader className="sr-only">
               <DrawerTitle>{vendor.name} Menu</DrawerTitle>
               <DrawerDescription>Browse and order items from {vendor.name}</DrawerDescription>

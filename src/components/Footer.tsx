@@ -52,7 +52,7 @@ export function Footer() {
              <div className="space-y-2 sm:space-y-3">
                <button 
                  onClick={() => navigate('/partner')}
-                 className="block text-[#1BA672] hover:text-[#2FCC5A] transition-colors text-sm text-left whitespace-nowrap interactive font-medium"
+                 className="block text-gray-400 hover:text-white transition-colors text-sm text-left whitespace-nowrap interactive font-normal"
                >
                  Partner with Gutzo
                </button>

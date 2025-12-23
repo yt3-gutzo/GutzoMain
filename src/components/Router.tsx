@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
-type Route = '/' | '/T&C' | '/refund_policy' | '/privacy_policy' | '/payment-status' | '/contact' | '/about' | '/partner' | '/phonepe-soon' | `/vendor/${string}`;
+type Route = '/' | '/T&C' | '/refund_policy' | '/privacy_policy' | '/payment-status' | '/contact' | '/about' | '/partner' | '/checkout' | '/phonepe-soon' | `/vendor/${string}`;
 
 interface RouterContextType {
   currentRoute: Route;
   navigate: (route: Route) => void;
+  goBack: () => void;
 }
 
 const RouterContext = createContext<RouterContextType | undefined>(undefined);
@@ -14,7 +15,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
 
   // Update document title based on route
   const updateDocumentTitle = useCallback((route: Route) => {
-    const titles: Record<Route, string> = {
+    const titles: Record<string, string> = {
       '/': 'Gutzo - Healthy Meals in Coimbra',
       '/T&C': 'Terms & Conditions - Gutzo',
       '/refund_policy': 'Refund Policy - Gutzo',
@@ -23,6 +24,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
       '/contact': 'Contact Us - Gutzo',
       '/about': 'About Us - Gutzo',
       '/partner': 'Partner with Gutzo',
+      '/checkout': 'Checkout - Gutzo',
       '/phonepe-soon': 'PhonePe Integration - Gutzo'
     };
     // Handle vendor route explicitly as it's dynamic
@@ -36,7 +38,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   // Initialize route from browser URL
   useEffect(() => {
   const path = window.location.pathname as Route;
-  const validRoutes: Route[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/partner', '/phonepe-soon'];
+  const validRoutes: string[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/partner', '/checkout', '/phonepe-soon'];
     
     // Check if it's a valid static route OR a vendor route
     if (validRoutes.includes(path) || path.startsWith('/vendor/')) {
@@ -77,11 +79,16 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     }
   }, [currentRoute, updateDocumentTitle]);
 
+  const goBack = useCallback(() => {
+      window.history.back();
+      // We rely on popstate event to update the state, which is handled in useEffect below
+  }, []);
+
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
     const path = window.location.pathname as Route;
-    const validRoutes: Route[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/partner', '/phonepe-soon'];
+    const validRoutes: string[] = ['/', '/T&C', '/refund_policy', '/privacy_policy', '/payment-status', '/contact', '/about', '/partner', '/checkout', '/phonepe-soon'];
       
       if (validRoutes.includes(path) || path.startsWith('/vendor/')) {
         window.scrollTo(0, 0);
@@ -99,7 +106,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   }, [updateDocumentTitle]);
 
   return (
-    <RouterContext.Provider value={{ currentRoute, navigate }}>
+    <RouterContext.Provider value={{ currentRoute, navigate, goBack }}>
       {children}
     </RouterContext.Provider>
   );

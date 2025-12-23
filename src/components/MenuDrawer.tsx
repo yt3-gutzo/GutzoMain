@@ -114,7 +114,7 @@ export function MenuDrawer({ vendor, isOpen, onClose, selectedCategory, loadProd
 
   return (
     <Drawer open={isOpen} onOpenChange={onClose}>
-      <DrawerContent className="max-h-[85vh] flex flex-col">
+      <DrawerContent className="max-h-[65vh] flex flex-col">
         <DrawerHeader className="border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             <DrawerTitle className="text-xl font-semibold">{vendor.name} Menu</DrawerTitle>

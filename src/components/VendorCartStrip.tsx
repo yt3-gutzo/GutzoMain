@@ -44,13 +44,9 @@ export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart,
   return (
     <div 
       className={`fixed bottom-4 z-50 transition-all duration-300 ease-in-out
-        ${/* Mobile: Always centered with margin */ ''}
         left-4 right-4
-        ${/* Desktop: Dynamic positioning */ ''}
-        ${isDrawerOpen 
-          ? 'lg:left-auto lg:right-4 lg:w-[400px]' 
-          : 'lg:left-1/2 lg:-translate-x-1/2 lg:w-full lg:max-w-3xl'
-        }`}
+        lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:w-full lg:max-w-4xl
+        ${isDrawerOpen ? 'lg:translate-x-0 lg:left-auto lg:right-4 lg:w-[400px]' : ''}`}
     >
       <div 
         className="bg-white rounded-xl shadow-xl flex items-center justify-between p-3 border border-gray-100"
