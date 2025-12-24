@@ -133,9 +133,13 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
   // ADD PRODUCT
   // POST /api/vendor-auth/:id/products
   // ============================================
+  // ============================================
+  // ADD PRODUCT
+  // POST /api/vendor-auth/:id/products
+  // ============================================
   router.post('/:id/products', asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { name, description, price, image, image_url, category, is_veg, is_available } = req.body;
+    const { name, description, price, image, image_url, category, is_veg, is_available, addon_ids, parent_product_ids } = req.body;
   
     const { data: product, error } = await supabaseAdmin
       .from('products')
@@ -149,12 +153,34 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
         is_veg: is_veg ?? true,
         is_available: is_available ?? true,
         rating: 0,
-        sort_order: 999 
+        sort_order: 999,
+        addon_ids: addon_ids || []
       })
       .select()
       .single();
   
     if (error) throw new ApiError(500, 'Failed to create product');
+
+    // Handle Link as Addon (Parent Products)
+    if (parent_product_ids && Array.isArray(parent_product_ids) && parent_product_ids.length > 0) {
+        // Fetch current addons of these parents
+        const { data: parents } = await supabaseAdmin
+            .from('products')
+            .select('id, addon_ids')
+            .in('id', parent_product_ids);
+        
+        if (parents) {
+            for (const parent of parents) {
+                const currentAddons = parent.addon_ids || [];
+                if (!currentAddons.includes(product.id)) {
+                    await supabaseAdmin
+                        .from('products')
+                        .update({ addon_ids: [...currentAddons, product.id] })
+                        .eq('id', parent.id);
+                }
+            }
+        }
+    }
   
     successResponse(res, { product }, 'Product added successfully');
   }));
@@ -165,15 +191,40 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
   // ============================================
   router.put('/:id/products/:productId', asyncHandler(async (req, res) => {
     const { productId } = req.params;
+    const { addon_ids, parent_product_ids, ...updates } = req.body;
     
+    // Prepare update payload
+    const payload = { ...updates };
+    if (addon_ids) payload.addon_ids = addon_ids;
+
     const { data: product, error } = await supabaseAdmin
       .from('products')
-      .update(req.body)
+      .update(payload)
       .eq('id', productId)
       .select()
       .single();
   
     if (error) throw new ApiError(500, 'Failed to update product');
+
+    // Handle Link as Addon (Parent Products)
+    if (parent_product_ids && Array.isArray(parent_product_ids) && parent_product_ids.length > 0) {
+        const { data: parents } = await supabaseAdmin
+            .from('products')
+            .select('id, addon_ids')
+            .in('id', parent_product_ids);
+        
+        if (parents) {
+            for (const parent of parents) {
+                const currentAddons = parent.addon_ids || [];
+                if (!currentAddons.includes(productId)) {
+                    await supabaseAdmin
+                        .from('products')
+                        .update({ addon_ids: [...currentAddons, productId] })
+                        .eq('id', parent.id);
+                }
+            }
+        }
+    }
   
     successResponse(res, { product }, 'Product updated successfully');
   }));

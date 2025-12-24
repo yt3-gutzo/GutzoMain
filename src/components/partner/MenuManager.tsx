@@ -5,11 +5,25 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Loader2, Plus, Pencil, Trash2, X, Image as ImageIcon } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, X, Image as ImageIcon, Check, ChevronsUpDown } from "lucide-react";
 import { nodeApiService as apiService } from "../../utils/nodeApi";
 import { toast } from "sonner";
 import { ImageWithFallback } from "../common/ImageWithFallback";
 import { ImageUpload } from "../common/ImageUpload";
+import { cn } from "../ui/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "../ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../ui/popover";
 
 interface Product {
   id: string;
@@ -20,6 +34,7 @@ interface Product {
   is_veg: boolean;
   is_available: boolean;
   category: string;
+  addon_ids?: string[];
 }
 
 interface Category {
@@ -163,6 +178,7 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
               <ProductForm 
                  vendorId={vendorId} 
                  product={editingProduct} 
+                 products={products}
                  categories={categories}
                  onClose={() => setIsEditing(false)} 
                  onSuccess={() => { setIsEditing(false); fetchMenu(); }} 
@@ -174,7 +190,12 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
   );
 }
 
-function ProductForm({ vendorId, product, categories, onClose, onSuccess }: { vendorId: string, product: Product | null, categories: Category[], onClose: () => void, onSuccess: () => void }) {
+function ProductForm({ vendorId, product, products = [], categories, onClose, onSuccess }: { vendorId: string, product: Product | null, products?: Product[], categories: Category[], onClose: () => void, onSuccess: () => void }) {
+    // Calculate initial parent links (products that have THIS product as an addon)
+    const initialParentIds = product 
+      ? products.filter(p => p.addon_ids?.includes(product.id)).map(p => p.id)
+      : [];
+
     const [formData, setFormData] = useState({
         name: product?.name || '',
         description: product?.description || '',
@@ -182,9 +203,13 @@ function ProductForm({ vendorId, product, categories, onClose, onSuccess }: { ve
         image_url: product?.image_url || '',
         is_veg: product?.is_veg ?? true,
         is_available: product?.is_available ?? true,
-        category: product?.category || (categories[0]?.name || 'Main Course')
+        category: product?.category || (categories[0]?.name || 'Main Course'),
+        addon_ids: product?.addon_ids || [],
+        parent_product_ids: initialParentIds
     });
     const [loading, setLoading] = useState(false);
+    const [openParentSelect, setOpenParentSelect] = useState(false);
+    const [openAddonSelect, setOpenAddonSelect] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -205,6 +230,25 @@ function ProductForm({ vendorId, product, categories, onClose, onSuccess }: { ve
             setLoading(false);
         }
     };
+
+    const toggleAddonForThis = (id: string) => {
+        setFormData(prev => {
+            const current = prev.addon_ids || [];
+            if (current.includes(id)) return { ...prev, addon_ids: current.filter(x => x !== id) };
+            return { ...prev, addon_ids: [...current, id] };
+        });
+    };
+
+    const toggleLinkToParent = (id: string) => {
+        setFormData(prev => {
+            const current = prev.parent_product_ids || [];
+            if (current.includes(id)) return { ...prev, parent_product_ids: current.filter(x => x !== id) };
+            return { ...prev, parent_product_ids: [...current, id] };
+        });
+    };
+
+    // Eliminate self from lists
+    const otherProducts = products.filter(p => !product || p.id !== product.id);
 
     return (
         <div>
@@ -259,6 +303,123 @@ function ProductForm({ vendorId, product, categories, onClose, onSuccess }: { ve
                     />
                 </div>
 
+                {/* Add-ons Section */}
+                <div className="grid md:grid-cols-2 gap-4 border rounded-lg p-3 bg-gray-50">
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase text-gray-500">Add Add-ons to {formData.name || 'this item'}</Label>
+                        <Popover open={openAddonSelect} onOpenChange={setOpenAddonSelect} modal={true}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={openAddonSelect}
+                                    className="w-full justify-between h-auto min-h-[40px] px-3 py-2 text-left font-normal bg-white"
+                                >
+                                    {formData.addon_ids && formData.addon_ids.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                        {formData.addon_ids.map(id => {
+                                            const p = products.find(prod => prod.id === id);
+                                            return p ? (
+                                                <span key={id} className="bg-gray-100 text-gray-800 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 border">
+                                                    {p.name}
+                                                    <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleAddonForThis(id); }} />
+                                                </span>
+                                            ) : null
+                                        })}
+                                    </div>
+                                    ) : (
+                                        <span className="text-gray-500 text-sm">Select add-ons...</span>
+                                    )}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0 z-[9999]" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search products..." />
+                                    <CommandList className="max-h-[200px] overflow-auto">
+                                        <CommandEmpty>No product found.</CommandEmpty>
+                                        {otherProducts.map((p) => (
+                                            <CommandItem
+                                                key={p.id}
+                                                value={p.name}
+                                                onSelect={() => toggleAddonForThis(p.id)}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-2 h-4 w-4",
+                                                        formData.addon_ids?.includes(p.id)
+                                                            ? "opacity-100"
+                                                            : "opacity-0"
+                                                    )}
+                                                />
+                                                {p.name}
+                                                <span className="ml-2 text-xs text-gray-400">₹{p.price}</span>
+                                            </CommandItem>
+                                        ))}
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase text-gray-500">Link {formData.name || 'this item'} to others</Label>
+                        <Popover open={openParentSelect} onOpenChange={setOpenParentSelect} modal={true}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={openParentSelect}
+                                    className="w-full justify-between h-auto min-h-[40px] px-3 py-2 text-left font-normal bg-white"
+                                >
+                                    {formData.parent_product_ids && formData.parent_product_ids.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                        {formData.parent_product_ids.map(id => {
+                                            const p = products.find(prod => prod.id === id);
+                                            return p ? (
+                                                <span key={id} className="bg-gray-100 text-gray-800 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 border">
+                                                    {p.name}
+                                                    <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleLinkToParent(id); }} />
+                                                </span>
+                                            ) : null
+                                        })}
+                                    </div>
+                                    ) : (
+                                        <span className="text-gray-500 text-sm">Select products...</span>
+                                    )}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0 z-[9999]" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search products..." />
+                                    <CommandList className="max-h-[200px] overflow-auto">
+                                        <CommandEmpty>No product found.</CommandEmpty>
+                                        {otherProducts.map((p) => (
+                                            <CommandItem
+                                                key={p.id}
+                                                value={p.name}
+                                                onSelect={() => toggleLinkToParent(p.id)}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-2 h-4 w-4",
+                                                        formData.parent_product_ids?.includes(p.id)
+                                                            ? "opacity-100"
+                                                            : "opacity-0"
+                                                    )}
+                                                />
+                                                {p.name}
+                                            </CommandItem>
+                                        ))}
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                </div>
                 <div className="flex items-center gap-6 pt-2">
                     <div className="flex items-center gap-2">
                         <Switch id="veg" checked={formData.is_veg} onCheckedChange={c => setFormData(prev => ({ ...prev, is_veg: c }))} />
