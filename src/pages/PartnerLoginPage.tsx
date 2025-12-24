@@ -12,38 +12,8 @@ import { ImageWithFallback } from "../components/common/ImageWithFallback";
 export function PartnerLoginPage() {
   const { navigate } = useRouter();
   const [formData, setFormData] = useState({ phone: '', password: '' });
-  const [step, setStep] = useState<'phone' | 'password' | 'lead_found'>('phone');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMsg('');
-
-    try {
-      const response = await apiService.checkVendorStatus(formData.phone);
-      if (response && response.success) {
-        const { status } = response.data;
-        
-        if (status === 'vendor') {
-            setStep('password');
-        } else {
-             // Block access for leads and new users
-             // status === 'lead' or 'new'
-             setErrorMsg("Account not found. Please register as a partner first.");
-        }
-      }
-    } catch (error: any) {
-        // Fallback or error handling
-        console.error("Status check failed", error);
-        // If check failed, assume new user or error
-        // But safer to show error
-        setErrorMsg(error.message || "Failed to verify phone number");
-    } finally {
-        setIsLoading(false);
-    }
-  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -62,7 +32,12 @@ export function PartnerLoginPage() {
               navigate('/partner/dashboard');
           }
       } catch (error: any) {
-          setErrorMsg(error.message || "Login failed");
+          // Map backend 404/Vendor not found to specific message
+          if (error.message === 'Vendor not found' || error.status === 404) {
+             setErrorMsg("Account not found. Please register as a partner first.");
+          } else {
+             setErrorMsg(error.message || "Login failed");
+          }
       } finally {
           setIsLoading(false);
       }
@@ -71,7 +46,7 @@ export function PartnerLoginPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
        <button
-          onClick={() => step === 'password' ? setStep('phone') : navigate('/')}
+          onClick={() => navigate('/')}
           className="absolute top-4 left-4 text-[#1A1A1A] hover:opacity-70 transition-opacity"
           style={{ fontSize: 24, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}
           aria-label="Back"
@@ -92,11 +67,11 @@ export function PartnerLoginPage() {
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl font-bold text-gray-900">Kitchen Portal</CardTitle>
             <CardDescription>
-              {step === 'phone' ? 'Enter your phone number to continue.' : 'Enter your password to login.'}
+              Enter your password to login.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={step === 'phone' ? handlePhoneSubmit : handleLoginSubmit} className="space-y-4">
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
               
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number</Label>
@@ -116,28 +91,24 @@ export function PartnerLoginPage() {
                     }}
                     className="rounded-l-none"
                     required
-                    disabled={step === 'password'}
                   />
                 </div>
               </div>
 
-              {step === 'password' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <Label htmlFor="password">Password</Label>
-                        <button type="button" onClick={() => toast.info("Contact support to reset password")} className="text-xs text-[#1BA672] hover:underline">Forgot password?</button>
-                    </div>
-                    <Input 
-                        id="password" 
-                        type="password"
-                        placeholder="••••••••" 
-                        value={formData.password}
-                        onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                        required
-                        autoFocus
-                    />
-                  </div>
-              )}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <button type="button" onClick={() => toast.info("Contact support to reset password")} className="text-xs text-[#1BA672] hover:underline">Forgot password?</button>
+                </div>
+                <Input 
+                    id="password" 
+                    type="password"
+                    placeholder="••••••••" 
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    required
+                />
+              </div>
 
               {errorMsg && (
                 <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md text-center border border-red-100">
@@ -154,10 +125,10 @@ export function PartnerLoginPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {step === 'phone' ? 'Verifying...' : 'Logging in...'}
+                    Logging in...
                   </>
                 ) : (
-                  step === 'phone' ? "Continue" : "Login"
+                  "Login"
                 )}
               </Button>
             </form>

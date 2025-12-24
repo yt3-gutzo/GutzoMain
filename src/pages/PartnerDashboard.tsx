@@ -4,6 +4,16 @@ import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
 import { Label } from "../components/ui/label";
 import { Loader2, LogOut, Store, Star, ChefHat, MapPin, TrendingUp, LayoutDashboard, UtensilsCrossed, ShoppingBag, UserCog } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 import { useRouter } from "../components/Router";
 import { nodeApiService as apiService } from "../utils/nodeApi";
 import { toast } from "sonner";
@@ -35,6 +45,7 @@ export function PartnerDashboard() {
   const [vendor, setVendor] = useState<VendorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'profile'>('dashboard');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     // Check auth
@@ -53,10 +64,15 @@ export function PartnerDashboard() {
     }
   }, [navigate]);
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
     localStorage.removeItem('vendor_data');
     navigate('/partner/login');
     toast.info("Logged out successfully");
+    setShowLogoutConfirm(false);
   };
 
   const refreshProfile = async () => {
@@ -99,20 +115,20 @@ export function PartnerDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-gray-50 overflow-hidden">
       {/* Sidebar Navigation */}
-      <aside className="bg-white border-r w-full md:w-64 flex-shrink-0 sticky top-0 md:h-screen z-20 flex flex-col">
-         <div className="h-20 flex items-center px-6 border-b gap-3">
+      <aside className="w-full md:w-64 flex-shrink-0 bg-white border-b md:border-b-0 md:border-r flex flex-col z-20 md:h-full">
+         <div className="h-16 md:h-20 flex items-center px-4 md:px-6 border-b gap-3 flex-shrink-0">
              <ImageWithFallback
                 src="https://35-194-40-59.nip.io/service/storage/v1/object/public/Gutzo/GUTZO.svg"
                 alt="Gutzo"
                 className="object-contain block"
-                style={{ width: '120px', height: 'auto' }}
+                style={{ width: '100px', height: 'auto' }}
               />
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Partner</span>
          </div>
          
-         <div className="p-4 space-y-1 overflow-x-auto flex md:flex-col md:space-y-1 md:overflow-visible scrollbar-hide flex-1">
+         <div className="p-2 md:p-4 overflow-x-auto md:overflow-y-auto flex md:flex-col gap-1 md:gap-2 flex-1 scrollbar-hide">
             {tabs.map(tab => (
                 <button
                    key={tab.id}
@@ -129,7 +145,7 @@ export function PartnerDashboard() {
             ))}
          </div>
 
-         <div className="p-4 mt-auto border-t hidden md:block w-full bg-white">
+         <div className="p-4 border-t hidden md:block mt-auto flex-shrink-0 bg-white">
              <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
                     {vendor.image ? <ImageWithFallback src={vendor.image} alt={vendor.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold">{vendor.name.charAt(0)}</div>}
@@ -139,52 +155,72 @@ export function PartnerDashboard() {
                     <p className="text-xs text-gray-500 truncate">{vendor.is_open ? '● Online' : '○ Offline'}</p>
                 </div>
              </div>
-             <Button variant="outline" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 border-red-100" onClick={handleLogout}>
+             <Button variant="outline" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 border-red-100" onClick={handleLogoutClick}>
                  <LogOut className="w-4 h-4 mr-2" /> Logout
              </Button>
          </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 min-w-0">
-        {/* Mobile Header (only visible on small screens) */}
-        <header className="bg-white border-b h-16 flex items-center justify-between px-4 md:hidden sticky top-0 z-10">
+      {/* Main Content Actions */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile Header */}
+        <header className="bg-white border-b h-16 flex items-center justify-between px-4 md:hidden flex-shrink-0 sticky top-0 z-10">
              <span className="font-bold text-lg">{tabs.find(t => t.id === activeTab)?.label}</span>
-             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500">
+             <Button variant="ghost" size="sm" onClick={handleLogoutClick} className="text-red-500">
                 <LogOut className="w-5 h-5" />
              </Button>
         </header>
 
-        <div className="p-4 md:p-8 max-w-5xl mx-auto">
-            {activeTab === 'dashboard' && (
-                <div className="space-y-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-                            <p className="text-gray-500">Welcome back, {vendor.name}</p>
-                        </div>
-                        <div className="flex items-center gap-3 bg-white p-2 rounded-lg border shadow-sm self-start">
-                            <span className="text-sm font-medium px-2">Kitchen Status:</span>
-                            <div className="flex items-center gap-2">
-                                <Switch checked={vendor.is_open} onCheckedChange={toggleStatus} />
-                                <span className={`text-sm font-bold ${vendor.is_open ? 'text-green-600' : 'text-gray-500'}`}>{vendor.is_open ? 'OPEN' : 'CLOSED'}</span>
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+            <div className="max-w-5xl mx-auto">
+                {activeTab === 'dashboard' && (
+                    <div className="space-y-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+                                <p className="text-gray-500">Welcome back, {vendor.name}</p>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white p-2 rounded-lg border shadow-sm self-start">
+                                <span className="text-sm font-medium px-2">Kitchen Status:</span>
+                                <div className="flex items-center gap-2">
+                                    <Switch checked={vendor.is_open} onCheckedChange={toggleStatus} />
+                                    <span className={`text-sm font-bold ${vendor.is_open ? 'text-green-600' : 'text-gray-500'}`}>{vendor.is_open ? 'OPEN' : 'CLOSED'}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <StatsCard label="Total Rating" value={vendor.rating} icon={Star} color="text-yellow-500" />
-                        <StatsCard label="Total Orders" value={vendor.total_orders || 0} icon={ShoppingBag} color="text-blue-500" />
-                        <StatsCard label="Menu Items" value="Manage" icon={UtensilsCrossed} color="text-orange-500" onClick={() => setActiveTab('menu')} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <StatsCard label="Total Rating" value={vendor.rating} icon={Star} color="text-yellow-500" />
+                            <StatsCard label="Total Orders" value={vendor.total_orders || 0} icon={ShoppingBag} color="text-blue-500" />
+                            <StatsCard label="Menu Items" value="Manage" icon={UtensilsCrossed} color="text-orange-500" onClick={() => setActiveTab('menu')} />
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {activeTab === 'menu' && <MenuManager vendorId={vendor.id} />}
-            {activeTab === 'profile' && <ProfileManager vendorId={vendor.id} initialData={vendor} onUpdate={refreshProfile} />}
-            {activeTab === 'orders' && <OrderManager vendorId={vendor.id} />}
+                {activeTab === 'menu' && <MenuManager vendorId={vendor.id} />}
+                {activeTab === 'profile' && <ProfileManager vendorId={vendor.id} initialData={vendor} onUpdate={refreshProfile} />}
+                {activeTab === 'orders' && <OrderManager vendorId={vendor.id} />}
+            </div>
         </div>
       </main>
+
+      <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to logout?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will need to login again to access your dashboard.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmLogout} className="text-white hover:opacity-90" style={{ backgroundColor: '#1BA672' }}>
+              Logout
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -204,3 +240,4 @@ function StatsCard({ label, value, icon: Icon, color, onClick }: any) {
         </Card>
     );
 }
+
