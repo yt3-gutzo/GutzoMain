@@ -36,12 +36,16 @@ router.post('/check-status', asyncHandler(async (req, res) => {
   // 2. Check vendor_leads table
   const { data: lead } = await supabaseAdmin
     .from('vendor_leads')
-    .select('id')
+    .select('id, status, remarks')
     .eq('phone', phone)
     .single();
 
   if (lead) {
-    return successResponse(res, { status: 'lead' });
+    return successResponse(res, { 
+      status: 'lead',
+      leadStatus: lead.status,
+      leadRemarks: lead.remarks 
+    });
   }
 
   // 3. New user

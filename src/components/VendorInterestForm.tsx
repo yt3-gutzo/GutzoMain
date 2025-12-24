@@ -154,6 +154,22 @@ export function VendorInterestForm() {
           <p className="text-gray-600">
             We have received your details. Our onboarding team will contact you shortly on <strong>{formData.phone}</strong>.
           </p>
+
+          {history.state?.leadStatus && (
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                      <span className="text-sm text-gray-500">Current Status:</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium uppercase tracking-wider bg-blue-100 text-blue-700">
+                          {history.state.leadStatus.replace('_', ' ')}
+                      </span>
+                  </div>
+                  {history.state?.leadRemarks && (
+                      <p className="text-sm text-gray-600 mt-2 italic">
+                          "{history.state.leadRemarks}"
+                      </p>
+                  )}
+              </div>
+          )}
           <Button 
             onClick={() => navigate('/')}
             className="mt-4 w-full"

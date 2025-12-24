@@ -52,7 +52,7 @@ router.post('/', asyncHandler(async (req, res) => {
       email,
       city,
       food_type,
-      status: 'new'
+      status: 'open'
     })
     .select()
     .single();

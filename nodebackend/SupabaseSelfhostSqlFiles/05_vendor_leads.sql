@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS vendor_leads (
     email TEXT,
     city TEXT NOT NULL,
     food_type TEXT,
-    status TEXT CHECK (status IN ('new', 'contacted', 'kyc_requested', 'kyc_verified', 'active_managed', 'rejected')) DEFAULT 'new',
+    remarks TEXT,
+    status TEXT CHECK (status IN ('open', 'in-progress', 'approved', 'rejected')) DEFAULT 'open',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

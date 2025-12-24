@@ -28,14 +28,10 @@ export function PartnerLoginPage() {
         
         if (status === 'vendor') {
             setStep('password');
-        } else if (status === 'lead') {
-            navigate('/partner-with-gutzo', { phone: formData.phone, leadExisting: true });
         } else {
-            // New user - redirect to registration
-            toast.info("Account not found. Redirecting to registration...");
-            setTimeout(() => {
-                navigate('/partner-with-gutzo', { phone: formData.phone });
-            }, 1000);
+             // Block access for leads and new users
+             // status === 'lead' or 'new'
+             setErrorMsg("Account not found. Please register as a partner first.");
         }
       }
     } catch (error: any) {
@@ -75,10 +71,12 @@ export function PartnerLoginPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
        <button
-          onClick={() => step === 'password' ? setStep('phone') : navigate('/partner-with-gutzo')}
-          className="absolute top-4 left-4 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          onClick={() => step === 'password' ? setStep('phone') : navigate('/')}
+          className="absolute top-4 left-4 text-[#1A1A1A] hover:opacity-70 transition-opacity"
+          style={{ fontSize: 24, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}
+          aria-label="Back"
         >
-          &larr; Back
+          &larr;
         </button>
 
       <div className="w-full max-w-md">
