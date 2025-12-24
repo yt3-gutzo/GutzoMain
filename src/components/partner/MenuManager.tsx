@@ -115,8 +115,27 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
       }
     } catch (error) {
       toast.error('Failed to delete item');
-    } finally {
       setProductToDelete(null);
+    }
+  };
+
+  const toggleAvailability = async (product: Product) => {
+    const newStatus = !product.is_available;
+    
+    // Optimistic update
+    setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_available: newStatus } : p));
+    
+    try {
+      const res = await apiService.updateVendorProduct(vendorId, product.id, { is_available: newStatus });
+      if (res.success) {
+        toast.success(`Item marked as ${newStatus ? 'Available' : 'Unavailable'}`);
+      } else {
+        throw new Error('Failed');
+      }
+    } catch (error) {
+      // Revert if failed
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_available: !newStatus } : p));
+      toast.error('Failed to update status');
     }
   };
 
@@ -159,8 +178,17 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
                       <h3 className="font-bold text-gray-900 leading-tight">{product.name}</h3>
                       <p className="text-sm text-[#1BA672] font-semibold mt-0.5">₹{product.price}</p>
                     </div>
-                    <div className={`shrink-0 w-3 h-3 rounded-full border ${product.is_veg ? 'border-green-600 bg-green-50' : 'border-red-600 bg-red-50'} flex items-center justify-center ml-2`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${product.is_veg ? 'bg-green-600' : 'bg-red-600'}`}></div>
+                    <div className="flex items-center gap-2">
+                         <div className={`shrink-0 w-3 h-3 rounded-full border ${product.is_veg ? 'border-green-600 bg-green-50' : 'border-red-600 bg-red-50'} flex items-center justify-center`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${product.is_veg ? 'bg-green-600' : 'bg-red-600'}`}></div>
+                         </div>
+                         <div onClick={(e) => e.stopPropagation()} title="Toggle Availability">
+                           <Switch 
+                              checked={product.is_available} 
+                              onCheckedChange={() => toggleAvailability(product)}
+                              className="scale-75 data-[state=checked]:bg-[#1BA672]"
+                           />
+                         </div>
                     </div>
                  </div>
                  
