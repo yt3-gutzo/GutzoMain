@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea"; 
 import { Loader2, Save } from "lucide-react";
@@ -18,7 +19,20 @@ export function ProfileManager({ vendorId, initialData, onUpdate }: { vendorId: 
     delivery_time: '',
     minimum_order: '',
     delivery_fee: '',
-    pincode: ''
+    pincode: '',
+    // Business Details
+    company_type: '',
+    company_reg_no: '',
+    owner_name: '',
+    owner_aadhar_no: '',
+    pan_card_no: '',
+    fssai_license: '',
+    gst_number: '',
+    // Bank Details
+    bank_account_no: '',
+    ifsc_code: '',
+    bank_name: '',
+    account_holder_name: ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +49,20 @@ export function ProfileManager({ vendorId, initialData, onUpdate }: { vendorId: 
             delivery_time: initialData.delivery_time || '',
             minimum_order: initialData.minimum_order || '',
             delivery_fee: initialData.delivery_fee || '',
-            pincode: initialData.pincode || ''
+            pincode: initialData.pincode || '',
+            // Education/Business
+            company_type: initialData.company_type || '',
+            company_reg_no: initialData.company_reg_no || '',
+            owner_name: initialData.owner_name || '',
+            owner_aadhar_no: initialData.owner_aadhar_no || '',
+            pan_card_no: initialData.pan_card_no || '',
+            fssai_license: initialData.fssai_license || '',
+            gst_number: initialData.gst_number || '',
+            // Bank
+            bank_account_no: initialData.bank_account_no || '',
+            ifsc_code: initialData.ifsc_code || '',
+            bank_name: initialData.bank_name || '',
+            account_holder_name: initialData.account_holder_name || ''
         });
     }
   }, [initialData]);
@@ -93,9 +120,92 @@ export function ProfileManager({ vendorId, initialData, onUpdate }: { vendorId: 
                 </div>
             </div>
 
+            {/* Business Details Section */}
+            <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold mb-4">Business Details</h3>
+                <div className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label htmlFor="company_type">Company Type</Label>
+                             <Select 
+                                value={formData.company_type} 
+                                onValueChange={(value) => setFormData(prev => ({ ...prev, company_type: value }))}
+                                disabled
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Sole Proprietorship">Sole Proprietorship</SelectItem>
+                                    <SelectItem value="Partnership">Partnership</SelectItem>
+                                    <SelectItem value="LLP">LLP</SelectItem>
+                                    <SelectItem value="Pvt Ltd">Pvt Ltd</SelectItem>
+                                    <SelectItem value="OPC">OPC</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="owner_name">Owner Name</Label>
+                            <Input id="owner_name" value={formData.owner_name} onChange={e => setFormData(prev => ({ ...prev, owner_name: e.target.value }))} placeholder="Full Name" disabled />
+                        </div>
+                    </div>
 
+                     <div className="grid md:grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label htmlFor="company_reg_no">Registration No / CIN</Label>
+                            <Input id="company_reg_no" value={formData.company_reg_no} onChange={e => setFormData(prev => ({ ...prev, company_reg_no: e.target.value }))} disabled />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="owner_aadhar_no">Aadhar Number</Label>
+                            <Input id="owner_aadhar_no" value={formData.owner_aadhar_no} onChange={e => setFormData(prev => ({ ...prev, owner_aadhar_no: e.target.value }))} disabled />
+                        </div>
+                    </div>
 
-            <Button type="submit" className="w-full bg-[#1BA672] hover:bg-[#14885E] text-white" disabled>
+                    <div className="grid md:grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label htmlFor="pan_card_no">PAN Number</Label>
+                            <Input id="pan_card_no" value={formData.pan_card_no} onChange={e => setFormData(prev => ({ ...prev, pan_card_no: e.target.value }))} disabled />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="gst_number">GST Number</Label>
+                            <Input id="gst_number" value={formData.gst_number} onChange={e => setFormData(prev => ({ ...prev, gst_number: e.target.value }))} disabled />
+                        </div>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="fssai_license">FSSAI License</Label>
+                        <Input id="fssai_license" value={formData.fssai_license} onChange={e => setFormData(prev => ({ ...prev, fssai_license: e.target.value }))} disabled />
+                    </div>
+                </div>
+            </div>
+
+             {/* Bank Details Section */}
+             <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold mb-4">Bank Details</h3>
+                <div className="space-y-4">
+                     <div className="grid md:grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label htmlFor="bank_name">Bank Name</Label>
+                            <Input id="bank_name" value={formData.bank_name} onChange={e => setFormData(prev => ({ ...prev, bank_name: e.target.value }))} disabled />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="account_holder_name">Account Holder Name</Label>
+                            <Input id="account_holder_name" value={formData.account_holder_name} onChange={e => setFormData(prev => ({ ...prev, account_holder_name: e.target.value }))} disabled />
+                        </div>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label htmlFor="bank_account_no">Account Number</Label>
+                            <Input id="bank_account_no" value={formData.bank_account_no} onChange={e => setFormData(prev => ({ ...prev, bank_account_no: e.target.value }))} disabled />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="ifsc_code">IFSC Code</Label>
+                            <Input id="ifsc_code" value={formData.ifsc_code} onChange={e => setFormData(prev => ({ ...prev, ifsc_code: e.target.value }))} disabled />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <Button type="submit" className="w-full bg-[#1BA672] hover:bg-[#14885E] text-white">
                 {loading ? <Loader2 className="animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                 Save Changes
             </Button>

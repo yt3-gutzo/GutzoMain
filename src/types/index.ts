@@ -23,6 +23,19 @@ export interface Vendor {
   latitude?: number;
   longitude?: number;
   isBlacklisted?: boolean;
+  // New Business Details
+  company_reg_no?: string;
+  company_type?: string;
+  owner_name?: string;
+  owner_aadhar_no?: string;
+  pan_card_no?: string;
+  // New Bank Details
+  bank_account_no?: string;
+  ifsc_code?: string;
+  bank_name?: string;
+  account_holder_name?: string;
+  fssai_license?: string;
+  gst_number?: string;
 }
 
 export interface Product {
