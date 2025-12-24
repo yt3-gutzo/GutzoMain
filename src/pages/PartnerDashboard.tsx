@@ -38,6 +38,7 @@ interface VendorData {
   delivery_time?: string;
   minimum_order?: number;
   delivery_fee?: number;
+  pincode?: string;
 }
 
 export function PartnerDashboard() {

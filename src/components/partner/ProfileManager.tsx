@@ -17,9 +17,11 @@ export function ProfileManager({ vendorId, initialData, onUpdate }: { vendorId: 
     image: '',
     delivery_time: '',
     minimum_order: '',
-    delivery_fee: ''
+    delivery_fee: '',
+    pincode: ''
   });
   const [loading, setLoading] = useState(false);
+
 
   useEffect(() => {
     if (initialData) {
@@ -32,7 +34,8 @@ export function ProfileManager({ vendorId, initialData, onUpdate }: { vendorId: 
             image: initialData.image || '',
             delivery_time: initialData.delivery_time || '',
             minimum_order: initialData.minimum_order || '',
-            delivery_fee: initialData.delivery_fee || ''
+            delivery_fee: initialData.delivery_fee || '',
+            pincode: initialData.pincode || ''
         });
     }
   }, [initialData]);
@@ -55,61 +58,44 @@ export function ProfileManager({ vendorId, initialData, onUpdate }: { vendorId: 
     <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
             <div>
-                <h2 className="text-xl font-bold text-gray-900">Kitchen Profile</h2>
-                <p className="text-sm text-gray-500">Update how your kitchen appears to customers</p>
+                <h2 className="text-xl font-bold text-gray-900">{formData.name || 'Kitchen Profile'}</h2>
             </div>
+            {formData.image && (
+                <div className="h-16 w-16 rounded-full overflow-hidden border shadow-sm">
+                    <img src={formData.image} alt="Profile" className="h-full w-full object-cover" />
+                </div>
+            )}
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl border space-y-4 shadow-sm">
-            <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label htmlFor="name">Kitchen Name</Label>
-                    <Input id="name" value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="cuisine">Cuisine Type</Label>
-                    <Input id="cuisine" value={formData.cuisine_type} onChange={e => setFormData(prev => ({ ...prev, cuisine_type: e.target.value }))} placeholder="e.g. South Indian" />
-                </div>
-            </div>
+
 
             <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" value={formData.description} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} className="min-h-[80px]" />
+                <Label htmlFor="description">Description (Kitchen Bio)</Label>
+                <Textarea id="description" value={formData.description} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} className="min-h-[280px] text-base" style={{ height: '180px' }} placeholder="Describe your kitchen, your story, or what makes your food special..." disabled />
             </div>
 
+
+
             <div className="space-y-2">
-                <Label htmlFor="image">Banner Image URL</Label>
-                <Input id="image" value={formData.image} onChange={e => setFormData(prev => ({ ...prev, image: e.target.value }))} />
-                 {formData.image && <img src={formData.image} alt="Preview" className="w-full h-32 object-cover rounded mt-2 bg-gray-100" />}
+                <Label htmlFor="address">Address</Label>
+                <Textarea id="address" value={formData.address} onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} className="min-h-[240px] text-base" style={{ height: '100px' }} disabled />
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
                  <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Input id="address" value={formData.address} onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} />
+                    <Label htmlFor="pincode">Pincode</Label>
+                    <Input id="pincode" value={formData.pincode} onChange={e => setFormData(prev => ({ ...prev, pincode: e.target.value }))} maxLength={6} disabled />
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="phone">Contact Phone</Label>
-                    <Input id="phone" value={formData.phone} onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))} />
+                    <Input id="phone" value={formData.phone} onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))} disabled />
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t">
-                 <div className="space-y-2">
-                    <Label htmlFor="time">Del. Time</Label>
-                    <Input id="time" value={formData.delivery_time} onChange={e => setFormData(prev => ({ ...prev, delivery_time: e.target.value }))} placeholder="30-45 mins" />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="min">Min Order (₹)</Label>
-                    <Input id="min" type="number" value={formData.minimum_order} onChange={e => setFormData(prev => ({ ...prev, minimum_order: e.target.value }))} />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="fee">Fee (₹)</Label>
-                    <Input id="fee" type="number" value={formData.delivery_fee} onChange={e => setFormData(prev => ({ ...prev, delivery_fee: e.target.value }))} />
-                </div>
-            </div>
 
-            <Button type="submit" className="w-full bg-[#1BA672] hover:bg-[#14885E] text-white" disabled={loading}>
+
+            <Button type="submit" className="w-full bg-[#1BA672] hover:bg-[#14885E] text-white" disabled>
                 {loading ? <Loader2 className="animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                 Save Changes
             </Button>
