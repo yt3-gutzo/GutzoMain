@@ -314,7 +314,8 @@ function ProductForm({ vendorId, product, products = [], categories, onClose, on
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={openAddonSelect}
-                                    className="w-full justify-between h-auto min-h-[40px] px-3 py-2 text-left font-normal bg-white"
+                                    disabled={formData.parent_product_ids && formData.parent_product_ids.length > 0}
+                                    className="w-full justify-between h-auto min-h-[40px] px-3 py-2 text-left font-normal bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {formData.addon_ids && formData.addon_ids.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
@@ -372,7 +373,8 @@ function ProductForm({ vendorId, product, products = [], categories, onClose, on
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={openParentSelect}
-                                    className="w-full justify-between h-auto min-h-[40px] px-3 py-2 text-left font-normal bg-white"
+                                    disabled={formData.addon_ids && formData.addon_ids.length > 0}
+                                    className="w-full justify-between h-auto min-h-[40px] px-3 py-2 text-left font-normal bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {formData.parent_product_ids && formData.parent_product_ids.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
