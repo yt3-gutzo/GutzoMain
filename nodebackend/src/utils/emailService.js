@@ -84,3 +84,36 @@ export const sendVendorAcknowledgment = async (leadData) => {
     // Don't throw here to avoid failing the whole request if just the ack email fails
   }
 };
+
+/**
+ * Send OTP email to vendor for password reset
+ * @param {string} email - Vendor email
+ * @param {string} otp - The OTP code
+ * @returns {Promise<void>}
+ */
+export const sendVendorOTP = async (email, otp) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: "Gutzo Partner Code: Your One-Time Password",
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2>Password Reset Request</h2>
+        <p>Use the code below to reset your partner portal password.</p>
+        <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
+          <h1 style="color: #1BA672; margin: 0; letter-spacing: 5px;">${otp}</h1>
+        </div>
+        <p>This code will expire in 5 minutes.</p>
+        <p style="color: #666; font-size: 12px; margin-top: 30px;">If you didn't request this, please ignore this email.</p>
+      </div>
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log("📧 Vendor OTP email sent:", info.messageId);
+  } catch (error) {
+    console.error("❌ Error sending vendor OTP email:", error);
+    throw new Error("Failed to send OTP email");
+  }
+};

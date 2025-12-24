@@ -208,6 +208,27 @@ class NodeApiService {
         });
     }
 
+    async vendorForgotPassword(email: string) {
+        return this.request("/vendor-auth/forgot-password", {
+            method: "POST",
+            body: { email },
+        });
+    }
+
+    async vendorVerifyOtp(email: string, otp: string) {
+        return this.request("/vendor-auth/verify-otp", {
+            method: "POST",
+            body: { email, otp },
+        });
+    }
+
+    async vendorResetPassword(email: string, otp: string, newPassword: string) {
+        return this.request("/vendor-auth/reset-password", {
+            method: "POST",
+            body: { email, otp, newPassword },
+        });
+    }
+
     async deleteVendorProduct(vendorId: string, productId: string) {
         return this.request(`/vendor-auth/${vendorId}/products/${productId}`, {
             method: "DELETE",

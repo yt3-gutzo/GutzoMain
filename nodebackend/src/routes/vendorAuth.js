@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { asyncHandler, successResponse, ApiError } from '../middleware/errorHandler.js';
+import { sendVendorOTP } from '../utils/emailService.js';
 
 const router = express.Router();
 
@@ -214,6 +215,98 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
     if (error) throw new ApiError(500, 'Failed to update profile');
   
     successResponse(res, { vendor }, 'Profile updated successfully');
+  }));
+
+  // ============================================
+  // FORGOT PASSWORD - REQUEST OTP
+  // POST /api/vendor-auth/forgot-password
+  // ============================================
+  router.post('/forgot-password', asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    if (!email) throw new ApiError(400, 'Email is required');
+
+    // Check if vendor exists
+    const { data: vendor } = await supabaseAdmin
+        .from('vendors')
+        .select('id, email')
+        .eq('email', email)
+        .single();
+
+    if (!vendor) throw new ApiError(404, 'No account found with this email');
+
+    // Generate 6 digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Store in DB (Update vendor record)
+    const { error } = await supabaseAdmin
+        .from('vendors')
+        .update({ otp, otp_expires_at: expiresAt })
+        .eq('email', email);
+
+    if (error) throw new ApiError(500, 'Failed to generate OTP');
+
+    // Send Email
+    await sendVendorOTP(email, otp);
+
+    successResponse(res, null, 'OTP sent to your email');
+  }));
+
+  // ============================================
+  // VERIFY OTP
+  // POST /api/vendor-auth/verify-otp
+  // ============================================
+  router.post('/verify-otp', asyncHandler(async (req, res) => {
+      const { email, otp } = req.body;
+      if (!email || !otp) throw new ApiError(400, 'Email and OTP required');
+  
+      const { data: vendor, error } = await supabaseAdmin
+          .from('vendors')
+          .select('id, otp, otp_expires_at')
+          .eq('email', email)
+          .single();
+  
+      if (error || !vendor) throw new ApiError(400, 'Invalid request');
+
+      // Verify OTP and Expiry
+      if (vendor.otp !== otp) throw new ApiError(400, 'Invalid OTP');
+      if (new Date(vendor.otp_expires_at) < new Date()) throw new ApiError(400, 'OTP has expired');
+  
+      successResponse(res, { valid: true }, 'OTP Verified');
+  }));
+
+  // ============================================
+  // RESET PASSWORD
+  // POST /api/vendor-auth/reset-password
+  // ============================================
+  router.post('/reset-password', asyncHandler(async (req, res) => {
+      const { email, otp, newPassword } = req.body;
+      if (!email || !otp || !newPassword) throw new ApiError(400, 'All fields required');
+  
+      // Verify OTP again (double check)
+      const { data: vendor } = await supabaseAdmin
+          .from('vendors')
+          .select('id, otp, otp_expires_at')
+          .eq('email', email)
+          .single();
+    
+      if (!vendor || vendor.otp !== otp || new Date(vendor.otp_expires_at) < new Date()) {
+          throw new ApiError(400, 'Invalid or expired OTP');
+      }
+  
+      // Update Password and Clear OTP
+      const { error: updateError } = await supabaseAdmin
+          .from('vendors')
+          .update({ 
+              password: newPassword,
+              otp: null,
+              otp_expires_at: null 
+          })
+          .eq('email', email);
+  
+      if (updateError) throw new ApiError(500, 'Failed to reset password');
+  
+      successResponse(res, null, 'Password reset successful. Please login.');
   }));
 
 export default router;
