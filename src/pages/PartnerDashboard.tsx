@@ -116,9 +116,9 @@ export function PartnerDashboard() {
   ];
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-gray-50 overflow-hidden">
+    <div className="flex flex-col lg:flex-row min-h-screen w-full bg-gray-50">
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 flex-shrink-0 bg-white border-b md:border-b-0 md:border-r flex flex-col z-20 md:h-full">
+      <aside className="w-full lg:w-64 flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r flex flex-col z-20 lg:h-full">
          <div className="h-16 md:h-20 flex items-center px-4 md:px-6 border-b gap-3 flex-shrink-0">
              <ImageWithFallback
                 src="https://35-194-40-59.nip.io/service/storage/v1/object/public/Gutzo/GUTZO.svg"
@@ -146,7 +146,7 @@ export function PartnerDashboard() {
             ))}
          </div>
 
-         <div className="p-4 border-t hidden md:block mt-auto flex-shrink-0 bg-white">
+         <div className="p-4 border-t hidden lg:block mt-auto flex-shrink-0 bg-white">
              <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
                     {vendor.image ? <ImageWithFallback src={vendor.image} alt={vendor.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold">{vendor.name.charAt(0)}</div>}
@@ -163,9 +163,9 @@ export function PartnerDashboard() {
       </aside>
 
       {/* Main Content Actions */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0">
         {/* Mobile Header */}
-        <header className="bg-white border-b h-16 flex items-center justify-between px-4 md:hidden flex-shrink-0 sticky top-0 z-10">
+        <header className="bg-white border-b h-16 flex items-center justify-between px-4 lg:hidden flex-shrink-0 sticky top-0 z-10">
              <span className="font-bold text-lg">{tabs.find(t => t.id === activeTab)?.label}</span>
              <Button variant="ghost" size="sm" onClick={handleLogoutClick} className="text-red-500">
                 <LogOut className="w-5 h-5" />
@@ -173,7 +173,7 @@ export function PartnerDashboard() {
         </header>
 
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 p-4 lg:p-8">
             <div className="max-w-5xl mx-auto">
                 {activeTab === 'dashboard' && (
                     <div className="space-y-6">
