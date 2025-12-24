@@ -323,6 +323,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
             noPadding
             onMealPlanClick={plan => setSelectedMealPlan(plan)}
             disabled={!isServiceable}
+            validVendorIds={[vendor.id]}
           />
           {/* Show next steps UI when a meal plan is selected */}
           {selectedMealPlan && (
