@@ -11,7 +11,7 @@ import { ImageWithFallback } from "../components/common/ImageWithFallback";
 
 export function PartnerLoginPage() {
   const { navigate } = useRouter();
-  const [formData, setFormData] = useState({ phone: '', password: '' });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -20,9 +20,17 @@ export function PartnerLoginPage() {
       setIsLoading(true);
       setErrorMsg('');
 
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        setErrorMsg("Please enter a valid email address");
+        setIsLoading(false);
+        return;
+      }
+
       try {
           const response = await apiService.vendorLogin({ 
-              phone: formData.phone,
+              email: formData.email,
               password: formData.password 
           });
 
@@ -74,25 +82,15 @@ export function PartnerLoginPage() {
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <div className="flex">
-                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-200 bg-gray-50 text-gray-500 text-sm">
-                    +91
-                  </span>
-                  <Input 
-                    id="phone" 
-                    placeholder="9876543210" 
-                    value={formData.phone}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, ''); // Allow only numbers
-                      if (val.length <= 10) {
-                         setFormData(prev => ({ ...prev, phone: val }))
-                      }
-                    }}
-                    className="rounded-l-none"
-                    required
-                  />
-                </div>
+                <Label htmlFor="email">Email Address</Label>
+                <Input 
+                  id="email" 
+                  type="email"
+                  placeholder="vendor@example.com" 
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  required
+                />
               </div>
 
               <div className="space-y-2">

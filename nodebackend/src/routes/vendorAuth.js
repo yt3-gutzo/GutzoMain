@@ -57,17 +57,17 @@ router.post('/check-status', asyncHandler(async (req, res) => {
 // POST /api/vendor-auth/login
 // ============================================
 router.post('/login', asyncHandler(async (req, res) => {
-  const { phone, password } = req.body;
+  const { email, password } = req.body;
 
-  if (!phone || !password) {
-    throw new ApiError(400, 'Phone and password are required');
+  if (!email || !password) {
+    throw new ApiError(400, 'Email and password are required');
   }
 
-  // Check if vendor exists with this phone number
+  // Check if vendor exists with this email
   const { data: vendor, error } = await supabaseAdmin
     .from('vendors')
     .select('*')
-    .eq('phone', phone)
+    .eq('email', email)
     .single();
 
   if (error || !vendor) {
