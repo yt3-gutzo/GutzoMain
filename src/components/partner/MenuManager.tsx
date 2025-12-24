@@ -24,6 +24,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 interface Product {
   id: string;
@@ -52,6 +62,7 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -90,16 +101,22 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
       } catch(e) { console.error(e); }
   };
 
-  const handleDelete = async (productId: string) => {
-    if (!confirm('Are you sure you want to delete this item?')) return;
+  const confirmDelete = (productId: string) => {
+    setProductToDelete(productId);
+  };
+
+  const executeDelete = async () => {
+    if (!productToDelete) return;
     try {
-      const res = await apiService.deleteVendorProduct(vendorId, productId);
+      const res = await apiService.deleteVendorProduct(vendorId, productToDelete);
       if (res.success) {
-        setProducts(prev => prev.filter(p => p.id !== productId));
+        setProducts(prev => prev.filter(p => p.id !== productToDelete));
         toast.success('Item deleted');
       }
     } catch (error) {
       toast.error('Failed to delete item');
+    } finally {
+      setProductToDelete(null);
     }
   };
 
@@ -153,7 +170,7 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
                     <Button variant="outline" size="sm" className="h-8 text-xs flex-1" onClick={() => { setEditingProduct(product); setIsEditing(true); }}>
                        <Pencil className="w-3 h-3 mr-1" /> Edit
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(product.id)}>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => confirmDelete(product.id)}>
                        <Trash2 className="w-3 h-3" />
                     </Button>
                  </div>
@@ -185,7 +202,25 @@ export function MenuManager({ vendorId }: MenuManagerProps) {
               />
            </div>
         </div>
+
       )}
+
+      <AlertDialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the item from your menu.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDelete} className="bg-red-600 hover:bg-red-700 text-white" style={{ backgroundColor: '#dc2626', color: 'white' }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
