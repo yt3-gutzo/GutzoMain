@@ -446,13 +446,23 @@ export function CheckoutPage() {
        }
    };
 
+   // Redirect if cart is empty
+   useEffect(() => {
+     if (cartItems.length === 0) {
+        // Robust redirect logic using explicit state or history
+        const state = window.history.state;
+        if (state && state.from === 'vendor_details') {
+            goBack();
+        } else {
+            // Default behavior (homepage) if no specific source
+            // Or if goBack would take us somewhere weird (like login)
+            navigate('/');
+        }
+     }
+   }, [cartItems.length, goBack, navigate]);
+
    if (cartItems.length === 0) {
-     return (
-         <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
-             <h2 className="text-xl font-bold mb-4 text-gray-900">Your cart is empty</h2>
-             <Button onClick={() => navigate('/')} className="bg-gutzo-brand text-white">Browse Restaurants</Button>
-         </div>
-     );
+     return null; // Avoid flashing
    }
 
    return (

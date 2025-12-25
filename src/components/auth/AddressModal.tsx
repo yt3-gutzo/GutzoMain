@@ -329,7 +329,10 @@ const AddressForm = ({
                 // BUT do not disable if we are currently editing that address (handled by isEditing check if we had one)
                 // For now, assume this modal is always for NEW addresses (based on usage in InstantOrderPanel)
                 // If editing is added later, we need to pass currentAddressId prop.
-                const isDisabled = (type === 'home' && hasHome) || (type === 'work' && hasWork);
+                
+                // RESTRICTION CODE COMMENTED OUT AS PER USER REQUEST (Allow multiple Home/Work)
+                // const isDisabled = (type === 'home' && hasHome) || (type === 'work' && hasWork);
+                const isDisabled = false;
 
                 const typeConfig = {
                   home: { label: 'Home', icon: Home },

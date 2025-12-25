@@ -252,7 +252,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
   const handleShowCheckout = () => {
     // setShowCartPanel(false);
     // setShowCheckoutPanel(true);
-    navigate('/checkout');
+    navigate('/checkout', { from: 'vendor_details' });
   };
 
   const handlePaymentSuccess = (data: any) => {
@@ -287,7 +287,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
         {/* Always render header; use CSS for responsive visibility */}
         <div className="hidden lg:block">
           <Header 
-            onShowCart={() => navigate('/checkout')} 
+            onShowCart={() => navigate('/checkout', { from: 'vendor_details' })} 
             onShowLogin={handleShowLogin}
             onShowProfile={handleShowProfile}
             onLogout={handleLogout}
@@ -342,7 +342,7 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
           {/* Today's best picks section inside same container */}
           <InstantPicks noPadding vendorId={vendor.id} disabled={!isServiceable} />
         </div>
-      {(!showCartPanel && !showCheckoutPanel) && <CartStrip onShowCart={() => navigate('/checkout')} />}
+      {(!showCartPanel && !showCheckoutPanel) && <CartStrip onShowCart={() => navigate('/checkout', { from: 'vendor_details' })} />}
       <CartPanel
         isOpen={showCartPanel}
         onClose={() => setShowCartPanel(false)}
