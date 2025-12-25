@@ -10,7 +10,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { ImageWithFallback } from "./common/ImageWithFallback";
 import { useRouter } from "../components/Router";
 import colors from "../styles/colors";
-import { LocationBottomSheet } from "./LocationBottomSheet";
+// LocationBottomSheet moved to App.tsx
 import { SearchBottomSheet } from "./SearchBottomSheet";
 import { LocationDropdown } from "./LocationDropdown";
 import { SearchDropdown } from "./SearchDropdown";
@@ -22,6 +22,7 @@ export interface HeaderProps {
   onShowProfile?: (content: 'profile' | 'orders' | 'address') => void;
   onShowCart?: () => void;
   onShowAddressList?: () => void;
+  onShowLocationSheet?: () => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   /**
@@ -38,13 +39,13 @@ export interface HeaderProps {
 }
 
 
-export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onShowAddressList, searchQuery = '', onSearchChange, hideInteractive = false, pageLabel, hideSearchLocation = false, hideCart = false }: HeaderProps) {
+export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onShowAddressList, onShowLocationSheet, searchQuery = '', onSearchChange, hideInteractive = false, pageLabel, hideSearchLocation = false, hideCart = false }: HeaderProps) {
   const { navigate } = useRouter();
   const { locationDisplay, isLoading, error, refreshLocation, isInCoimbatore, locationLabel } = useLocation();
   const { totalItems } = useCart();
   const { isAuthenticated, user, isLoading: authLoading } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showLocationSheet, setShowLocationSheet] = useState(false);
+  // showLocationSheet state moved to App.tsx
   const [showSearchSheet, setShowSearchSheet] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -72,7 +73,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
   };
 
   const handleMobileLocationClick = () => {
-    setShowLocationSheet(true);
+    onShowLocationSheet?.();
   };
 
   const handleMobileSearchClick = () => {
@@ -335,12 +336,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
       </div>
     </header>
 
-      {/* Bottom Sheets for Mobile */}
-      <LocationBottomSheet
-        isOpen={showLocationSheet}
-        onClose={() => setShowLocationSheet(false)}
-        onShowAddressList={onShowAddressList}
-      />
+      {/* Bottom Sheets for Mobile */ }
       
       <SearchBottomSheet
         isOpen={showSearchSheet}

@@ -210,7 +210,7 @@ const AddressForm = ({
       </div>
 
       <div
-        className="flex-1 overflow-y-auto p-4 sm:p-6 mobile-product-scroll scrollbar-hide max-h-[60vh] min-h-0"
+        className="flex-1 overflow-y-auto p-4 sm:p-6 mobile-product-scroll scrollbar-hide min-h-0"
         ref={modalContentRef}
       >
         {/* Google Maps Location Picker */}
@@ -820,7 +820,7 @@ export function AddressModal({
 
   // Portal-based modal content
   const modalContent = (
-    <div className="fixed inset-0 z-[100]">
+    <div className="fixed inset-0" style={{ zIndex: 10000 }}>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/40 transition-opacity duration-300 ease-out"
@@ -828,8 +828,35 @@ export function AddressModal({
       />
       
       {/* Unified Modal Container */}
-      <div className="fixed inset-0 flex items-end sm:items-center justify-center">
-        <div className="relative bg-white w-full sm:w-[480px] sm:max-w-[90%] max-h-[90vh] sm:rounded-2xl rounded-t-3xl shadow-xl overflow-hidden transform transition-all duration-300 z-[101]">
+      <div className="fixed inset-0 flex items-end sm:items-center justify-center pointer-events-none">
+        
+        {/* Style injection for robust mobile layout */}
+        <style>{`
+          @media (max-width: 639px) {
+            .address-modal-mobile {
+              position: fixed !important;
+              top: 104px !important;
+              bottom: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              width: 100% !important;
+              height: calc(100vh - 104px) !important;
+              max-height: none !important;
+              max-width: none !important;
+              border-radius: 1.5rem 1.5rem 0 0 !important;
+              transform: none !important;
+              z-index: 10001 !important;
+              display: flex !important;
+              flex-direction: column !important;
+              pointer-events: auto !important;
+            }
+          }
+        `}</style>
+        
+        <div 
+          className="address-modal-mobile relative bg-white w-full sm:w-[480px] sm:max-w-[90%] max-h-[90vh] sm:rounded-2xl rounded-t-3xl shadow-xl overflow-hidden transform transition-all duration-300 flex flex-col pointer-events-auto"
+          style={{ zIndex: 10001 }}
+        >
           <AddressForm
             newAddress={newAddress}
             setNewAddress={setNewAddress}
@@ -846,7 +873,7 @@ export function AddressModal({
             modalContentRef={modalContentRef as React.RefObject<HTMLDivElement>}
             onLocationSelect={handleLocationSelect}
             // Add existing addresses for uniqueness check
-            existingAddresses={addresses as Address[]} // Convert to legacy type if needed or update props
+            existingAddresses={addresses as any[]} // Convert to any to bypass strict checks
           />
         </div>
       </div>

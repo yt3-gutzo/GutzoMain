@@ -49,6 +49,7 @@ import { PartnerLoginPage } from "./pages/PartnerLoginPage";
 import { PartnerDashboard } from "./pages/PartnerDashboard";
 import { CheckoutPage } from "./pages/CheckoutPage"; // Added CheckoutPage import
 import { Toaster } from "./components/ui/sonner";
+import { toast } from "sonner";
 import { Loader2, MapPin, Plus, X, Zap } from "lucide-react";
 import { Vendor } from "./types/index";
 import { useVendors } from "./hooks/useVendors";
@@ -60,6 +61,7 @@ import { Button } from "./components/ui/button";
 import AddToHomeScreenPrompt from "./components/AddToHomeScreenPrompt";
 import { BrowserRouter } from 'react-router-dom';
 import VendorDetailsPage from './components/VendorDetailsPage';
+import { LocationBottomSheet } from "./components/LocationBottomSheet";
 
 
 function AppContent() {
@@ -120,6 +122,8 @@ function AppContent() {
   const { clearCart, items: cartItems } = useCart();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [addressRefreshTrigger, setAddressRefreshTrigger] = useState(0); // Trigger for address updates
+  const [showLocationSheet, setShowLocationSheet] = useState(false);
+  const [returnToLocationSheet, setReturnToLocationSheet] = useState(false);
 
   // Next steps state for meal plan
   // (already declared above, remove duplicate)
@@ -312,7 +316,24 @@ function AppContent() {
     }
     setAddressRefreshTrigger(prev => prev + 1);
     setShowAddressModal(false);
+    
+    // Check if we need to return to the location sheet
+    if (returnToLocationSheet) {
+      setTimeout(() => {
+        setShowLocationSheet(true);
+        setReturnToLocationSheet(false);
+      }, 300); // Small delay for smooth transition
+    }
   };
+
+  const handleOpenAddAddress = () => {
+    setShowLocationSheet(false);
+    setShowAddressModal(true);
+    setReturnToLocationSheet(true);
+  };
+   const handleShowLocationSheet = () => {
+       setShowLocationSheet(true);
+   };
   const handleAddressSelected = (address: any) => {
     setShowAddressPanel(false);
   };
@@ -376,7 +397,7 @@ function AppContent() {
           canInstall={canInstall}
         />
       </div>
-      {(showLoginPanel || showProfilePanel || showCartPanel || showCheckoutPanel || showAddressPanel) && (
+      {(showLoginPanel || showProfilePanel || showCartPanel || showCheckoutPanel || showAddressPanel || showLocationSheet) && (
         <div 
           className="fixed inset-0 z-40 transition-all duration-300 ease-out bg-black-50"
           onClick={() => {
@@ -384,7 +405,9 @@ function AppContent() {
             if (showProfilePanel) handleCloseProfile();
             if (showCartPanel) handleCloseCart();
             if (showCheckoutPanel) handleCloseCheckout();
+            if (showCheckoutPanel) handleCloseCheckout();
             if (showAddressPanel) setShowAddressPanel(false);
+            if (showLocationSheet) setShowLocationSheet(false);
           }}
         />
       )}
@@ -396,6 +419,7 @@ function AppContent() {
         onShowAddressList={handleShowAddressList}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onShowLocationSheet={handleShowLocationSheet}
       />
       <Inspiration onOptionClick={setSelectedCategory} loading={loading} />
       <WeeklyMealPlansSection 
@@ -528,6 +552,11 @@ function AppContent() {
         isOpen={showAddressModal}
         onClose={() => setShowAddressModal(false)}
         onSave={handleAddressAdded}
+      />
+      <LocationBottomSheet
+        isOpen={showLocationSheet}
+        onClose={() => setShowLocationSheet(false)}
+        onAddAddress={handleOpenAddAddress}
       />
       <AddressListPanel
         isOpen={showAddressPanel}

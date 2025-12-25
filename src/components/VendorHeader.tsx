@@ -91,11 +91,15 @@ const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, loca
                   fontSize: '0.95rem',
                   cursor: onAddressClick ? 'pointer' : 'default',
                   display: 'flex',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  maxWidth: '220px', // Limit width to force truncation
                 }}
               >
-                Delivery to {userAddressLabel || "Location"}
-                {onAddressClick && <span style={{ fontSize: '0.8em', marginLeft: 4 }}>▼</span>}
+                <span className="shrink-0 mr-1">Delivery to</span>
+                <span className="truncate block" style={{ maxWidth: '140px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {userAddressLabel || "Location"}
+                </span>
+                {onAddressClick && <span style={{ fontSize: '0.8em', marginLeft: 4, flexShrink: 0 }}>▼</span>}
               </span>
             </div>
           </div>
