@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../components/Router';
+import { useLocation as useUserLocation } from '../contexts/LocationContext';
 import { nodeApiService as apiService } from '../utils/nodeApi';
 import { DistanceService } from '../utils/distanceService';
 import { ArrowLeft, Plus, ChevronRight, FileText, Percent, X, ChevronDown, Share, UtensilsCrossed, Clock, MapPin, Phone } from 'lucide-react';
@@ -41,6 +42,7 @@ export function CheckoutPage() {
   const { navigate, goBack } = useRouter();
   const { items, updateQuantityOptimistic, removeItem } = useCart();
   const cartItems = items as unknown as CartItem[];
+  const { location: userLocation, locationDisplay } = useUserLocation();
   
 
   
@@ -119,7 +121,8 @@ export function CheckoutPage() {
   }, [cartItems]);
 
   // Fetch Addresses
-  useEffect(() => {
+  // Fetch Addresses Function
+  const fetchAddresses = () => {
     // Dynamic import to avoid circular dependency issues if any
     if (user?.phone) {
         const phone = user.phone.startsWith('+91') ? user.phone : `+91${user.phone}`;
@@ -127,13 +130,36 @@ export function CheckoutPage() {
             AddressApi.getUserAddresses(phone).then(res => {
                 if (res.success && res.data) {
                     setAddresses(res.data);
+                    // Prioritize default address
                     const defaultAddr = res.data.find((a: any) => a.is_default) || res.data[0];
                     if (defaultAddr) setSelectedAddress(defaultAddr);
                 }
             });
         });
+    } else if (userLocation && userLocation.coordinates) {
+       // Guest Fallback: Use device location
+       const fallbackAddress = {
+           id: 'device_location',
+           type: 'Current Location',
+           full_address: locationDisplay || 'Detected Location',
+           street: '',
+           area: '',
+           latitude: userLocation.coordinates.latitude,
+           longitude: userLocation.coordinates.longitude,
+           is_default: false,
+           label: 'Current Location',
+           address_type: 'Current Location' // for display consistency
+       };
+       setSelectedAddress(fallbackAddress);
+       setAddresses([]); // Clear saved addresses
     }
-  }, [user]);
+  };
+
+  // Initial Fetch & Sync
+  useEffect(() => {
+    fetchAddresses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.phone, user?.id, userLocation?.coordinates?.latitude, userLocation?.coordinates?.longitude, locationDisplay]);
 
   // Calculate Delivery Fee
   useEffect(() => {
@@ -233,12 +259,17 @@ export function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
-      if (cartItems.length === 0 || isProcessing || !isServiceable) return;
+      if (cartItems.length === 0 || isProcessing) return;
       
       const userPhone = user?.phone;
       if (!userPhone) {
           setShowLoginPanel(true);
           toast.info("Please login to place your order");
+          return;
+      }
+
+      if (!isServiceable) {
+          toast.error("Location not serviceable");
           return;
       }
       if (!selectedAddress) {
@@ -641,9 +672,20 @@ export function CheckoutPage() {
       {/* ProfilePanel for Address Selection */}
       <ProfilePanel 
         isOpen={showProfilePanel}
-        onClose={() => setShowProfilePanel(false)}
         onLogout={() => {}}
         content={profilePanelContent}
+        onClose={() => {
+            setShowProfilePanel(false);
+            // Refresh addresses when panel closes (to capture any changes/new defaults)
+            if (profilePanelContent === 'address') {
+                fetchAddresses();
+            }
+        }}
+        userInfo={user ? {
+          name: user.name,
+          phone: user.phone,
+          email: user.email
+        } : null}
       />
       
       <LoginPanel 
