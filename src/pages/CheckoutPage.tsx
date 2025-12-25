@@ -128,11 +128,60 @@ export function CheckoutPage() {
         const phone = user.phone.startsWith('+91') ? user.phone : `+91${user.phone}`;
         import('../utils/addressApi').then(({ AddressApi }) => {
             AddressApi.getUserAddresses(phone).then(res => {
-                if (res.success && res.data) {
+                if (res.success && res.data && res.data.length > 0) {
                     setAddresses(res.data);
-                    // Prioritize default address
-                    const defaultAddr = res.data.find((a: any) => a.is_default) || res.data[0];
-                    if (defaultAddr) setSelectedAddress(defaultAddr);
+                    
+                    // Address Synchronization Logic
+                    let matchedAddress = null;
+
+                    // 1. Check for manual override from LocationContext (most recent user selection)
+                    if (userLocation && userLocation.coordinates) {
+                        const { latitude: ctxLat, longitude: ctxLng } = userLocation.coordinates;
+                        
+                        // Find address matching these coordinates (with small epsilon for float precision)
+                        matchedAddress = res.data.find((addr: any) => {
+                             const latDiff = Math.abs((addr.latitude || 0) - ctxLat);
+                             const lngDiff = Math.abs((addr.longitude || 0) - ctxLng);
+                             return latDiff < 0.0001 && lngDiff < 0.0001; 
+                        });
+
+                        if (matchedAddress) {
+                            console.log('📍 Synced Address with Header Selection:', matchedAddress.label || matchedAddress.type);
+                        }
+                    }
+
+                    // 2. Fallback to Default Address if no context match
+                    if (!matchedAddress) {
+                        matchedAddress = res.data.find((a: any) => a.is_default);
+                    }
+
+                    // 3. Fallback to first address
+                    if (!matchedAddress) {
+                        matchedAddress = res.data[0];
+                    }
+                    
+                    // Only update if we found something
+                    if (matchedAddress) {
+                        setSelectedAddress(matchedAddress);
+                    }
+                } else if (res.success && (!res.data || res.data.length === 0)) {
+                    // No addresses found, but maybe we have a location from context?
+                     if (userLocation && userLocation.coordinates) {
+                       // Guest/New User Fallback: Use device location
+                       const fallbackAddress = {
+                           id: 'device_location',
+                           type: 'Current Location',
+                           full_address: locationDisplay || 'Detected Location',
+                           street: '',
+                           area: '',
+                           latitude: userLocation.coordinates.latitude,
+                           longitude: userLocation.coordinates.longitude,
+                           is_default: false,
+                           label: 'Current Location',
+                           address_type: 'Current Location' 
+                       };
+                       setSelectedAddress(fallbackAddress);
+                    }
                 }
             });
         });
@@ -194,254 +243,270 @@ export function CheckoutPage() {
               
               console.log('Serviceability API Request:', { pickup, drop });
 
-              const res = await apiService.getDeliveryServiceability(pickup, drop);
-              if (res.success && res.data) {
-                   setIsServiceable(res.data.is_serviceable ?? true);
-                   setDeliveryFee(res.data.total_amount || 50);
-                   
-                   // Fetch dynamic ETA
-                   const pickupEtaStr = res.data.pickup_eta || res.data.value?.pickup_eta;
-                   console.log('Pickup ETA from API:', pickupEtaStr);
-                   
-                   if (pickupEtaStr && vendorLat && vendorLng && selectedAddress.latitude && selectedAddress.longitude) {
-                       try {
-                           const travelTimeStr = await DistanceService.getTravelTime(
-                               { latitude: vendorLat, longitude: vendorLng },
-                               { latitude: selectedAddress.latitude, longitude: selectedAddress.longitude }
-                           );
-                           
-                           let totalEtaDisplay = pickupEtaStr;
-                           if (travelTimeStr) {
-                               const pickupMins = DistanceService.parseDurationToMinutes(pickupEtaStr);
-                               const travelMins = DistanceService.parseDurationToMinutes(travelTimeStr);
-                               
-                               if (pickupMins > 0 && travelMins > 0) {
-                                   const totalMins = pickupMins + travelMins;
-                                   totalEtaDisplay = `${totalMins}-${totalMins + 5} mins`;
-                               }
-                           }
-                           console.log('Setting dynamic ETA:', totalEtaDisplay);
-                           setDynamicEta(totalEtaDisplay);
-                       } catch (e) {
-                           console.error('Failed to calculate ETA:', e);
-                           // Fallback to just the pickup ETA if travel time fails
-                           console.log('Using pickup ETA as fallback:', pickupEtaStr);
-                           setDynamicEta(pickupEtaStr);
-                       }
-                   } else if (pickupEtaStr) {
-                       // If we have pickup ETA but missing coordinates, use it anyway
-                       console.log('Using pickup ETA (missing coordinates):', pickupEtaStr);
-                       setDynamicEta(pickupEtaStr);
-                   }
-              } else {
-                   setDeliveryFee(50);
-              }
-          } catch (e) {
-              console.error(e);
-              setDeliveryFee(50);
-          } finally {
-              setLoadingFee(false);
-          }
-      }
-      fetchFee();
-  }, [selectedAddress, vendor]);
+               const res = await apiService.getDeliveryServiceability(pickup, drop);
+               if (res.success && res.data) {
+                    // Check serviceability explicitly matching VendorDetailsPage logic
+                    const serviceable = res.data.is_serviceable !== undefined ? res.data.is_serviceable : (res.data.value?.is_serviceable ?? true);
+                    setIsServiceable(serviceable);
 
-  const displayItems = syncedItems.length > 0 ? syncedItems : cartItems;
-  const itemTotal = displayItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
-  const donation = isDonationChecked ? donationAmount : 0;
-  const grandTotal = itemTotal + deliveryFee + PLATFORM_FEE + donation;
-  const savings = 153; 
-
-  const handleQuantityChange = async (productId: string, newQty: number) => {
-    if (newQty <= 0) return removeItem(productId);
-    updateQuantityOptimistic(productId, newQty);
-  };
-
-  const handlePlaceOrder = async () => {
-      if (cartItems.length === 0 || isProcessing) return;
-      
-      const userPhone = user?.phone;
-      if (!userPhone) {
-          setShowLoginPanel(true);
-          toast.info("Please login to place your order");
-          return;
-      }
-
-      if (!isServiceable) {
-          toast.error("Location not serviceable");
-          return;
-      }
-      if (!selectedAddress) {
-        toast.error('Please select a delivery address');
-        return;
-      }
-
-      setIsProcessing(true);
-      try {
-        // 1. Create order
-        const orderPayload = {
-          vendor_id: vendor?.id || cartItems[0].vendorId,
-          items: displayItems.map(item => ({
-            product_id: item.productId || item.id,
-            quantity: item.quantity,
-          })),
-          delivery_address: selectedAddress,
-          delivery_phone: userPhone,
-          payment_method: 'wallet', 
-          special_instructions: ''
-        };
-
-        const orderRes = await apiService.createOrder(userPhone, orderPayload);
-        
-        if (!orderRes.success || !orderRes.data || !orderRes.data.order) {
-           throw new Error(orderRes.message || 'Failed to create order');
-        }
-
-        const order = orderRes.data.order;
-        const orderId = order.id;
-        const amount = order.total_amount || grandTotal;
-
-        // 2. Initiate Payment
-        const data = await (apiService as any).initiatePaytmPayment(userPhone, orderId, amount, user?.id || userPhone);
-        
-        const responseData = data.data || data; 
-        const paytmResp = responseData.paytmResponse || responseData.initiateTransactionResponse;
-        const token = responseData.txnToken || paytmResp?.body?.txnToken;
-
-        if (data.success && token && paytmResp) {
-          const mid = responseData.mid || paytmResp.body.mid || 'xFDrTr50750120794198';
-          
-          const script = document.createElement('script');
-          script.src = `https://securestage.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
-          script.async = true;
-          script.crossOrigin = "anonymous";
-          script.onload = () => {
-            // @ts-ignore
-            if (window.Paytm && window.Paytm.CheckoutJS) {
-               // @ts-ignore
-               const checkoutJs = window.Paytm.CheckoutJS;
-               checkoutJs.onLoad(() => {
-                  const config = {
-                    merchant: {
-                      mid: mid,
-                      name: "Gutzo",
-                      redirect: false
-                    },
-                    flow: "DEFAULT",
-                    data: {
-                      orderId: order.order_number, 
-                      token: token,
-                      tokenType: "TXN_TOKEN",
-                      amount: String(amount)
-                    },
-                      handler: {
-                      notifyMerchant: function(eventName: string, eventData: any) {
-                        console.log('Paytm Event:', eventName, eventData);
-                      },
-                      transactionStatus: function(paymentStatus: any) {
-                        // @ts-ignore
-                        window.Paytm.CheckoutJS.close();
-                        
-                        const form = document.createElement('form');
-                        form.method = 'POST';
-                        form.action = 'http://localhost:3001/api/payments/callback'; 
-                        
-                        Object.keys(paymentStatus).forEach(key => {
-                           const value = paymentStatus[key];
-                           if (typeof value === 'object') return;
-                           const input = document.createElement('input');
-                           input.type = 'hidden';
-                           input.name = key;
-                           input.value = String(value);
-                           form.appendChild(input);
-                        });
-                        
-                        document.body.appendChild(form);
-                        form.submit();
-                      }
+                    if (serviceable) {
+                         setDeliveryFee(res.data.total_amount || 50);
+                         
+                         // Fetch dynamic ETA
+                         const pickupEtaStr = res.data.pickup_eta || res.data.value?.pickup_eta;
+                         console.log('Pickup ETA from API:', pickupEtaStr);
+                         
+                         if (pickupEtaStr && vendorLat && vendorLng && selectedAddress.latitude && selectedAddress.longitude) {
+                             try {
+                                 const travelTimeStr = await DistanceService.getTravelTime(
+                                     { latitude: vendorLat, longitude: vendorLng },
+                                     { latitude: selectedAddress.latitude, longitude: selectedAddress.longitude }
+                                 );
+                                 
+                                 let totalEtaDisplay = pickupEtaStr;
+                                 if (travelTimeStr) {
+                                     const pickupMins = DistanceService.parseDurationToMinutes(pickupEtaStr);
+                                     const travelMins = DistanceService.parseDurationToMinutes(travelTimeStr);
+                                     
+                                     if (pickupMins > 0 && travelMins > 0) {
+                                         const totalMins = pickupMins + travelMins;
+                                         totalEtaDisplay = `${totalMins}-${totalMins + 5} mins`;
+                                     }
+                                 }
+                                 console.log('Setting dynamic ETA:', totalEtaDisplay);
+                                 setDynamicEta(totalEtaDisplay);
+                             } catch (e) {
+                                 console.error('Failed to calculate ETA:', e);
+                                 // Fallback to just the pickup ETA if travel time fails
+                                 setDynamicEta(pickupEtaStr);
+                             }
+                         } else if (pickupEtaStr) {
+                             setDynamicEta(pickupEtaStr);
+                         }
+                    } else {
+                         // Not serviceable
+                         setDeliveryFee(0); // or keep as is, but button should be disabled
+                         setDynamicEta(null);
                     }
-                  };
-                  checkoutJs.init(config).then(() => {
-                      checkoutJs.invoke();
-                  }).catch((err: any) => {
-                      console.error('Paytm Init Error:', err);
-                      setIsProcessing(false);
-                      toast.error('Payment initialization failed');
-                  });
-               });
-            } else {
-                setIsProcessing(false);
-                toast.error('Payment gateway failed to load');
-            }
-          };
-          script.onerror = () => {
-             setIsProcessing(false);
-             toast.error('Network error loading payment gateway');
-          };
-          document.body.appendChild(script);
-        } else {
-             throw new Error('Invalid payment initiation response');
-        }
+               } else {
+                    setDeliveryFee(50);
+               }
+           } catch (e) {
+               console.error(e);
+               setDeliveryFee(50);
+           } finally {
+               setLoadingFee(false);
+           }
+       }
+       fetchFee();
+   }, [selectedAddress, vendor]);
 
-      } catch (error: any) {
-        console.error('Order Placement Error:', error);
-        toast.error(error.message || 'Failed to place order');
-        setIsProcessing(false);
-      }
-  };
+   const displayItems = syncedItems.length > 0 ? syncedItems : cartItems;
+   const itemTotal = displayItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+   
+   const donation = isDonationChecked ? donationAmount : 0;
+   const grandTotal = itemTotal + deliveryFee + PLATFORM_FEE + donation;
+   const savings = 153; 
 
-  if (cartItems.length === 0) {
-    return (
-        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">Your cart is empty</h2>
-            <Button onClick={() => navigate('/')} className="bg-gutzo-brand text-white">Browse Restaurants</Button>
-        </div>
-    );
-  }
+   const handleQuantityChange = async (productId: string, newQty: number) => {
+     if (newQty <= 0) return removeItem(productId);
+     updateQuantityOptimistic(productId, newQty);
+   };
 
-  return (
-    <div className="min-h-screen bg-[#F4F5F7] pb-32 lg:pb-8">
-      {/* Desktop Header */}
-      <div className="hidden lg:block">
-        <Header 
-          onLogout={handleLogout}
-          onShowProfile={handleShowProfile}
-          onShowAddressList={() => handleShowProfile('address')}
-          onShowLogin={() => setShowLoginPanel(true)} // Open login panel instead of redirect
-          onShowCart={() => {}} // No-op for now on standalone checkout
-          hideInteractive={false}
-          hideSearchLocation={true}
-          hideCart={true}
-        />
-      </div>
+   const handlePlaceOrder = async () => {
+       if (cartItems.length === 0 || isProcessing) return;
+       
+       const userPhone = user?.phone;
+       if (!userPhone) {
+           setShowLoginPanel(true);
+           toast.info("Please login to place your order");
+           return;
+       }
 
-      {/* Mobile Header */}
-      <div className="bg-white sticky top-0 z-40 shadow-[0_1px_3px_rgba(0,0,0,0.05)] lg:hidden">
-        <div className="max-w-7xl mx-auto w-full">
-            <div className="flex items-center px-4 !py-4 justify-between min-h-[64px]">
-            <div className="flex items-center gap-3 flex-1 overflow-hidden">
-                <button onClick={goBack} className="p-1 -ml-1 flex-shrink-0">
-                    <ArrowLeft className="w-6 h-6 text-gray-800" />
-                </button>
-                <div className="flex-1 flex flex-col justify-center overflow-hidden">
-                    <div className="text-[17px] font-extrabold text-gray-600 leading-tight mb-2 truncate">
-                        {vendor?.name || 'Restaurant'}
-                    </div>
-                    
-                    {/* Address Selection in Header */}
-                    <div onClick={() => {
-                      console.log('Address dropdown clicked');
-                      setShowProfilePanel(true);
-                      setProfilePanelContent('address');
-                    }} className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer leading-none group lg:hidden">
-                        <span className="text-sm text-gray-600 truncate max-w-[280px]">
-                           <span className="font-medium text-gray-900">{dynamicEta || '30-35 mins'} to home</span>
-                           <span className="mx-1 text-gray-400">|</span>
-                           {selectedAddress ? selectedAddress.full_address : 'Select address'}
-                        </span>
-                        <ChevronDown className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
-                    </div>
+       if (!isServiceable) {
+           toast.error("Location not serviceable");
+           return;
+       }
+       if (!selectedAddress) {
+         toast.error('Please select a delivery address');
+         return;
+       }
+
+       setIsProcessing(true);
+       try {
+         // 1. Create order
+         const orderPayload = {
+           vendor_id: vendor?.id || cartItems[0].vendorId,
+           items: displayItems.map(item => ({
+             product_id: item.productId || item.id,
+             quantity: item.quantity,
+           })),
+           delivery_address: selectedAddress,
+           delivery_phone: userPhone,
+           payment_method: 'wallet', 
+           special_instructions: undefined // Allow explicitly undefined to be dropped by JSON.stringify or backend to handle if passed as text
+         };
+
+         const orderRes = await apiService.createOrder(userPhone, orderPayload);
+         
+         if (!orderRes.success || !orderRes.data || !orderRes.data.order) {
+            throw new Error(orderRes.message || 'Failed to create order');
+         }
+
+         const order = orderRes.data.order;
+         const orderId = order.id;
+         const amount = order.total_amount || grandTotal;
+
+         // 2. Initiate Payment
+         const data = await (apiService as any).initiatePaytmPayment(userPhone, orderId, amount, user?.id || userPhone);
+         
+         const responseData = data.data || data; 
+         const paytmResp = responseData.paytmResponse || responseData.initiateTransactionResponse;
+         const token = responseData.txnToken || paytmResp?.body?.txnToken;
+
+         if (data.success && token && paytmResp) {
+           const mid = responseData.mid || paytmResp.body.mid || 'xFDrTr50750120794198';
+           
+           const script = document.createElement('script');
+           script.src = `https://securestage.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
+           script.async = true;
+           script.crossOrigin = "anonymous";
+           script.onload = () => {
+             // @ts-ignore
+             if (window.Paytm && window.Paytm.CheckoutJS) {
+                // @ts-ignore
+                const checkoutJs = window.Paytm.CheckoutJS;
+                checkoutJs.onLoad(() => {
+                   const config = {
+                     merchant: {
+                       mid: mid,
+                       name: "Gutzo",
+                       redirect: false
+                     },
+                     flow: "DEFAULT",
+                     data: {
+                       orderId: order.order_number, 
+                       token: token,
+                       tokenType: "TXN_TOKEN",
+                       amount: String(amount)
+                     },
+                       handler: {
+                       notifyMerchant: function(eventName: string, eventData: any) {
+                         console.log('Paytm Event:', eventName, eventData);
+                       },
+                       transactionStatus: function(paymentStatus: any) {
+                         // @ts-ignore
+                         window.Paytm.CheckoutJS.close();
+                         
+                         const form = document.createElement('form');
+                         form.method = 'POST';
+                         form.action = 'http://localhost:3001/api/payments/callback'; 
+                         
+                         Object.keys(paymentStatus).forEach(key => {
+                            const value = paymentStatus[key];
+                            if (typeof value === 'object') return;
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = key;
+                            input.value = String(value);
+                            form.appendChild(input);
+                         });
+                         
+                         document.body.appendChild(form);
+                         form.submit();
+                       }
+                     }
+                   };
+                   checkoutJs.init(config).then(() => {
+                       checkoutJs.invoke();
+                   }).catch((err: any) => {
+                       console.error('Paytm Init Error:', err);
+                       setIsProcessing(false);
+                       toast.error('Payment initialization failed');
+                   });
+                });
+             } else {
+                 setIsProcessing(false);
+                 toast.error('Payment gateway failed to load');
+             }
+           };
+           script.onerror = () => {
+              setIsProcessing(false);
+              toast.error('Network error loading payment gateway');
+           };
+           document.body.appendChild(script);
+         } else {
+              throw new Error('Invalid payment initiation response');
+         }
+
+       } catch (error: any) {
+         console.error('Order Placement Error:', error);
+         toast.error(error.message || 'Failed to place order');
+         setIsProcessing(false);
+       }
+   };
+
+   if (cartItems.length === 0) {
+     return (
+         <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
+             <h2 className="text-xl font-bold mb-4 text-gray-900">Your cart is empty</h2>
+             <Button onClick={() => navigate('/')} className="bg-gutzo-brand text-white">Browse Restaurants</Button>
+         </div>
+     );
+   }
+
+   return (
+     <div className="min-h-screen bg-[#F4F5F7] pb-32 lg:pb-8">
+       {/* Desktop Header */}
+       <div className="hidden lg:block">
+         <Header 
+           onLogout={handleLogout}
+           onShowProfile={handleShowProfile}
+           onShowAddressList={() => handleShowProfile('address')}
+           onShowLogin={() => setShowLoginPanel(true)} // Open login panel instead of redirect
+           onShowCart={() => {}} // No-op for now on standalone checkout
+           hideInteractive={false}
+           hideSearchLocation={true}
+           hideCart={true}
+         />
+       </div>
+
+       {/* Mobile Header */}
+       <div className="bg-white sticky top-0 z-40 shadow-[0_1px_3px_rgba(0,0,0,0.05)] lg:hidden">
+         <div className="max-w-7xl mx-auto w-full">
+             <div className="flex items-center px-4 !py-4 justify-between min-h-[64px]">
+             <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                 <button onClick={goBack} className="p-1 -ml-1 flex-shrink-0">
+                     <ArrowLeft className="w-6 h-6 text-gray-800" />
+                 </button>
+                 <div className="flex-1 flex flex-col justify-center overflow-hidden">
+                     <div className="text-[17px] font-extrabold text-gray-600 leading-tight mb-2 truncate">
+                         {vendor?.name || 'Restaurant'}
+                     </div>
+                     
+                     {/* Address Selection in Header */}
+                     <div onClick={() => {
+                       console.log('Address dropdown clicked');
+                       setShowProfilePanel(true);
+                       setProfilePanelContent('address');
+                     }} className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer leading-none group lg:hidden">
+                         <span className="text-sm text-gray-600 truncate max-w-[280px]">
+                            <span className={`font-medium ${!isServiceable ? 'text-red-500' : 'text-gray-900'}`}>
+                                {!isServiceable ? 'Not Serviceable' : (dynamicEta || '30-35 mins')} {!isServiceable ? '' : 'to'} {
+                                    !user 
+                                    ? 'Current Location' 
+                                    : (() => {
+                                        if (!selectedAddress) return 'Location';
+                                        if (selectedAddress.label === 'Other' || selectedAddress.type === 'Other') {
+                                            return selectedAddress.custom_label || selectedAddress.label || selectedAddress.type || 'Other';
+                                        }
+                                        return selectedAddress.label || selectedAddress.type || 'Location';
+                                    })()
+                                }
+                            </span>
+                         </span>
+                         <ChevronDown className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+                     </div>
                 </div>
             </div>
             

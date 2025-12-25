@@ -110,7 +110,7 @@ export const schemas = {
     delivery_phone: Joi.string().required(),
     coupon_code: Joi.string().uppercase(),
     tip_amount: Joi.number().min(0).default(0),
-    special_instructions: Joi.string().max(500),
+    special_instructions: Joi.string().max(500).allow(''),
     payment_method: Joi.string().valid('upi', 'card', 'wallet', 'cod').required(),
     order_source: Joi.string().valid('app', 'web', 'whatsapp').default('app')
   }),
