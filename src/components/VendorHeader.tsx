@@ -13,10 +13,12 @@ interface VendorHeaderProps {
   isLoadingEta?: boolean;
   onAddressClick?: () => void;
   onBack?: () => void;
+  isOpen?: boolean;
+  nextOpenTime?: string;
 }
 
 
-const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, location, deliveryTime, tags, cuisineType, userAddressLabel, isLoadingEta, onAddressClick, onBack }) => {
+const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, location, deliveryTime, tags, cuisineType, userAddressLabel, isLoadingEta, onAddressClick, onBack, isOpen = true, nextOpenTime }) => {
   // Construct dynamic tagline: "Cuisine · First Tag"
   const tagline = [
     cuisineType,
@@ -54,7 +56,32 @@ const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, loca
       </div>
 
       {/* Card Section (below header) */}
-      <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', margin: '16px auto', padding: 16, fontFamily: 'Poppins, sans-serif', width: '100%' }}>
+      <div className="relative" style={{ width: '100%', margin: '16px auto' }}>
+        {/* Closed/Opening Soon Banner - Positioned absolutely at top center overlapping the card edge */}
+        {!isOpen && (
+            <div 
+              style={{ 
+                position: 'absolute', 
+                top: -24, 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                zIndex: 10,
+                background: 'linear-gradient(to bottom, #4A4A4A, #2C2C2C)',
+                borderRadius: '12px',
+                padding: '6px 24px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                border: '2px solid white'
+              }}
+            >
+               <span style={{ color: 'white', fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', lineHeight: 1 }}>Currently</span>
+               <span style={{ color: 'white', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', lineHeight: 1 }}>CLOSED</span>
+            </div>
+        )}
+
+      <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 16, paddingTop: !isOpen ? 40 : 16, fontFamily: 'Poppins, sans-serif', width: '100%' }}>
         {/* Ratings & Price Row (plain text, bold, no pill) */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
           <span style={{ fontWeight: 700, fontSize: '1rem', color: '#1A1A1A', marginRight: 8, display: 'flex', alignItems: 'center' }}>
@@ -114,6 +141,7 @@ const VendorHeader: React.FC<VendorHeaderProps> = ({ name, rating, reviews, loca
           <span style={{ marginRight: 6 }}>🛵</span>
           Free delivery on orders above ₹99
         </div>
+      </div>
       </div>
     </>
   );

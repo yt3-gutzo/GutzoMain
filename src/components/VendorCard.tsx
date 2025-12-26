@@ -34,7 +34,10 @@ export function VendorCard({ vendor, onClick }: VendorCardProps) {
           src={vendor.image || ""}
           alt={vendor.name}
           className="w-full h-full object-cover"
-          style={{ borderRadius: '16px' }}
+          style={{ 
+            borderRadius: '16px',
+            filter: vendor.isOpen === false ? 'grayscale(100%)' : 'none'
+          }}
         />
       </div>
       <CardContent className="flex-1 flex flex-col pt-0 px-0 pb-0">

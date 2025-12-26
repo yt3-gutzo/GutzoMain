@@ -36,6 +36,9 @@ export interface Vendor {
   account_holder_name?: string;
   fssai_license?: string;
   gst_number?: string;
+  // Opening Status
+  isOpen?: boolean;
+  nextOpenTime?: string;
 }
 
 export interface Product {

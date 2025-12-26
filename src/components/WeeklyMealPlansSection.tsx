@@ -32,9 +32,10 @@ interface WeeklyMealPlansSectionProps {
 	onMealPlanClick?: (plan: MealPlan) => void;
 	disabled?: boolean;
     validVendorIds?: string[]; // IDs of vendors currently service-able/visible
+    isOpen?: boolean;
 }
 
-export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanClick, disabled, validVendorIds }: WeeklyMealPlansSectionProps) {
+export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanClick, disabled, validVendorIds, isOpen = true }: WeeklyMealPlansSectionProps) {
 	const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -170,6 +171,7 @@ export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanCl
 										objectFit: 'cover',
 										objectPosition: 'center',
 										borderRadius: '16px',
+                                        filter: !isOpen ? 'grayscale(100%)' : 'none',
 									}}
 								/>
 							</div>

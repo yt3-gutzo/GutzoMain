@@ -324,13 +324,16 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
             cuisineType={vendor.cuisineType}
             tags={vendor.tags || []}
             onBack={handleClose}
+            isOpen={vendor.isOpen}
+            nextOpenTime={vendor.nextOpenTime}
           />
           {/* Weekly Meal Plans section replaces Select your plans section */}
           <WeeklyMealPlansSection
             noPadding
             onMealPlanClick={plan => setSelectedMealPlan(plan)}
-            disabled={!isServiceable}
+            disabled={!isServiceable || !vendor.isOpen}
             validVendorIds={[vendor.id]}
+            isOpen={vendor.isOpen}
           />
           {/* Show next steps UI when a meal plan is selected */}
           {selectedMealPlan && (
@@ -347,7 +350,12 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
             )
           )}
           {/* Today's best picks section inside same container */}
-          <InstantPicks noPadding vendorId={vendor.id} disabled={!isServiceable} />
+          <InstantPicks 
+             noPadding 
+             vendorId={vendor.id} 
+             disabled={!isServiceable || !vendor.isOpen} 
+             isOpen={vendor.isOpen}
+          />
         </div>
       {(!showCartPanel && !showCheckoutPanel) && <CartStrip onShowCart={() => navigate('/checkout', { from: 'vendor_details' })} />}
       <CartPanel
