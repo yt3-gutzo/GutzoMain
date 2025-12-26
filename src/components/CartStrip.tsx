@@ -6,9 +6,10 @@ import { ShoppingBag } from "lucide-react";
 
 interface CartStripProps {
   onShowCart?: () => void;
+  isOpen?: boolean;
 }
 
-const CartStrip: React.FC<CartStripProps> = ({ onShowCart }) => {
+const CartStrip: React.FC<CartStripProps> = ({ onShowCart, isOpen = true }) => {
   const { totalItems, totalAmount } = useCart();
   React.useEffect(() => {
     console.log('[CartStrip] totalItems:', totalItems);
@@ -29,7 +30,7 @@ const CartStrip: React.FC<CartStripProps> = ({ onShowCart }) => {
           pointer-events: none;
         }
         .gutzo-cart-strip-inner {
-          background: #1BA672;
+          background: ${!isOpen ? '#4A4A4A' : '#1BA672'};
           color: #fff;
           padding: 14px 24px;
           display: flex;
@@ -61,10 +62,18 @@ const CartStrip: React.FC<CartStripProps> = ({ onShowCart }) => {
               color: '#fff',
               gap: 4,
             }}
-            onClick={onShowCart}
+            onClick={isOpen ? onShowCart : undefined}
           >
-            View Cart
-            <span style={{ fontSize: '18px', fontWeight: 'bold' }}>&gt;</span>
+            {isOpen ? (
+                <>
+                View Cart
+                <span style={{ fontSize: '18px', fontWeight: 'bold' }}>&gt;</span>
+                </>
+            ) : (
+                <span style={{ fontSize: '15px', fontWeight: 600, textTransform: 'none' }}>
+                    Closed
+                </span>
+            )}
           </div>
         </div>
       </div>

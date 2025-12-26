@@ -10,13 +10,14 @@ interface VendorCartStripProps {
   onViewCart: () => void;
   isDrawerOpen?: boolean;
   isCartOpen?: boolean;
+  isOpen?: boolean;
 }
 
 import { X } from "lucide-react";
 import { useRouter } from "./Router";
 import ClearCartModal from "./ClearCartModal";
 
-export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart, isDrawerOpen = false, isCartOpen = false }: VendorCartStripProps) {
+export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart, isDrawerOpen = false, isCartOpen = false, isOpen = true }: VendorCartStripProps) {
   const { navigate } = useRouter();
   const { getVendorItems, clearCart } = useCart();
   const vendorItems = getVendorItems(vendorId);
@@ -77,16 +78,25 @@ export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart,
         <div className="flex items-center gap-2 flex-shrink-0">
             {/* Green Checkout Button */}
             <button
-               onClick={onViewCart}
-               className="bg-[#1BA672] hover:bg-[#14885E] text-white rounded-lg px-6 py-3 flex flex-col items-center justify-center min-w-[150px] transition-colors relative overflow-hidden group active:scale-95 duration-200 flex-shrink-0"
-               style={{ backgroundColor: '#1BA672' }}
+               onClick={isOpen ? onViewCart : undefined}
+               className={`rounded-lg px-6 py-3 flex flex-col items-center justify-center min-w-[150px] transition-colors relative overflow-hidden group active:scale-95 duration-200 flex-shrink-0 ${!isOpen ? 'bg-[#4A4A4A] cursor-not-allowed' : 'bg-[#1BA672] hover:bg-[#14885E]'}`}
+               style={{ backgroundColor: !isOpen ? '#4A4A4A' : '#1BA672' }}
+               disabled={!isOpen}
             >
-               <div className="text-lg font-normal opacity-95 leading-tight mb-0.5">
-                 {itemCount} item{itemCount !== 1 ? 's' : ''} | ₹{totalAmount}
-               </div>
-               <div className="text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90">
-                 Checkout
-               </div>
+               {isOpen ? (
+                   <>
+                   <div className="text-lg font-normal opacity-95 leading-tight mb-0.5 text-white">
+                     {itemCount} item{itemCount !== 1 ? 's' : ''} | ₹{totalAmount}
+                   </div>
+                   <div className="text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90 text-white">
+                     Checkout
+                   </div>
+                   </>
+               ) : (
+                    <div className="text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90 text-white">
+                        Closed
+                    </div>
+               )}
             </button>
 
             {/* Remove / Close Button */}

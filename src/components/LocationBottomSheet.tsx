@@ -298,7 +298,7 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
                                     <span>Edit</span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 hover:bg-red-50 text-red-600 focus:bg-red-50 focus:text-red-600 text-sm font-medium outline-none"
+                                    className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 hover:bg-gray-50 text-gray-700 text-sm font-medium outline-none"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setDeleteConfirmationId(addr.id);

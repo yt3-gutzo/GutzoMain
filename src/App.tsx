@@ -544,12 +544,15 @@ function AppContent() {
       />
       {/* Show VendorCartStrip (Detailed) only when cart, profile, and login panels are not open, and no meal plan is selected */}
       {!showCartPanel && !showProfilePanel && !showLoginPanel && !showCheckoutPanel && !selectedMealPlan && cartItems.length > 0 && (
-         <VendorCartStrip 
+          <VendorCartStrip 
             vendorId={cartItems[0].vendorId || cartItems[0].vendor?.id || 'v1'} // Fallback safely
             vendorName={cartItems[0].vendor?.name || 'Vendor'}
             vendorImage={cartItems[0].vendor?.image}
             onViewCart={handleShowCart} 
-         />
+            isOpen={
+                (vendors.find(v => v.id === (cartItems[0].vendorId || cartItems[0].vendor?.id))?.isOpen ?? true)
+            }
+          />
       )}
       <InstantOrderPanel
         isOpen={showCheckoutPanel}

@@ -357,7 +357,18 @@ const VendorDetailsPage: React.FC<VendorDetailsPageProps> = ({ vendorId, vendors
              isOpen={vendor.isOpen}
           />
         </div>
-      {(!showCartPanel && !showCheckoutPanel) && <CartStrip onShowCart={() => navigate('/checkout', { from: 'vendor_details' })} />}
+      {(!showCartPanel && !showCheckoutPanel) && (
+        <CartStrip 
+            onShowCart={() => navigate('/checkout', { from: 'vendor_details' })} 
+            isOpen={
+              cartItems.length > 0
+                ? (cartItems[0].vendorId === vendor.id 
+                    ? vendor.isOpen !== false 
+                    : (vendors.find(v => v.id === cartItems[0].vendorId)?.isOpen ?? true))
+                : true
+            }
+        />
+      )}
       <CartPanel
         isOpen={showCartPanel}
         onClose={() => setShowCartPanel(false)}
