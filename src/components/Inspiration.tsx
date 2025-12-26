@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "../utils/supabase/client";
+import React from "react";
+import { useCategories } from "../hooks/useCategories";
 
 interface InspirationOption {
   label: string;
@@ -12,44 +12,14 @@ interface InspirationProps {
 }
 
 export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading: parentLoading = false }) => {
-  const [inspirationOptions, setInspirationOptions] = useState<InspirationOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorState, setErrorState] = useState<any>(null);
+  const { categories, loading: categoriesLoading } = useCategories();
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('categories')
-          .select('name, image_url')
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true });
+  const inspirationOptions: InspirationOption[] = categories.map((cat) => ({
+    label: cat.name,
+    img: cat.image_url || null, // Ensure compatibility with strict null check if needed, though types seem to allow string | undefined
+  }));
 
-        if (error) {
-          console.error('Error fetching categories:', error);
-          setErrorState(error);
-          return;
-        }
-
-        if (data) {
-          console.log('Fetched inspiration categories:', data);
-          const mappedData = data.map((item) => ({
-            label: item.name,
-            img: item.image_url,
-          }));
-          setInspirationOptions(mappedData);
-          setErrorState(null); // Clear error if success
-        }
-      } catch (err) {
-        console.error('Unexpected error fetching categories:', err);
-        setErrorState(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCategories();
-  }, []);
+  const loading = categoriesLoading;
 
   const isLoading = parentLoading || loading;
   return (
@@ -63,20 +33,12 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading
         </h2>
         <div className="mt-2" />
         {/* Error/Empty State Debugging */}
-        {!isLoading && (
-          <>
-             {errorState && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-lg text-sm mb-4">
-                <strong>Supabase Error:</strong> {JSON.stringify(errorState)}
-              </div>
-             )}
-             {!errorState && inspirationOptions.length === 0 && (
-              <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm mb-4">
-                <strong>Data is empty.</strong> The query returned 0 rows.
-              </div>
-             )}
-          </>
+        {!isLoading && inspirationOptions.length === 0 && (
+          <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm mb-4">
+            <strong>Data is empty.</strong> The query returned 0 rows.
+          </div>
         )}
+
         {/* Mobile: double-lined horizontal scroll (both rows scroll together) */}
         {isLoading ? (
            <div className="sm:hidden overflow-x-auto scrollbar-hide pb-2 -mr-4" style={{ width: 'calc(100% + 16px)' }}>
