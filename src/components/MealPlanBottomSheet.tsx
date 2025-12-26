@@ -547,15 +547,21 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                               {(() => {
                                  const startStr = isTomorrow(startDate) ? 'Starts tomorrow' : `Starts ${format(startDate, 'EEE, d MMM')}`;
                                  const days = isTrial ? "3 days" : "Mon-Sat"; 
-                                 const meals = selectedMeals.length === 4 ? "All meals" : (selectedMeals.length === 1 ? selectedMeals[0] : `${selectedMeals.length} meals`);
+
                                  
                                  return (
                                     <div className="flex flex-col items-start gap-0.5">
                                        <p className="text-sm font-semibold text-gray-900 leading-tight">
                                           {startStr}
                                        </p>
-                                       <p className="text-xs text-gray-500 font-medium">
-                                          {days} • {meals}
+                                       <p className="text-xs text-gray-500 font-medium leading-normal">
+                                          {days} • <span className="text-gray-700">{(() => {
+                                             const MEAL_ORDER = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
+                                             const sortedMeals = [...selectedMeals].sort((a, b) => MEAL_ORDER.indexOf(a) - MEAL_ORDER.indexOf(b));
+                                             if (sortedMeals.length === 4) return "All meals";
+                                             if (sortedMeals.length === 0) return "Select meals";
+                                             return sortedMeals.join(', ');
+                                          })()}</span>
                                        </p>
                                     </div>
                                  );
