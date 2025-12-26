@@ -19,6 +19,8 @@ import {
   AddressType, 
   AddressTypeOption 
 } from "../../types/address";
+import { LocationSearchInput } from "../common/LocationSearchInput";
+
 import {
   reverseGeocode,
   extractAreaFromDetailedAddress,
@@ -51,6 +53,7 @@ interface AddressModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave?: (address: any) => Promise<void>;
+  editingAddress?: UserAddress | null;
 }
 
 // Helper functions moved outside component scope
@@ -110,6 +113,7 @@ interface AddressFormProps {
     address: string,
   ) => void;
   existingAddresses?: any[]; // Allow legacy or new types
+  title?: string;
 }
 
 const AddressForm = ({
@@ -129,6 +133,7 @@ const AddressForm = ({
   modalContentRef,
   onLocationSelect,
   existingAddresses = [],
+  title = "Add Delivery Address",
 }: AddressFormProps) => {
   // Defensive fallback: ensure availableTypes is always an array
   const safeAvailableTypes = Array.isArray(availableTypes) ? availableTypes : ['home', 'work', 'other'];
@@ -156,32 +161,14 @@ const AddressForm = ({
     })
     .filter((label: string) => label && label !== 'home' && label !== 'work');
 
-  // Auto-scroll when "other" type is selected
-  // Improved auto-scroll: trigger after custom label field is rendered
-  useEffect(() => {
-    if (addressData.type === 'other') {
-      // Use a slightly longer timeout to ensure modal animation completes and DOM is ready
-      const timer = setTimeout(() => {
-        if (modalContentRef?.current && customTagRef?.current) {
-          console.log("📜 Scrolling to custom tag input...");
-          modalContentRef.current.scrollTo({
-            top: modalContentRef.current.scrollHeight,
-            behavior: "smooth",
-          });
-          // Focus the custom label input
-          customTagRef.current.focus();
-        }
-      }, 500); // Increased to 500ms to handle transition
-      return () => clearTimeout(timer);
-    }
-  }, [addressData.type, modalContentRef, customTagRef]);
+
 
   return (
     <div className="flex flex-col h-full">
       {/* Mobile Header */}
       <div className="sm:hidden flex items-center justify-between p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
         <h2 className="font-semibold text-gray-900">
-          Add Delivery Address
+          {title}
         </h2>
         <button
           onClick={onClose}
@@ -198,7 +185,7 @@ const AddressForm = ({
             <MapPin className="h-4 w-4 text-gutzo-primary" />
           </div>
           <h3 className="font-semibold text-gray-900">
-            Add Delivery Address
+            {title}
           </h3>
         </div>
         <button
@@ -213,6 +200,18 @@ const AddressForm = ({
         className="flex-1 overflow-y-auto p-4 sm:p-6 mobile-product-scroll scrollbar-hide min-h-0"
         ref={modalContentRef}
       >
+        {/* Search Input inline matching design */}
+        <div className="mb-4">
+           <LocationSearchInput 
+              onLocationSelect={(locationData) =>
+                onLocationSelect(
+                  { lat: locationData.lat, lng: locationData.lng },
+                  locationData.address,
+                )
+              }
+           />
+        </div>
+
         {/* Google Maps Location Picker */}
         <GoogleMapPicker
           onLocationSelect={(locationData) =>
@@ -366,6 +365,19 @@ const AddressForm = ({
                         
                         // Clear validation errors
                         setValidationErrors(prev => ({ ...prev, label: '' }));
+
+                        // Scroll to custom tag field only on user interaction
+                        if (type === 'other') {
+                          setTimeout(() => {
+                            if (modalContentRef?.current && customTagRef?.current) {
+                              modalContentRef.current.scrollTo({
+                                top: modalContentRef.current.scrollHeight,
+                                behavior: "smooth",
+                              });
+                              customTagRef.current.focus();
+                            }
+                          }, 100);
+                        }
                       }}
                     >
                       <div className={`p-2 rounded-lg ${
@@ -489,6 +501,7 @@ export function AddressModal({
   isOpen,
   onClose,
   onSave,
+  editingAddress,
 }: AddressModalProps) {
   const { location } = useLocation();
   const { isAuthenticated } = useAuth();
@@ -496,30 +509,68 @@ export function AddressModal({
     availableTypes, 
     loading: addressesLoading, 
     createAddress, 
+    updateAddress,
     error: addressError,
     addresses // Expose existing addresses
   } = useAddresses();
   
+  // Add missing step state
+  const [step, setStep] = useState<"search" | "details">("search");
+  
   // Legacy state for backward compatibility
-  const [newAddress, setNewAddress] = useState<Address>({
-    complete_address: "",
-    floor: "",
-    landmark: "",
-    area: "",
-    city: "", // Include city in reset
-    type: "Home",
-    phone: "",
-    house_number: "",
-    apartment_road: "",
+  const [newAddress, setNewAddress] = useState<Address>(() => {
+    if (editingAddress) {
+       return {
+            id: editingAddress.id,
+            complete_address: editingAddress.full_address,
+            area: editingAddress.area || extractAreaFromAddress(editingAddress.full_address),
+            city: editingAddress.city,
+            type: editingAddress.type.charAt(0).toUpperCase() + editingAddress.type.slice(1) as any,
+            custom_tag: editingAddress.custom_label,
+            is_default: editingAddress.is_default,
+            latitude: editingAddress.latitude,
+            longitude: editingAddress.longitude,
+            house_number: editingAddress.street,
+            apartment_road: editingAddress.area,
+            landmark: editingAddress.landmark,
+       };
+    }
+    return {
+        complete_address: "",
+        floor: "",
+        landmark: "",
+        area: "",
+        city: "", 
+        type: "Home",
+        phone: "",
+        house_number: "",
+        apartment_road: "",
+    };
   });
-  const [addressData, setAddressData] = useState<AddressFormData>({
-    type: 'home',
-    street: '',
-    area: '',
-    landmark: '',
-    fullAddress: '',
-    isDefault: false,
-    zipcode: ''
+  const [addressData, setAddressData] = useState<AddressFormData>(() => {
+    if (editingAddress) {
+        return {
+            type: editingAddress.type,
+            label: editingAddress.custom_label,
+            street: editingAddress.street,
+            area: editingAddress.area,
+            landmark: editingAddress.landmark,
+            fullAddress: editingAddress.full_address,
+            latitude: editingAddress.latitude,
+            longitude: editingAddress.longitude,
+            isDefault: editingAddress.is_default,
+            zipcode: editingAddress.postal_code,
+        };
+    }
+    return {
+        type: 'home',
+        street: '',
+        area: '',
+        landmark: '',
+        fullAddress: '',
+        isDefault: false,
+        zipcode: ''
+    };
   });
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [savingAddress, setSavingAddress] = useState<boolean>(false);
@@ -670,6 +721,39 @@ export function AddressModal({
   useEffect(() => {
     const loadAvailableTypes = async () => {
       if (isOpen) {
+        if (editingAddress) {
+             setStep("details"); // Edit mode starts at details
+             // States already initialized via initializer, but let's ensure consistency if prop changes
+             setNewAddress({
+                id: editingAddress.id,
+                complete_address: editingAddress.full_address,
+                area: editingAddress.area || extractAreaFromAddress(editingAddress.full_address),
+                city: editingAddress.city,
+                type: editingAddress.type.charAt(0).toUpperCase() + editingAddress.type.slice(1) as any,
+                custom_tag: editingAddress.custom_label,
+                is_default: editingAddress.is_default,
+                latitude: editingAddress.latitude,
+                longitude: editingAddress.longitude,
+                house_number: editingAddress.street,
+                apartment_road: editingAddress.area,
+                landmark: editingAddress.landmark,
+            });
+            setAddressData({
+                type: editingAddress.type,
+                label: editingAddress.custom_label,
+                street: editingAddress.street,
+                area: editingAddress.area,
+                landmark: editingAddress.landmark,
+                fullAddress: editingAddress.full_address,
+                latitude: editingAddress.latitude,
+                longitude: editingAddress.longitude,
+                isDefault: editingAddress.is_default,
+                zipcode: editingAddress.postal_code,
+            });
+            setLoadingTypes(false);
+            return;
+        }
+
         setLoadingTypes(true);
 
         // Determine smart default type
@@ -709,7 +793,7 @@ export function AddressModal({
     };
 
     loadAvailableTypes();
-  }, [isOpen, addresses]); // Added addresses dependency
+  }, [isOpen, addresses, editingAddress]); // Added dependencies
 
   // Validation is now handled directly in handleSaveAddress function
 
@@ -795,13 +879,20 @@ export function AddressModal({
 
       console.log('🏠 Saving address with payload:', addressPayload);
 
-      // Use the address hook to create address
-      const result = await createAddress(addressPayload as any);
+      // Call update or create based on editing mode
+      let result;
+      if (editingAddress?.id) {
+         result = await updateAddress(editingAddress.id, addressPayload as any);
+      } else {
+         result = await createAddress(addressPayload as any);
+      }
       
       if (result.success) {
         console.log('✅ Address saved successfully');
-        // Only trigger onSave to update UI (fetch latest addresses), not to create another address
-        if (onSave) await onSave(result.data || addressPayload);
+        // Trigger onSave. meaningful data if create, else just payload
+        // updateAddress returns { success: true }, createAddress returns { success: true, data: ... }
+        const resultData = (result as any).data || addressPayload;
+        if (onSave) await onSave(resultData);
         // Reset and close
         handleClose();
       } else {
@@ -817,13 +908,13 @@ export function AddressModal({
     } finally {
       setSavingAddress(false);
     }
-  }, [addressData, createAddress, onSave, handleClose]);
+  }, [addressData, createAddress, updateAddress, editingAddress, onSave, handleClose]);
 
   if (!isOpen) return null;
 
   // Portal-based modal content
   const modalContent = (
-    <div className="fixed inset-0" style={{ zIndex: 10000 }}>
+    <div className="fixed inset-0" style={{ zIndex: 99999 }}>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/40 transition-opacity duration-300 ease-out"
@@ -848,7 +939,7 @@ export function AddressModal({
               max-width: none !important;
               border-radius: 1.5rem 1.5rem 0 0 !important;
               transform: none !important;
-              z-index: 10001 !important;
+              z-index: 100000 !important;
               display: flex !important;
               flex-direction: column !important;
               pointer-events: auto !important;
@@ -858,7 +949,7 @@ export function AddressModal({
         
         <div 
           className="address-modal-mobile relative bg-white w-full sm:w-[480px] sm:max-w-[90%] max-h-[90vh] sm:rounded-2xl rounded-t-3xl shadow-xl overflow-hidden transform transition-all duration-300 flex flex-col pointer-events-auto"
-          style={{ zIndex: 10001 }}
+          style={{ zIndex: 100000 }}
         >
           <AddressForm
             newAddress={newAddress}
@@ -877,6 +968,7 @@ export function AddressModal({
             onLocationSelect={handleLocationSelect}
             // Add existing addresses for uniqueness check
             existingAddresses={addresses as any[]} // Convert to any to bypass strict checks
+            title={editingAddress ? 'Edit Delivery Address' : 'Add Delivery Address'}
           />
         </div>
       </div>
