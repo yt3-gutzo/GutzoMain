@@ -23,6 +23,7 @@ interface LocationContextType {
   isInCoimbatore: boolean;
   isDefaultAddress: boolean;
   locationLabel: string | null;
+  overrideLocation: (location: LocationData) => Promise<void>;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
@@ -240,6 +241,20 @@ export function LocationProvider({ children }: LocationProviderProps) {
     }
   }, [isAuthenticated]);
 
+  // Override location manually (e.g. from search)
+  const overrideLocation = async (locationData: LocationData) => {
+    setIsDefaultAddress(false);
+    setLocationLabel(null); // Clear label as it's a manual override
+    setLocation(locationData);
+    
+    // Also update display immediately
+    const display = LocationService.getLocationDisplay(locationData);
+    setLocationDisplay(display);
+    
+    // Cache it? Ideally yes, but depends on LocationService policy
+    // LocationService.cacheLocation(locationData); // If we expose this
+  };
+
   return (
     <LocationContext.Provider
       value={{
@@ -250,7 +265,8 @@ export function LocationProvider({ children }: LocationProviderProps) {
         refreshLocation,
         isInCoimbatore,
         isDefaultAddress,
-        locationLabel
+        locationLabel,
+        overrideLocation
       }}
     >
       {children}

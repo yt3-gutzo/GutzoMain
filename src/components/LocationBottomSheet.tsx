@@ -109,6 +109,73 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
 
 
 
+  /* 
+     State to track if user is searching.
+     We start searching as soon as they type.
+  */
+  const [searchText, setSearchText] = useState("");
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const isSearching = searchText.trim().length > 0;
+
+  // Use a ref for PlacesService to avoid re-creating it
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+
+  const handlePredictionSelect = (prediction: google.maps.places.AutocompletePrediction) => {
+     if (!window.google?.maps?.places) return;
+
+     if (!placesServiceRef.current) {
+        // Create a dummy div for the service (as required by the API)
+        const dummyDiv = document.createElement('div');
+        placesServiceRef.current = new google.maps.places.PlacesService(dummyDiv);
+     }
+
+     const request = {
+        placeId: prediction.place_id,
+        fields: ['name', 'geometry', 'formatted_address', 'address_components']
+     };
+
+     placesServiceRef.current.getDetails(request, async (place, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && place && place.geometry && place.geometry.location) {
+             const lat = place.geometry.location.lat();
+             const lng = place.geometry.location.lng();
+             const address = place.formatted_address || place.name || '';
+             
+             // Construct LocationData object
+             const selectedLocation = {
+                city: '', // Helper function or leave blank
+                state: '',
+                country: 'India',
+                coordinates: {
+                latitude: lat,
+                longitude: lng
+                },
+                timestamp: Date.now()
+             };
+
+            console.log("📍 Location details fetched:", selectedLocation);
+
+            // Override location in context
+            if (context?.overrideLocation) {
+                await context.overrideLocation(selectedLocation);
+            } else {
+                console.error("overrideLocation missing in context");
+            }
+
+            onClose();
+        } else {
+            console.error("Failed to fetch place details:", status);
+        }
+     });
+  };
+
+  const handleSearchSelect = (loc: any) => {
+     // Legacy handler, unused now if we use predictions, 
+     // but kept null op to satisfy interface if needed
+  }; 
+
+  // Safe access to context (though hook ensures it exists)
+  const context = useLocation();
+
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
@@ -162,16 +229,14 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
           </div>
 
           <LocationSearchInput
-            onLocationSelect={(loc) => {
-              console.log("Selected from search:", loc);
-              // TODO: Handle selection (update context?)
-              // For now we just log it as per previous plan
-            }}
+            onSearchChange={setSearchText}
+            onLocationSelect={() => {}} // Disabled as we handle it via predictions
+            onPredictionsChange={setPredictions}
           />
         </SheetHeader>
 
         <div className="px-6 pb-6 pt-2 space-y-4 flex-1 overflow-y-auto scrollbar-hide">
-          {/* Use Current Location Row */}
+          {/* Use Current Location Row - Always Visible */}
           <button
             onClick={handleDetectLocation}
             disabled={locationLoading}
@@ -197,8 +262,37 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
             <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors flex-shrink-0 ml-4" />
           </button>
 
-          {/* Manage Addresses (for authenticated users) */}
-          {isAuthenticated && (
+          {/* Search Results List (Visible when searching) */}
+          {isSearching && predictions.length > 0 && (
+            <div className="space-y-3">
+               <h3 className="text-sm font-medium text-gray-500 mb-2 px-1">
+                  Search Results
+               </h3>
+               {predictions.map((prediction) => (
+                  <button
+                    key={prediction.place_id}
+                    onClick={() => handlePredictionSelect(prediction)}
+                    className="w-full flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors text-left border-b border-gray-50 last:border-0"
+                  >
+                     <MapPin className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                     <div>
+                        <h4 className="font-medium text-gray-900 text-sm">
+                           {prediction.structured_formatting?.main_text || prediction.description}
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                           {prediction.structured_formatting?.secondary_text}
+                        </p>
+                     </div>
+                  </button>
+               ))}
+               <div className="flex justify-end p-2">
+                   <span className="text-[10px] text-gray-400">powered by Google</span>
+               </div>
+            </div>
+          )}
+
+          {/* Manage Addresses (Hide when searching) */}
+          {!isSearching && isAuthenticated && (
             <>
               <Button
                 onClick={handleAddAddress}
@@ -386,8 +480,12 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
                 </AlertDialogContent>
               </AlertDialog>
             </>
-          )}
+          )} 
 
+          {/* Search Results would go here if we were rendering a custom list, 
+              but Google Maps Autocomplete renders its own dropdown attached to the input.
+              We just hide the other content to reduce clutter. 
+          */}
         </div>
       </SheetContent>
 
