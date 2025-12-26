@@ -28,6 +28,7 @@ import { getGoogleMapsApiKey } from "../utils/googleMapsConfig";
 import { AddressApi } from "../utils/addressApi";
 import { UserAddress } from "../types/address";
 import { LocationSearchInput } from "./common/LocationSearchInput";
+import { LocationService } from "../utils/locationService";
 
 import { useAddresses } from "../hooks/useAddresses";
 
@@ -121,6 +122,18 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
   useEffect(() => {
     setSearchText("");
     setPredictions([]);
+  }, [isOpen]);
+
+  const [gpsLocationName, setGpsLocationName] = useState("Using GPS");
+
+  useEffect(() => {
+    if (isOpen) {
+        // We can safely access LocationService here as it is imported
+        const cached = LocationService.getCachedLocation();
+        if (cached) {
+             setGpsLocationName(LocationService.getLocationDisplay(cached));
+        }
+    }
   }, [isOpen]);
 
   // Use a ref for PlacesService to avoid re-creating it
@@ -280,7 +293,7 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
               <div className="min-w-0">
                 <h4 className="font-semibold text-gutzo-primary">Use current location</h4>
                 <p className="text-sm text-gray-500 truncate mt-0.5">
-                   Using GPS
+                   {gpsLocationName || "Using GPS"}
                 </p>
               </div>
             </div>

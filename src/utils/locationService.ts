@@ -138,7 +138,7 @@ export class LocationService {
             const locationData = await this.reverseGeocode(latitude, longitude);
 
             // Cache the location
-            //this.cacheLocation(locationData);
+            this.cacheLocation(locationData);
 
             resolve(locationData);
           } catch (error) {

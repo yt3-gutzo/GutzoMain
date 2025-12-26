@@ -20,7 +20,7 @@ interface LocationContextType {
   locationDisplay: string;
   isLoading: boolean;
   error: string | null;
-  refreshLocation: () => Promise<void>;
+  refreshLocation: (forceOverride?: boolean) => Promise<void>;
   isInCoimbatore: boolean;
   isDefaultAddress: boolean;
   locationLabel: string | null;
@@ -41,6 +41,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
   
   const [isDefaultAddress, setIsDefaultAddress] = useState(false);
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
+  const [isManualOverride, setIsManualOverride] = useState(false);
   
   // Get auth context to check for user's default address
   const { user, isAuthenticated } = useAuth();
@@ -80,8 +81,9 @@ export function LocationProvider({ children }: LocationProviderProps) {
     }
   };
 
-  const refreshLocation = async () => {
+  const refreshLocation = async (forceOverride = false) => {
     // Clear cache and get fresh location
+    setIsManualOverride(forceOverride);
     setIsDefaultAddress(false); // Reset default flag on manual refresh
     LocationService.clearCache();
     await loadLocation();
@@ -94,8 +96,8 @@ export function LocationProvider({ children }: LocationProviderProps) {
       let display = location ? LocationService.getLocationDisplay(location) : 'Location Unknown';
       let isDefaultAddressFound = false;
 
-      // If user is authenticated, try to get default address
-      if (isAuthenticated && user?.phone) {
+      // If user is authenticated, try to get default address - ONLY if not in manual override mode
+      if (!isManualOverride && isAuthenticated && user?.phone) {
         try {
           const result = await AddressApi.getDefaultAddress(user.phone);
           if (result.success && result.data) {
@@ -112,7 +114,6 @@ export function LocationProvider({ children }: LocationProviderProps) {
                 // Fallback to type if label is missing
                 label = result.data.type ? result.data.type.charAt(0).toUpperCase() + result.data.type.slice(1) : null;
             }
-            setLocationLabel(label);
             setLocationLabel(label);
             
             isDefaultAddressFound = true;
@@ -137,6 +138,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
                        city: result.data.city,
                        state: result.data.state,
                        country: 'India', // Defaulting as assumed
+                       formatted_address: display, // Ensure display syncs
                        coordinates: {
                            latitude: newLat,
                            longitude: newLng
@@ -154,7 +156,10 @@ export function LocationProvider({ children }: LocationProviderProps) {
           setLocationLabel(null);
         }
       } else {
-        setLocationLabel(null);
+        // Keeping label null if override or not auth (unless specific logic adds it)
+         // Note: overrideLocation clears label manually.
+         // If we are just refreshing GPS, label should be null.
+         if(isManualOverride) setLocationLabel(null);
       }
 
       setLocationDisplay(display);
@@ -162,7 +167,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
     };
 
     updateDisplay();
-  }, [location, isAuthenticated, user?.phone]);
+  }, [location, isAuthenticated, user?.phone, isManualOverride]);
 
   // Load location on mount
   useEffect(() => {
@@ -244,6 +249,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
 
   // Override location manually (e.g. from search)
   const overrideLocation = async (locationData: LocationData) => {
+    setIsManualOverride(true);
     setIsDefaultAddress(false);
     setLocationLabel(null); // Clear label as it's a manual override
     setLocation(locationData);
