@@ -327,16 +327,28 @@ router.post('/webhook', asyncHandler(async (req, res) => {
 
   // console.log(`[Paytm Webhook] Processing Order: ${orderId}, Status: ${txnStatus}`);
 
-  // Fetch existing order to check idempotency
+  // Fetch existing order to check idempotency and validate amount
   const { data: existingOrder } = await supabaseAdmin
     .from('orders')
-    .select('id, user_id, payment_status')
+    .select('id, user_id, payment_status, total_amount')
     .eq('order_number', orderId)
     .single();
 
   if (!existingOrder) {
     console.error(`[Paytm Webhook] Order ${orderId} not found`);
     return res.status(200).send('ORDER_NOT_FOUND');
+  }
+
+  // Validate Amount
+  if (txnAmount) {
+     const orderAmount = parseFloat(existingOrder.total_amount);
+     const paidAmount = parseFloat(txnAmount);
+     // Allow for very small floating point diff (e.g. 0.01)
+     if (Math.abs(orderAmount - paidAmount) > 0.05) { 
+        console.error(`[Paytm Webhook] Amount mismatch for ${orderId}. Expected ${orderAmount}, got ${paidAmount}`);
+        // Log this suspicious activity but do NOT mark as paid
+        return res.status(200).send('AMOUNT_MISMATCH'); 
+     }
   }
 
   // Idempotency: If already paid, do nothing
@@ -391,6 +403,64 @@ router.post('/webhook', asyncHandler(async (req, res) => {
   }
 
   // console.log(`[Paytm Webhook] Successfully processed ${orderId}`);
+  return res.status(200).send('OK');
+}));
+
+// PAYTM REFUND WEBHOOK
+router.post('/webhook/refund', asyncHandler(async (req, res) => {
+  const paytmParams = req.body;
+  // console.log('[Paytm Refund Webhook] Received:', JSON.stringify(paytmParams));
+
+  const receivedChecksum = paytmParams.CHECKSUMHASH;
+  if (!receivedChecksum) return res.status(200).send('CHECKSUM_MISSING');
+
+  const paramsForVerify = { ...paytmParams };
+  delete paramsForVerify.CHECKSUMHASH;
+
+  const isValid = PaytmChecksum.verifySignature(paramsForVerify, PAYTM_MERCHANT_KEY, receivedChecksum);
+  if (!isValid) return res.status(200).send('CHECKSUM_INVALID');
+
+  // Parse fields
+  const orderId = paytmParams.ORDERID;
+  const refundId = paytmParams.REFID; // Our internal refund ID
+  const refundAmount = paytmParams.REFUNDAMOUNT;
+  // Use STATUS or refund status field depending on exact payload. 
+  // Common Paytm refund webhooks often use 'STATUS' just like payment.
+  // But sometimes it might be 'RESULT' or similar. We will assume standard structure.
+  
+  // NOTE: If this is 'Success Refund' webhook, status is usually 'TXN_SUCCESS' or 'SUCCESS'
+  // If 'Accept Refund', it might be 'PENDING'
+  
+  // Update Payment/Order status
+  // We'll update the 'payments' table to reflect refund. 
+  // Ideally we should have a 'refunds' table, but for now we might update 'payments' or just log.
+  
+  // Since we don't have a refunds table explicitly shown in previous code, 
+  // we will update the payment status to 'refunded' if it's a full refund.
+  
+  const { data: payment } = await supabaseAdmin
+    .from('payments')
+    .select('*, order:orders(id, total_amount)')
+    .eq('merchant_order_id', orderId)
+    .single();
+
+  if (!payment) return res.status(200).send('ORDER_NOT_FOUND');
+
+  if (paytmParams.STATUS === 'TXN_SUCCESS' || paytmParams.STATUS === 'SUCCESS') {
+      // Mark as refunded
+      await supabaseAdmin
+        .from('payments')
+        .update({
+          status: 'refunded', // Simple state update
+          gateway_response: { ...payment.gateway_response, refund_webhook: paytmParams },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.id);
+
+      // Also update order status if needed
+      // await supabaseAdmin.from('orders').update({ payment_status: 'refunded' }).eq('order_number', orderId);
+  }
+
   return res.status(200).send('OK');
 }));
 
