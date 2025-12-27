@@ -33,9 +33,10 @@ interface WeeklyMealPlansSectionProps {
 	disabled?: boolean;
     validVendorIds?: string[]; // IDs of vendors currently service-able/visible
     isOpen?: boolean;
+    title?: string;
 }
 
-export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanClick, disabled, validVendorIds, isOpen = true }: WeeklyMealPlansSectionProps) {
+export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanClick, disabled, validVendorIds, isOpen = true, title = "Everyday Meals" }: WeeklyMealPlansSectionProps) {
 	const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -114,7 +115,7 @@ export default function WeeklyMealPlansSection({ noPadding = false, onMealPlanCl
 					className="text-left font-medium tracking-tight w-full mb-3 text-[20px] lg:text-[30px]"
 					style={{ fontFamily: 'Poppins', letterSpacing: '-0.01em', fontWeight: 500, color: '#111', marginTop: 0 }}
 				>
-					Weekly Meal Plans
+					{title}
 				</h2>
 				<div
 					className="gutzo-desktop-scroll scrollbar-hide flex flex-row gap-4 overflow-x-auto"

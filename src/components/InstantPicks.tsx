@@ -182,7 +182,7 @@ const InstantPicks: React.FC<InstantPicksProps> = ({ noPadding = false, vendorId
     <h3
       className="instant-picks-heading text-left font-medium tracking-tight w-full mb-3"
     >
-      Today's best picks (Instant)
+      Pick Your Food
     </h3>
     <div className={`instant-picks-list${noPadding ? ' no-padding' : ''}`}>
       {products.map((product, idx) => (

@@ -474,7 +474,7 @@ function AppContent() {
                   className="text-left font-semibold text-3xl md:text-4xl lg:text-5xl tracking-tight w-full font-primary text-main"
                 >
                   {selectedCategory === "All" 
-                    ? "Explore Delicious Choices Near You.." 
+                    ? "Kitchens Near You" 
                     : `${filteredVendors.length} ${selectedCategory} restaurants`
                   }
                 </h2>

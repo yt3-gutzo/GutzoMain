@@ -29,7 +29,7 @@ export const Inspiration: React.FC<InspirationProps> = ({ onOptionClick, loading
           className="text-left font-medium tracking-tight w-full mb-4 text-[20px] lg:text-[30px]"
           style={{ fontFamily: 'Poppins', letterSpacing: '-0.01em', fontWeight: 500, color: '#111' }}
         >
-          Start Your Gutzo Journey Here
+          Today's Mood
         </h2>
         <div className="mt-2" />
         {/* Error/Empty State Debugging - REMOVED for production */}
