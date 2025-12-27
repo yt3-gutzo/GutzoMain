@@ -16,7 +16,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   // Update document title based on route
   const updateDocumentTitle = useCallback((route: Route) => {
     const titles: Record<string, string> = {
-      '/': 'Gutzo - Food you’ll eat again',
+      '/': 'Gutzo - Feels lighter',
       '/T&C': 'Terms & Conditions | Gutzo',
       '/refund_policy': 'Refund Policy | Gutzo',
       '/privacy_policy': 'Privacy Policy | Gutzo',
