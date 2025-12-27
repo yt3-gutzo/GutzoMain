@@ -118,53 +118,92 @@ export class LocationService {
     enableHighAccuracy?: boolean;
     maximumAge?: number;
   } = {}): Promise<LocationData> {
-    return new Promise((resolve, reject) => {
-      if (!this.isGeolocationAvailable()) {
-        reject(new Error("Geolocation is not supported by this browser"));
-        return;
+    try {
+      // Check if we are on a native platform using Capacitor
+      const { Capacitor } = await import("@capacitor/core");
+      const { Geolocation } = await import("@capacitor/geolocation");
+
+      if (Capacitor.isNativePlatform()) {
+        try {
+          // Request permissions first
+          const permissionStatus = await Geolocation.checkPermissions();
+          if (permissionStatus.location !== "granted") {
+            await Geolocation.requestPermissions();
+          }
+
+          const position = await Geolocation.getCurrentPosition({
+            enableHighAccuracy: options.enableHighAccuracy ?? true,
+            timeout: options.timeout ?? 10000,
+            maximumAge: options.maximumAge ?? 300000,
+          });
+
+          const { latitude, longitude } = position.coords;
+          const locationData = await this.reverseGeocode(latitude, longitude);
+
+          // Cache the location
+          this.cacheLocation(locationData);
+          return locationData;
+        } catch (nativeError) {
+          console.error("Native location error:", nativeError);
+          throw new Error("Failed to get location from device");
+        }
       }
 
-      const defaultOptions = {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000, // 5 minutes
-        ...options,
-      };
+      // Fallback for Web
+      return new Promise((resolve, reject) => {
+        if (!this.isGeolocationAvailable()) {
+          reject(new Error("Geolocation is not supported by this browser"));
+          return;
+        }
 
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            const locationData = await this.reverseGeocode(latitude, longitude);
+        const defaultOptions = {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000, // 5 minutes
+          ...options,
+        };
 
-            // Cache the location
-            this.cacheLocation(locationData);
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const { latitude, longitude } = position.coords;
+              const locationData = await this.reverseGeocode(
+                latitude,
+                longitude,
+              );
 
-            resolve(locationData);
-          } catch (error) {
-            reject(error);
-          }
-        },
-        (error) => {
-          let errorMessage = "Unable to get your location";
+              // Cache the location
+              this.cacheLocation(locationData);
 
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = "Location access denied by user";
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = "Location information is unavailable";
-              break;
-            case error.TIMEOUT:
-              errorMessage = "Location request timed out";
-              break;
-          }
+              resolve(locationData);
+            } catch (error) {
+              reject(error);
+            }
+          },
+          (error) => {
+            let errorMessage = "Unable to get your location";
 
-          reject(new Error(errorMessage));
-        },
-        defaultOptions,
-      );
-    });
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                errorMessage = "Location access denied by user";
+                break;
+              case error.POSITION_UNAVAILABLE:
+                errorMessage = "Location information is unavailable";
+                break;
+              case error.TIMEOUT:
+                errorMessage = "Location request timed out";
+                break;
+            }
+
+            reject(new Error(errorMessage));
+          },
+          defaultOptions,
+        );
+      });
+    } catch (e) {
+      console.error("Location Service Error:", e);
+      throw e;
+    }
   }
 
   // Get location (cached or fresh)
