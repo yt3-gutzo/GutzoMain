@@ -185,6 +185,7 @@ function AppContent() {
   // Custom vendor data for Explore Delicious Choices
   // Use vendors fetched from API
   let filteredVendors = vendors;
+  const isNoService = !loading && filteredVendors.length === 0;
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
@@ -445,11 +446,13 @@ function AppContent() {
         onSearchChange={setSearchQuery}
         onShowLocationSheet={handleShowLocationSheet}
       />
-      <Inspiration onOptionClick={setSelectedCategory} loading={loading} />
-      <WeeklyMealPlansSection 
-        onMealPlanClick={plan => setSelectedMealPlan(plan)} 
-        validVendorIds={filteredVendors.map(v => v.id)}
-      />
+      {!isNoService && <Inspiration onOptionClick={setSelectedCategory} loading={loading} />}
+      {!isNoService && (
+        <WeeklyMealPlansSection 
+          onMealPlanClick={plan => setSelectedMealPlan(plan)} 
+          validVendorIds={filteredVendors.map(v => v.id)}
+        />
+      )}
       {/* Show next steps UI when a meal plan is selected */}
       {selectedMealPlan && (
         <>
@@ -466,18 +469,20 @@ function AppContent() {
         ref={listingsRef}
       >
           <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <h2
-                className="text-left font-semibold text-3xl md:text-4xl lg:text-5xl tracking-tight w-full font-primary text-main"
-              >
-                {selectedCategory === "All" 
-                  ? "Explore Delicious Choices Near You.." 
-                  : `${filteredVendors.length} ${selectedCategory} restaurants`
-                }
-              </h2>
+          {!isNoService && (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <h2
+                  className="text-left font-semibold text-3xl md:text-4xl lg:text-5xl tracking-tight w-full font-primary text-main"
+                >
+                  {selectedCategory === "All" 
+                    ? "Explore Delicious Choices Near You.." 
+                    : `${filteredVendors.length} ${selectedCategory} restaurants`
+                  }
+                </h2>
+              </div>
             </div>
-          </div>
+          )}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-full mx-auto w-full">
               {loading ? (
                 // Show 4 skeletons while loading
