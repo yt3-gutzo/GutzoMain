@@ -319,7 +319,7 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
                 {locationLabel && !isLoading && !error ? (
                   <>
                     <div className="flex items-center gap-1">
-                      <span className="text-[14px] font-bold text-gray-900 leading-tight">
+                      <span className="text-[14px] font-normal text-gray-900 leading-tight">
                         {locationLabel}
                       </span>
                       <ChevronDown className="h-3.5 w-3.5 text-gray-900 flex-shrink-0" strokeWidth={3} />
@@ -329,12 +329,28 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
                     </span>
                   </>
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="truncate text-sm text-gray-900 font-bold">
-                        {isLoading ? <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"/> : error ? "Error" : locationDisplay}
-                    </span>
-                     {!isLoading && !error && <ChevronDown className="h-3.5 w-3.5 text-gray-900 flex-shrink-0" strokeWidth={3} />}
-                  </div>
+                  (() => {
+                    const parts = locationDisplay.split(',');
+                    const hasComma = parts.length > 1;
+                    const title = hasComma ? parts[0].trim() : locationDisplay;
+                    const subtitle = hasComma ? parts.slice(1).join(',').trim() : '';
+
+                    return (
+                        <>
+                            <div className="flex items-center gap-1">
+                                <span className="text-[14px] font-normal text-gray-900 leading-tight truncate">
+                                    {isLoading ? <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"/> : error ? "Error" : title}
+                                </span>
+                                {!isLoading && !error && <ChevronDown className="h-3.5 w-3.5 text-gray-900 flex-shrink-0" strokeWidth={3} />}
+                            </div>
+                            {subtitle && !isLoading && !error && (
+                                <span className="truncate text-xs text-gray-500 font-normal leading-tight w-full block">
+                                    {subtitle}
+                                </span>
+                            )}
+                        </>
+                    );
+                  })()
                 )}
               </div>
             </button>
