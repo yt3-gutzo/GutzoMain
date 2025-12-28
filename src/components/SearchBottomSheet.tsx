@@ -77,43 +77,38 @@ export function SearchBottomSheet({ isOpen, onClose, searchQuery, onSearchChange
           }
         `}</style>
         {/* Always visible close button, top right, above all content */}
-        <button
-          onClick={onClose}
-          className="absolute z-50 top-4 right-4 rounded-full p-2 bg-white/80 hover:bg-gray-100 shadow transition-colors"
-          style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.08)' }}
-          aria-label="Close search"
-        >
-          <X className="h-6 w-6 text-gray-500" />
-        </button>
-        <SheetHeader className="p-6 pt-12 pb-4 border-b border-gray-100">
-          <SheetTitle>Search</SheetTitle>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200">
-              <Search className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="Search for restaurant, salads or meals"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="flex-1 outline-none bg-transparent text-gray-900 placeholder:text-gray-400"
-              />
-              {searchQuery && (
-                <button
-                  onClick={handleClearSearch}
-                  className="p-1 hover:bg-gray-200 rounded-full transition-colors"
-                >
-                  <X className="h-4 w-4 text-gray-500" />
-                </button>
-              )}
-            </div>
+        <SheetHeader className="p-4 sm:p-6 border-b border-gray-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-xl font-bold text-gray-900">Search</SheetTitle>
             <button
               onClick={onClose}
-              className="rounded-full p-2 hover:bg-gray-100 transition-colors"
+              className="rounded-full p-1 hover:bg-gray-100 transition-colors -mr-2"
+              aria-label="Close"
             >
-              <X className="h-5 w-5 text-gray-500" />
+              <X className="h-6 w-6 text-gray-500" />
             </button>
+          </div>
+          
+          <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200">
+            <Search className="h-5 w-5 text-gray-400 flex-shrink-0" />
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Search for restaurant, salads or meals"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="flex-1 outline-none bg-transparent text-gray-900 placeholder:text-gray-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={handleClearSearch}
+                className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4 text-gray-500" />
+              </button>
+            )}
           </div>
         </SheetHeader>
 
