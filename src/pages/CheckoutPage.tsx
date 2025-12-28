@@ -369,8 +369,14 @@ export function CheckoutPage() {
            delivery_address: selectedAddress,
            delivery_phone: userPhone,
            payment_method: 'wallet', 
-           special_instructions: undefined // Allow explicitly undefined to be dropped by JSON.stringify or backend to handle if passed as text
-         };
+            special_instructions: undefined, // Allow explicitly undefined to be dropped by JSON.stringify or backend to handle if passed as text
+            // Send dynamic fees
+            delivery_fee: deliveryFee,
+            platform_fee: PLATFORM_FEE,
+            taxes: 0,
+            discount_amount: 0,
+            tip_amount: isDonationChecked ? donationAmount : 0
+          };
 
          const orderRes = await apiService.createOrder(userPhone, orderPayload);
          

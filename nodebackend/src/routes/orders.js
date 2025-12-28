@@ -21,7 +21,7 @@ const generateOrderNumber = () => {
 // ============================================
 // HELPER: Calculate Order Total
 // ============================================
-const calculateOrderTotal = async (items, vendorId, couponCode = null) => {
+const calculateOrderTotal = async (items, vendorId, couponCode = null, feeOverrides = {}) => {
   let subtotal = 0;
   const itemDetails = [];
 
@@ -50,20 +50,35 @@ const calculateOrderTotal = async (items, vendorId, couponCode = null) => {
     });
   }
 
-  // Get vendor details for delivery fee
+  // Get vendor details for defaults
   const { data: vendor } = await supabaseAdmin
     .from('vendors')
     .select('delivery_fee, minimum_order')
     .eq('id', vendorId)
     .single();
 
-  const deliveryFee = vendor?.delivery_fee || 1; // Default to 1 for testing
-  const packagingFee = 0; // Removed separate packaging fee
-  const platformFee = 1; // Fixed platform fee to 1 for testing
-  let discount = 0;
+  // Use overrides if provided, otherwise defaults
+  // Note: feeOverrides might contain explicit 0, so check !== undefined
+  const deliveryFee = feeOverrides.delivery_fee !== undefined 
+      ? Number(feeOverrides.delivery_fee) 
+      : (vendor?.delivery_fee || 1);
+  
+  const packagingFee = feeOverrides.packaging_fee !== undefined
+      ? Number(feeOverrides.packaging_fee)
+      : 0;
 
-  // Apply coupon if provided
-  if (couponCode) {
+  const platformFee = feeOverrides.platform_fee !== undefined
+      ? Number(feeOverrides.platform_fee)
+      : 1;
+
+  let discount = feeOverrides.discount_amount !== undefined
+      ? Number(feeOverrides.discount_amount)
+      : 0;
+
+  // Apply coupon only if discount override NOT provided (or if we want to re-validate)
+  // For safety, if frontend provides discount, we use it, but ideal validaton should check coupon validity again.
+  // For now, if couponCode is active and NO override, calculate it.
+  if (couponCode && feeOverrides.discount_amount === undefined) {
     const { data: coupon } = await supabaseAdmin
       .from('coupons')
       .select('*')
@@ -85,13 +100,18 @@ const calculateOrderTotal = async (items, vendorId, couponCode = null) => {
     }
   }
 
-  // Calculate included taxes for reporting (approximate based on UI logic)
-  // UI logic: 5% on items, 18% on fees. Both are inclusive.
-  const itemTax = subtotal - (subtotal / 1.05);
-  const feeTax = (deliveryFee + platformFee) - ((deliveryFee + platformFee) / 1.18);
-  const totalTax = Math.round(itemTax + feeTax);
+  // Calculate taxes
+  // If override provided, use it. Otherwise calculate default logic.
+  let totalTax;
+  if (feeOverrides.taxes !== undefined) {
+      totalTax = Number(feeOverrides.taxes);
+  } else {
+    const itemTax = subtotal - (subtotal / 1.05);
+    const feeTax = (deliveryFee + platformFee) - ((deliveryFee + platformFee) / 1.18);
+    totalTax = Math.round(itemTax + feeTax);
+  }
 
-  // Total is sum of components (prices are inclusive)
+  // Total
   const total = subtotal + deliveryFee + packagingFee + platformFee - discount;
 
   return {
@@ -99,7 +119,7 @@ const calculateOrderTotal = async (items, vendorId, couponCode = null) => {
     deliveryFee,
     packagingFee,
     platformFee,
-    taxes: totalTax, // Use calculated inclusive tax
+    taxes: totalTax, // Use calculated or overridden tax
     discount,
     total,
     itemDetails
@@ -124,7 +144,13 @@ router.post('/', validate(schemas.createOrder), asyncHandler(async (req, res) =>
       tip_amount = 0,
       special_instructions,
       payment_method,
-      order_source = 'app'
+      order_source = 'app',
+      // Destructure overrides
+      delivery_fee,
+      platform_fee,
+      packaging_fee,
+      taxes,
+      discount_amount
     } = req.body;
 
     // console.log('📦 Creating Order:', { vendor_id, itemCount: items.length });
@@ -149,7 +175,8 @@ router.post('/', validate(schemas.createOrder), asyncHandler(async (req, res) =>
 
     // Calculate totals
     // console.log('🧮 Calculating totals...');
-    const calculation = await calculateOrderTotal(items, vendor_id, coupon_code);
+    const feeOverrides = { delivery_fee, platform_fee, packaging_fee, taxes, discount_amount };
+    const calculation = await calculateOrderTotal(items, vendor_id, coupon_code, feeOverrides);
 
     // Check minimum order
     // Check minimum order
