@@ -301,7 +301,7 @@ router.post('/webhook', asyncHandler(async (req, res) => {
   // Express body-parser handles this automatically if configured.
   
   const paytmParams = req.body;
-  // console.log('[Paytm Webhook] Received:', JSON.stringify(paytmParams));
+  console.log('[Paytm Webhook] Received:', JSON.stringify(paytmParams));
 
   const receivedChecksum = paytmParams.CHECKSUMHASH;
 
