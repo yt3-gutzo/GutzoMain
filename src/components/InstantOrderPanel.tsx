@@ -868,7 +868,7 @@ export function InstantOrderPanel({
 
                 // Load Paytm JS Checkout and invoke payment
                 const script = document.createElement('script');
-                script.src = `https://securestage.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
+                script.src = `https://secure.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
                 script.async = true;
                 script.crossOrigin = "anonymous"; // Added as per docs
                 script.onload = () => {

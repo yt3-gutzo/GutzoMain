@@ -393,7 +393,7 @@ export function CheckoutPage() {
            const mid = responseData.mid || paytmResp.body.mid || 'xFDrTr50750120794198';
            
            const script = document.createElement('script');
-           script.src = `https://securestage.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
+           script.src = `https://secure.paytmpayments.com/merchantpgpui/checkoutjs/merchants/${mid}.js`;
            script.async = true;
            script.crossOrigin = "anonymous";
            script.onload = () => {
