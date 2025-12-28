@@ -393,6 +393,7 @@ router.post('/webhook', asyncHandler(async (req, res) => {
 
   // Send Notification (Only if status changed to PAID)
   if (paymentStatus === 'paid' && existingOrder.payment_status !== 'paid') {
+     // 1. Notify User (In-App)
      await supabaseAdmin.from('notifications').insert({
       user_id: existingOrder.user_id,
       type: 'payment_success',
@@ -400,6 +401,26 @@ router.post('/webhook', asyncHandler(async (req, res) => {
       message: `Payment of ₹${txnAmount} received for order #${orderId}`,
       data: { order_id: orderId, txn_id: txnId }
     });
+    
+    // 2. Notify Vendor (Email & Push)
+    // Fetch Vendor Details
+    const { data: orderWithVendor } = await supabaseAdmin
+      .from('orders')
+      .select('*, vendor:vendors(email, name, id)')
+      .eq('order_number', orderId)
+      .single();
+
+    if (orderWithVendor && orderWithVendor.vendor) {
+        // Send Email
+        import('../utils/emailService.js').then(({ sendVendorOrderNotification }) => {
+            sendVendorOrderNotification(orderWithVendor.vendor.email, orderWithVendor);
+        });
+
+        // Send Push (Stub)
+        import('../utils/pushService.js').then(({ sendVendorPush }) => {
+            sendVendorPush(orderWithVendor.vendor.id, 'New Order Received! 🔔', `Order #${orderId} is confirmed. Tap to view details.`);
+        });
+    }
   }
 
   // console.log(`[Paytm Webhook] Successfully processed ${orderId}`);
@@ -626,5 +647,36 @@ router.get('/history', authenticate, asyncHandler(async (req, res) => {
 
   successResponse(res, { payments, page, limit, total: count });
 }));
+
+// ============================================
+// MOCK PAYMENT (FOR DEV TEST ONLY)
+// POST /api/payments/mock-success
+// ============================================
+if (process.env.NODE_ENV === 'development') {
+    router.post('/mock-success', asyncHandler(async (req, res) => {
+        const { orderId } = req.body;
+        
+        // Mark order as paid
+        const { data: order } = await supabaseAdmin.from('orders').update({
+            payment_status: 'paid',
+            status: 'confirmed', // skipping placed logic for speed, or set to placed
+            payment_method: 'mock',
+            payment_id: 'MOCK_' + Date.now()
+        }).eq('order_number', orderId).select().single();
+        
+        // Notify
+        await supabaseAdmin.from('notifications').insert({
+              user_id: order.user_id,
+              type: 'payment_success',
+              title: 'Mock Payment Successful',
+              message: `Mock payment for order #${orderId}`,
+              data: { order_id: orderId }
+        });
+
+        // Notify Vendor logic... (simplified here)
+
+        successResponse(res, { order }, "Order marked as paid (Mock)");
+    }));
+}
 
 export default router;

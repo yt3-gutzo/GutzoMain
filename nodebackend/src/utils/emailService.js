@@ -117,3 +117,38 @@ export const sendVendorOTP = async (email, otp) => {
     throw new Error("Failed to send OTP email");
   }
 };
+
+/**
+ * Send New Order Notification to Vendor
+ * @param {string} email - Vendor email
+ * @param {Object} order - Order details
+ * @returns {Promise<void>}
+ */
+export const sendVendorOrderNotification = async (email, order) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: `🔔 New Order #${order.order_number} Received!`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2 style="color: #1BA672;">New Order Received!</h2>
+        <p>You have a new order to prepare.</p>
+        
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <p><strong>Order ID:</strong> #${order.order_number}</p>
+          <p><strong>Items:</strong> ${order.items ? order.items.length : 'Check App'}</p>
+          <p><strong>Total:</strong> ₹${order.total_amount}</p>
+        </div>
+
+        <a href="https://partner.gutzo.in/orders" style="display: inline-block; background: #1BA672; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Order</a>
+      </div>
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Vendor Order Notification sent to ${email}:`, info.messageId);
+  } catch (error) {
+    console.error("❌ Error sending vendor order notification:", error);
+  }
+};
