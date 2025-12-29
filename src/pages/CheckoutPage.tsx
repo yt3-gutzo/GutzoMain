@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { LoginPanel } from '../components/auth/LoginPanel';
 import { AddressModal } from '../components/auth/AddressModal';
 import { LocationBottomSheet } from '../components/LocationBottomSheet';
+import { OrderNote } from '../components/OrderNote';
 
 
 
@@ -32,6 +33,7 @@ interface CartItem {
     location?: string;
     latitude?: number;
     longitude?: number;
+    allow_notes?: boolean; // Controls visibility of "Add Note"
   };
   product: {
     image?: string;
@@ -91,6 +93,10 @@ export function CheckoutPage() {
   const [addressToSave, setAddressToSave] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dynamicEta, setDynamicEta] = useState<string | null>(null);
+  // const [showNoteSheet, setShowNoteSheet] = useState(false); // Managed internally by OrderNote
+  const [orderNote, setOrderNote] = useState("");
+  const [dontAddCutlery, setDontAddCutlery] = useState(false);
+  const [expandedBill, setExpandedBill] = useState(false);
 
   // Constants
   const ITEMS_GST_RATE = 0.05;
@@ -369,7 +375,7 @@ export function CheckoutPage() {
            delivery_address: selectedAddress,
            delivery_phone: userPhone,
            payment_method: 'wallet', 
-            special_instructions: undefined, // Allow explicitly undefined to be dropped by JSON.stringify or backend to handle if passed as text
+            special_instructions: orderNote || undefined, // Send note if exists
             // Send dynamic fees
             delivery_fee: deliveryFee,
             platform_fee: PLATFORM_FEE,
@@ -482,7 +488,34 @@ export function CheckoutPage() {
        }
    };
 
-   // Redirect if cart is empty
+    const handleShare = async () => {
+        if (!vendor) return;
+        
+        const shareData = {
+            title: vendor.name,
+            text: `Check out ${vendor.name} on Gutzo!`,
+            url: `${window.location.origin}/vendor/${vendor.id}`
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                // User cancelled or share failed, ignore
+                console.log('Share cancelled');
+            }
+        } else {
+            // Fallback
+            try {
+                await navigator.clipboard.writeText(shareData.url);
+                toast.success('Link copied to clipboard!');
+            } catch (err) {
+                toast.error('Failed to copy link');
+            }
+        }
+    };
+
+    // Redirect if cart is empty
    useEffect(() => {
      if (cartItems.length === 0) {
         // Robust redirect logic using explicit state or history
@@ -567,7 +600,10 @@ export function CheckoutPage() {
                 </div>
             </div>
             
-            <button className="p-2 -mr-2 flex-shrink-0 lg:hidden text-gray-700">
+            <button 
+                onClick={handleShare}
+                className="p-2 -mr-2 flex-shrink-0 lg:hidden text-gray-700 active:scale-95 transition-transform"
+            >
                 <Share className="w-5 h-5" />
             </button>
         </div>
@@ -687,14 +723,44 @@ export function CheckoutPage() {
                  </button>
             </div>
             
-            <div className="flex gap-3 pt-1 overflow-x-auto scrollbar-hide [&::-webkit-scrollbar]:hidden">
-                 <Button variant="outline" className="text-xs h-9 px-3 whitespace-nowrap border-gray-200 rounded-xl gap-2 text-gray-600 font-normal hover:border-gray-300 bg-white">
-                    <FileText className="w-4 h-4 text-gray-400" /> Add a note for {vendor?.name}
-                 </Button>
-                 <Button variant="outline" className="text-xs h-9 px-3 whitespace-nowrap border-gray-200 rounded-xl gap-2 text-gray-600 font-normal hover:border-gray-300 bg-white">
-                    <UtensilsCrossed className="w-4 h-4 text-gray-400" /> Don't add cutlery
-                 </Button>
+             <div className="flex gap-3 pt-1 overflow-x-auto scrollbar-hide [&::-webkit-scrollbar]:hidden items-start">
+                  {/* Show "Add Note" button ONLY if vendor allows notes AND no note exists */}
+                  {vendor?.allow_notes !== false && !orderNote && (
+                      <OrderNote 
+                          note={orderNote}
+                          onSave={setOrderNote}
+                          vendorName={vendor?.name}
+                      />
+                  )}
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setDontAddCutlery(!dontAddCutlery)}
+                    className="text-xs h-9 px-3 whitespace-nowrap rounded-xl gap-2 font-normal transition-colors"
+                    style={{
+                        backgroundColor: dontAddCutlery ? '#E8F6F1' : 'white',
+                        borderColor: dontAddCutlery ? '#1BA672' : '#E5E7EB', // E5E7EB is gray-200
+                        color: '#4B5563', // Always gray-600
+                    }}
+                  >
+                     <UtensilsCrossed 
+                        className="w-4 h-4" 
+                        style={{ color: '#9CA3AF' }} // Always gray-400
+                     /> 
+                     Don't add cutlery
+                  </Button>
             </div>
+
+            {/* If note exists, show it BELOW the buttons */}
+            {orderNote && (
+                <div className="pt-3">
+                    <OrderNote 
+                        note={orderNote}
+                        onSave={setOrderNote}
+                        vendorName={vendor?.name}
+                    />
+                </div>
+            )}
              </div>
         </div>
 
@@ -706,30 +772,78 @@ export function CheckoutPage() {
             {/* Consolidated Details Card */}
             <div className="bg-white rounded-xl p-4 shadow-sm divide-y divide-gray-100/50">
                 {/* Delivery Time */}
+                {/* Delivery Time - Commented out as per user request (Redundant with header)
                 <div className="flex gap-4 pb-4">
                     <div className="mt-0.5">
                         <Clock className="w-5 h-5 text-gray-700" />
                     </div>
                     <div className="flex-1">
                         <h3 className="font-bold text-gray-900 text-[15px]">Delivery in {dynamicEta || '30-35 mins'}</h3>
-                        <p className="text-sm text-gray-500 mt-0.5 border-b border-gray-300 border-dotted inline-block">Want this later? Schedule it</p>
+                         <p className="text-sm text-gray-500 mt-0.5 border-b border-gray-300 border-dotted inline-block">Want this later? Schedule it</p> 
                     </div>
                 </div>
+                */}
 
                 {/* Bill Summary */}
                 <div className="flex gap-4 pt-4">
                     <div className="mt-0.5">
                         <FileText className="w-5 h-5 text-gray-700" />
                     </div>
-                    <div className="flex-1">
-                        <div className="flex justify-between items-center">
+                    <div className="flex-1 transition-all duration-300">
+                        {/* Header: Click to Toggle */}
+                        <div 
+                            className="flex justify-between items-center cursor-pointer select-none"
+                            onClick={() => setExpandedBill(!expandedBill)}
+                        >
                             <div className="flex items-center gap-2">
                                  <span className="font-bold text-gray-900 text-[15px]">Total Bill</span>
                                  <span className="text-sm text-gray-400 line-through">₹{(grandTotal + savings).toFixed(2)}</span>
                                  <span className="font-bold text-gray-900 text-[15px]">₹{grandTotal.toFixed(2)}</span>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                            <ChevronDown 
+                                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expandedBill ? 'rotate-180' : ''}`} 
+                            />
                         </div>
+
+                        {/* Expandable Details */}
+                        {expandedBill && (
+                            <div className="mt-3 space-y-2 pt-2 border-t border-dashed border-gray-200 text-sm text-gray-600 animate-in slide-in-from-top-2 fade-in duration-200">
+                                <div className="flex justify-between">
+                                    <span>Item Total</span>
+                                    <span>₹{itemTotal.toFixed(2)}</span>
+                                </div>
+                                
+                                {deliveryFee > 0 ? (
+                                    <div className="flex justify-between">
+                                        <span>Delivery Partner Fee</span>
+                                        <span>₹{deliveryFee.toFixed(2)}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between text-green-600">
+                                        <span>Delivery Fee</span>
+                                        <span>FREE</span>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-between">
+                                    <span>Platform Fee</span>
+                                    <span>₹{PLATFORM_FEE.toFixed(2)}</span>
+                                </div>
+
+                                <div className="flex justify-between">
+                                    <span>GST & Restaurant Charges</span>
+                                    <span>₹{(0).toFixed(2)}</span>
+                                </div>
+                                
+                                {isDonationChecked && (
+                                     <div className="flex justify-between">
+                                        <span>Feeding India Donation</span>
+                                        <span>₹{donationAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div className="mt-1.5">
                             <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[11px] font-bold">
                                 You saved ₹{savings}

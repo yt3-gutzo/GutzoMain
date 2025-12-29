@@ -103,6 +103,9 @@ export function LocationProvider({ children }: LocationProviderProps) {
             // Use default address for display
             display = AddressApi.getAddressDisplayText(result.data);
             
+            // Clear any previous errors (like GPS failure) since we have a valid address
+            setError(null);
+            
             // Extract label
             let label = null;
             if (result.data.type === 'other' && result.data.custom_label) {
@@ -247,6 +250,7 @@ export function LocationProvider({ children }: LocationProviderProps) {
     setIsManualOverride(true);
     setIsDefaultAddress(false);
     setLocationLabel(null); // Clear label as it's a manual override
+    setError(null); // Clear any previous errors
     setLocation(locationData);
     
     // Also update display immediately

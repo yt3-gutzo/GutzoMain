@@ -202,118 +202,119 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
                   });
                 }}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4 flex-1">
-                    <div className={`p-3 rounded-lg ${
+                <div className="flex flex-col gap-4">
+                  {/* Top Section: Icon + Main Info + Status */}
+                  <div className="flex items-start gap-4">
+                    {/* Icon */}
+                    <div className={`p-3 rounded-xl flex-shrink-0 ${
                       order.status === 'delivered'
-                        ? 'bg-gutzo-primary text-white'
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-gutzo-primary/10 text-gutzo-primary'
+                        : 'bg-gray-100 text-gray-500'
                     }`}>
-                      <Package className="h-5 w-5" />
+                      <Package className="h-6 w-6" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <span className="font-semibold text-gray-900">
-                          Order #{order.order_number}
-                        </span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      {/* Flex Row for ID and Status Badge */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                         <span className="text-sm font-semibold text-gray-900 break-all">
+                           #{order.order_number || order.id.slice(0, 8)}
+                         </span>
+                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide whitespace-nowrap ${
                           order.status === 'delivered' || order.status === 'confirmed'
-                            ? 'bg-gutzo-primary text-white'
+                            ? 'bg-green-100 text-green-700'
                             : order.status === 'cancelled'
                             ? 'bg-red-100 text-red-700'
-                            : 'bg-gray-100 text-gray-700'
+                            : order.status === 'preparing'
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'bg-gray-100 text-gray-600'
                         }`}>
-                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          {order.status}
                         </span>
                       </div>
-                      <div className="text-gray-600 mb-1">
-                        <span className="font-medium">Vendor:</span> {order.vendor_name || order.vendorName || '-'}
+
+                      {/* Vendor Name */}
+                      <h4 className="font-bold text-gray-900 text-base mb-1 truncate">
+                        {order.vendor_name || order.vendorName || 'Unknown Vendor'}
+                      </h4>
+
+                      {/* Meta Details */}
+                      <div className="text-sm text-gray-500 space-y-0.5 mb-2">
+                        <div className="flex items-center gap-2">
+                            <Clock className="w-3 h-3" />
+                            <span>{new Date(order.created_at).toLocaleDateString()} • {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <div className="font-semibold text-gray-900 text-base mt-2">
+                           ₹{order.total_amount !== undefined && order.total_amount !== null ? Number(order.total_amount).toFixed(2) : '0.00'}
+                        </div>
                       </div>
-                      <div className="text-gray-600 mb-1">
-                        <span className="font-medium">Placed:</span> {new Date(order.created_at).toLocaleString()}
-                      </div>
-                      <div className="text-gray-900 font-semibold mb-1">
-                        <span className="font-medium">Total:</span> ₹{order.total_amount !== undefined && order.total_amount !== null ? Number(order.total_amount).toFixed(2) : ''}
-                      </div>
-                      {/* Inline expandable order details */}
-                      {expanded && (
-                        <div className="mb-2 mt-2 border rounded-lg bg-gray-50 p-3">
-                          <div className="flex justify-between text-gray-700">
-                            <span>Items ({order.items?.length || 0})</span>
-                            <span>
-                              ₹{order.subtotal !== undefined && order.subtotal !== null ? Number(order.subtotal).toFixed(2) : ''}
-                            </span>
+                    </div>
+                  </div>
+
+                  {/* Expanded Content */}
+                  {expanded && (
+                    <div className="border-t border-dashed pt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Items List */}
+                        <div className="space-y-2 mb-3">
+                          {order.items?.map((item: any) => (
+                            <div key={item.id} className="flex justify-between text-sm">
+                                <span className="text-gray-700 font-medium">
+                                  <span className="text-xs text-gray-500 mr-2">{item.quantity}x</span>
+                                  {item.product_name}
+                                </span>
+                                <span className="text-gray-900">₹{item.total_price}</span>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Breakdown */}
+                        <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1.5">
+                          <div className="flex justify-between">
+                            <span>Subtotal</span>
+                            <span>₹{Number(order.subtotal || 0).toFixed(2)}</span>
                           </div>
                           {order.delivery_fee > 0 && (
-                            <div className="flex justify-between text-gray-700">
-                              <span>Delivery Fee (incl. 18% GST)</span>
+                            <div className="flex justify-between">
+                              <span>Delivery</span>
                               <span>₹{Number(order.delivery_fee).toFixed(2)}</span>
                             </div>
                           )}
                           {order.platform_fee > 0 && (
-                            <div className="flex justify-between text-gray-700">
-                              <span>Platform Fee (incl. 18% GST)</span>
+                            <div className="flex justify-between">
+                              <span>Platform Fee</span>
                               <span>₹{Number(order.platform_fee).toFixed(2)}</span>
                             </div>
                           )}
-                          {order.gst_items > 0 && (
-                            <div className="flex justify-between text-gray-500 text-xs">
-                              <span>GST included in items @5%</span>
-                              <span>₹{Number(order.gst_items).toFixed(2)}</span>
-                            </div>
-                          )}
-                          {order.gst_fees > 0 && (
-                            <div className="flex justify-between text-gray-500 text-xs">
-                              <span>GST included in fees @18%</span>
-                              <span>₹{Number(order.gst_fees).toFixed(2)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between font-semibold text-gray-900 border-t pt-2 mt-2">
-                            <span>Total</span>
-                            <span>₹{order.total_amount !== undefined && order.total_amount !== null ? Number(order.total_amount).toFixed(2) : ''}</span>
-                          </div>
-                          {order.payment_id && (
-                            <div className="flex justify-between text-gray-600 text-xs mt-2">
-                              <span>Transaction ID:</span>
-                              <span className="font-mono">{order.payment_id}</span>
-                            </div>
-                          )}
-                          <div className="text-gray-600 mb-1 mt-2">
-                            <span className="font-medium">Placed:</span> {new Date(order.created_at).toLocaleString()}
-                          </div>
-                          <div className="text-gray-600 mb-1">
-                            <span className="font-medium">Items:</span>
-                            <ul className="ml-4 list-disc">
-                              {order.items.map((item: any) => (
-                                <li key={item.id} className="text-gray-700">
-                                  {item.product_name} x {item.quantity} - ₹{item.total_price}
-                                </li>
-                              ))}
-                            </ul>
+                          <div className="flex justify-between border-t pt-1.5 mt-1.5 font-bold text-gray-900 text-sm">
+                            <span>Grand Total</span>
+                            <span>₹{Number(order.total_amount || 0).toFixed(2)}</span>
                           </div>
                         </div>
-                      )}
                     </div>
-                  </div>
-                  {/* Actions */}
-                  <div className="flex flex-col items-end space-y-2 ml-4">
+                  )}
+
+                  {/* Bottom: Action Button */}
+                  <div className="pt-2 sm:pt-0">
                     <Button
-                      variant="outline"
+                      variant={expanded ? "ghost" : "outline"}
                       size="sm"
-                      className="border-gutzo-primary text-gutzo-primary hover:bg-gutzo-primary/10"
-                      onClick={() => {
-                        setExpandedOrderIds(prev => {
+                      className={`w-full h-10 text-sm font-medium transition-colors ${
+                        expanded 
+                          ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' 
+                          : 'border-gutzo-primary text-gutzo-primary hover:bg-gutzo-primary/5 hover:text-gutzo-primary-hover'
+                      }`}
+                      onClick={(e) => {
+                         e.stopPropagation(); 
+                         setExpandedOrderIds(prev => {
                           const next = new Set(prev);
-                          if (expanded) {
-                            next.delete(order.id);
-                          } else {
-                            next.add(order.id);
-                          }
+                          if (expanded) next.delete(order.id);
+                          else next.add(order.id);
                           return next;
                         });
                       }}
                     >
-                      <span className="text-xs">{expanded ? 'Hide Details' : 'View Details'}</span>
+                      {expanded ? 'Collapse Details' : 'View Details'}
                     </Button>
                   </div>
                 </div>

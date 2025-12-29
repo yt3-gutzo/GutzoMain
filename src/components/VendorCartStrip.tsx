@@ -50,24 +50,24 @@ export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart,
         ${isDrawerOpen ? 'lg:translate-x-0 lg:left-auto lg:right-4 lg:w-[400px]' : ''}`}
     >
       <div 
-        className="bg-white rounded-xl shadow-xl flex items-center justify-between p-3 border border-gray-100"
+        className="bg-white rounded-xl shadow-xl flex items-center justify-between p-2 md:p-3 border border-gray-100"
       >
         {/* Left Section: Image + Info */}
-        <div className="flex items-center gap-3 overflow-hidden">
+        <div className="flex items-center gap-2 md:gap-3 overflow-hidden min-w-0 flex-1">
             {vendorImage ? (
-               <img src={vendorImage} alt={vendorName} className="w-16 h-16 rounded-full object-cover border border-gray-100 flex-shrink-0" />
+               <img src={vendorImage} alt={vendorName} className="w-12 h-12 md:w-16 md:h-16 rounded-full object-cover border border-gray-100 flex-shrink-0" />
             ) : (
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl font-bold text-gray-400">{vendorName.charAt(0)}</span>
+                <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg md:text-xl font-bold text-gray-400">{vendorName.charAt(0)}</span>
                 </div>
             )}
-            <div className="flex flex-col overflow-hidden">
-              <span className="font-bold text-gray-900 text-lg truncate pr-2 leading-tight">
+            <div className="flex flex-col overflow-hidden min-w-0">
+              <span className="font-bold text-gray-900 text-base md:text-lg truncate pr-1 leading-tight">
                 {vendorName}
               </span>
               <button 
                 onClick={() => navigate(`/vendor/${vendorId}`)} // Simple navigation for "View Full Menu"
-                className="text-left text-sm text-gray-500 underline decoration-gray-400 underline-offset-2 hover:text-gray-800 transition-colors mt-0.5 font-medium"
+                className="text-left text-xs md:text-sm text-gray-500 underline decoration-gray-400 underline-offset-2 hover:text-gray-800 transition-colors mt-0.5 font-medium truncate"
               >
                 View Full Menu
               </button>
@@ -75,25 +75,25 @@ export function VendorCartStrip({ vendorId, vendorName, vendorImage, onViewCart,
         </div>
 
         {/* Right Section: Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
             {/* Green Checkout Button */}
             <button
                onClick={isOpen ? onViewCart : undefined}
-               className={`rounded-lg px-6 py-3 flex flex-col items-center justify-center min-w-[150px] transition-colors relative overflow-hidden group active:scale-95 duration-200 flex-shrink-0 ${!isOpen ? 'bg-[#4A4A4A] cursor-not-allowed' : 'bg-[#1BA672] hover:bg-[#14885E]'}`}
+               className={`rounded-lg px-4 py-2 md:px-6 md:py-3 flex flex-col items-center justify-center min-w-[120px] md:min-w-[150px] transition-colors relative overflow-hidden group active:scale-95 duration-200 flex-shrink-0 ${!isOpen ? 'bg-[#4A4A4A] cursor-not-allowed' : 'bg-[#1BA672] hover:bg-[#14885E]'}`}
                style={{ backgroundColor: !isOpen ? '#4A4A4A' : '#1BA672' }}
                disabled={!isOpen}
             >
                {isOpen ? (
                    <>
-                   <div className="text-lg font-normal opacity-95 leading-tight mb-0.5 text-white">
+                   <div className="text-sm md:text-lg font-normal opacity-95 leading-tight mb-0.5 text-white whitespace-nowrap">
                      {itemCount} item{itemCount !== 1 ? 's' : ''} | ₹{totalAmount}
                    </div>
-                   <div className="text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90 text-white">
+                   <div className="text-base md:text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90 text-white">
                      Checkout
                    </div>
                    </>
                ) : (
-                    <div className="text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90 text-white">
+                    <div className="text-base md:text-lg font-extrabold uppercase tracking-wide leading-tight opacity-90 text-white">
                         Closed
                     </div>
                )}

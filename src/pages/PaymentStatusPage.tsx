@@ -113,7 +113,11 @@ export default function PaymentStatusPage() {
             <div className="w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto">✓</div>
           )}
           {status === 'failed' && (
-            <div className="w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center mx-auto">✕</div>
+            <div className="w-12 h-12 bg-red-100 text-red-700 rounded-full flex items-center justify-center mx-auto mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
           )}
         </div>
         <h1 className="text-xl font-semibold mb-2">Payment Status</h1>
@@ -123,7 +127,8 @@ export default function PaymentStatusPage() {
         {status === 'failed' && (
           <button 
             onClick={() => window.location.href = '/'}
-            className="mt-6 w-full bg-gray-900 text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-colors"
+            className="mt-6 w-full bg-brand text-white font-medium py-3 rounded-xl hover:bg-brand-hover transition-colors"
+            style={{ backgroundColor: '#1ba672' }}
           >
             Return to Home
           </button>

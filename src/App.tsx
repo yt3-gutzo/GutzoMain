@@ -65,7 +65,12 @@ import { LocationBottomSheet } from "./components/LocationBottomSheet";
 import { LoadingScreen } from "./components/common/LoadingScreen";
 
 
+import { useMobileNavigation } from "./hooks/useMobileNavigation";
+
 function AppContent() {
+    // Enable mobile navigation (back button handling)
+    useMobileNavigation();
+
     // Use responsive hook for desktop detection
     const isDesktop = useMediaQuery('(min-width: 850px)');
 
