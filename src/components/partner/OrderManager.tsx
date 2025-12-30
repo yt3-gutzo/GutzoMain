@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { RefreshCw, ChefHat, Check, X, Clock, MapPin } from 'lucide-react';
+import { RefreshCw, ChefHat, Check, X, Clock, MapPin, ChevronDown, ChevronRight } from 'lucide-react';
 import { nodeApiService } from '../../utils/nodeApi';
 import { toast } from 'sonner';
 
@@ -33,16 +33,56 @@ import { supabase } from '../../utils/supabase/client';
 export function OrderManager({ vendorId }: { vendorId: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ 'Today': true });
+
+  const toggleGroup = (group: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [group]: !prev[group]
+    }));
+  };
+
+  // Audio handler
+  const playNotification = () => {
+     try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(e => {
+            console.error("Audio play error:", e);
+            toast.error("Enable audio permissions");
+        });
+     } catch(e) { console.error("Audio init error", e); }
+  };
+
+  const ordersRef = useRef<Order[]>([]); // Track previous orders to detect *new* ones during polling
 
   const fetchOrders = async () => {
     try {
       // Don't set loading true on background refreshes to avoid flickering
       if (orders.length === 0) setLoading(true);
+      
       // Show only orders where payment is successful (confirmed/paid)
       const response = await nodeApiService.getVendorOrders(vendorId, 'confirmed,paid,preparing,ready');
-      console.log('📦 Orders API Response:', response);
-      // Backend returns { success: true, data: { orders: [...] } }
-      setOrders(response?.data?.orders || []);
+      // console.log('📦 Orders API Response:', response);
+      
+      const newOrders = response?.data?.orders || [];
+      
+      // Check for NEW orders that are 'confirmed' or 'paid' compared to previous fetch
+      // This is the fallback/primary sound trigger if Realtime is flaky
+      if (ordersRef.current.length > 0) {
+          const previousIds = new Set(ordersRef.current.map(o => o.id));
+          const hasNewConfirmedOrder = newOrders.some((o: Order) => 
+              !previousIds.has(o.id) && ['confirmed', 'paid'].includes(o.status)
+          );
+          
+          if (hasNewConfirmedOrder) {
+              console.log("🔔 New confirmed order detected via Polling/Fetch - Playing Sound");
+              playNotification();
+              toast.success("New Order Received! 🔔");
+          }
+      }
+      
+      ordersRef.current = newOrders;
+      setOrders(newOrders);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
     } finally {
@@ -76,18 +116,22 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
           filter: `vendor_id=eq.${vendorId}`
         },
         async (payload) => {
-          console.log('⚡️ Realtime Event:', payload);
+          const newOrder = payload.new as any;
           
           if (payload.eventType === 'INSERT') {
-             toast.success("New Order Received! 🔔");
-             // Play notification sound if possible
-             try {
-                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                audio.play();
-             } catch(e) { console.error("Audio play failed", e); }
+             // Only play if it enters as confirmed/paid (rare but possible)
+             if (['confirmed', 'paid'].includes(newOrder.status)) {
+                 console.log("🔔 New Order Inserted - Playing Sound");
+                 toast.success("New Order Received! 🔔");
+                 playNotification();
+             }
           } else if (payload.eventType === 'UPDATE') {
-             // Optional: Toast on update or just silent refresh
-             // toast.info("Order updated");
+             // If status became confirmed/paid (e.g. was placed)
+             if (['confirmed', 'paid'].includes(newOrder.status)) {
+                 console.log("🔔 Order Updated - Playing Sound");
+                 toast.success("New Order Received! 🔔");
+                 playNotification();
+             }
           }
           
           // Refresh data
@@ -114,7 +158,7 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
       switch(status) {
           case 'placed': return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">New</Badge>;
           case 'confirmed': 
-          case 'paid': return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">Confirmed</Badge>;
+          case 'paid': return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">New</Badge>;
           case 'preparing': return <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">Preparing</Badge>;
           case 'ready': return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ready</Badge>;
           default: return <Badge variant="outline">{status}</Badge>;
@@ -128,10 +172,12 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
                 <h2 className="text-xl font-bold text-gray-900">Incoming Orders</h2>
                 <p className="text-sm text-gray-500">View and manage customer orders</p>
             </div>
-             <Button variant="outline" onClick={fetchOrders} disabled={loading} className="gap-2">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-             </Button>
+            <div className="flex gap-2">
+                 <Button variant="outline" onClick={fetchOrders} disabled={loading} className="gap-2">
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                 </Button>
+            </div>
         </div>
 
         {loading && orders.length === 0 ? (
@@ -145,90 +191,144 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
                  <p className="text-gray-500 text-sm max-w-sm text-center">New orders will appear here automatically. Make sure your kitchen status is "Online".</p>
             </div>
         ) : (
-            <div className="space-y-4">
-                {orders.map(order => (
-                    <Card key={order.id} className="overflow-hidden border-l-4 border-l-gutzo-primary">
-                        <CardContent className="p-6">
-                             <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <div className="flex items-center gap-3 mb-1">
-                                        <h3 className="font-bold text-lg">#{order.order_number}</h3>
-                                        {getStatusBadge(order.status)}
-                                    </div>
-                                    <div className="text-sm text-gray-500 flex items-center gap-2">
-                                        <Clock className="w-4 h-4" />
-                                        {new Date(order.created_at).toLocaleTimeString()}
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="font-bold text-lg">₹{order.total_amount}</div>
-                                    <div className="text-xs text-gray-500 uppercase">{order.user?.name || 'Guest'}</div>
-                                </div>
-                             </div>
+            <div className="space-y-8">
+                {Object.entries(
+                    orders.reduce((groups, order) => {
+                        const date = new Date(order.created_at);
+                        const today = new Date();
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        
+                        let key = date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                        
+                        if (date.toDateString() === today.toDateString()) {
+                            key = 'Today';
+                        } else if (date.toDateString() === yesterday.toDateString()) {
+                            key = 'Yesterday';
+                        }
+                        
+                        if (!groups[key]) {
+                            groups[key] = [];
+                        }
+                        groups[key].push(order);
+                        return groups;
+                    }, {} as Record<string, Order[]>)
+                ).sort((a, b) => {
+                    // Sort keys: Today first, then Yesterday, then others by date descending
+                    if (a[0] === 'Today') return -1;
+                    if (b[0] === 'Today') return 1;
+                    if (a[0] === 'Yesterday') return -1;
+                    if (b[0] === 'Yesterday') return 1;
+                    return new Date(b[1][0].created_at).getTime() - new Date(a[1][0].created_at).getTime();
+                }).map(([dateLabel, groupOrders]) => {
+                    const isExpanded = expandedGroups[dateLabel] ?? (dateLabel === 'Today');
 
-                             <div className="bg-gray-50 p-4 rounded-lg mb-4 space-y-2">
-                                {order.items.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between text-sm">
-                                        <div>
-                                            <span className="font-medium mr-2">{item.quantity}x</span>
-                                            {item.product_name}
-                                            {item.customizations && <div className="text-xs text-gray-500 ml-6">{item.customizations}</div>}
-                                        </div>
-                                    </div>
-                                ))}
-                             </div>
+                    return (
+                        <div key={dateLabel} className="space-y-4">
+                            <div 
+                                className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors select-none"
+                                onClick={() => toggleGroup(dateLabel)}
+                            >
+                                 <button className="p-1 rounded-full hover:bg-gray-200">
+                                    {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
+                                 </button>
+                                 <h3 className="text-lg font-bold text-gray-800">{dateLabel}</h3>
+                                 <div className="h-px flex-1 bg-gray-200"></div>
+                                 <span className="text-xs text-gray-400 font-medium">{groupOrders.length} orders</span>
+                            </div>
+                            
+                            {isExpanded && (
+                                <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                    {groupOrders.map(order => (
+                                        <Card key={order.id} className="overflow-hidden border-l-4 border-l-gutzo-primary">
+                                            <CardContent className="p-6">
+                                                 <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <div className="flex items-center gap-3 mb-1">
+                                                            <h3 className="font-bold text-lg">#{order.order_number}</h3>
+                                                            {getStatusBadge(order.status)}
+                                                        </div>
+                                                        <div className="text-sm text-gray-500 flex items-center gap-2">
+                                                            <Clock className="w-4 h-4" />
+                                                            {new Date(order.created_at).toLocaleTimeString()}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="font-bold text-lg">₹{order.total_amount}</div>
+                                                        <div className="text-xs text-gray-500 uppercase">{order.user?.name || 'Guest'}</div>
+                                                    </div>
+                                                 </div>
 
-                             {/* Action Buttons */}
-                             <div className="flex justify-end gap-3">
-                                {order.status === 'placed' || order.status === 'paid' || order.status === 'confirmed' ? (
-                                    <>
-                                        <Button 
-                                            variant="outline"
-                                            onClick={async () => {
-                                                if (confirm('Are you sure you want to reject this order?')) {
-                                                    try {
-                                                        await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'rejected'); // or 'cancelled' if that maps better
-                                                        // NOTE: Backend needs to handle 'rejected' status. 
-                                                        // If it only allows 'preparing', 'ready', 'completed' in route validation, we must update the backend too.
-                                                        toast.success("Order rejected");
-                                                        fetchOrders();
-                                                    } catch(e) { 
-                                                        console.error(e);
-                                                        toast.error("Failed to reject order"); 
-                                                    }
-                                                }
-                                            }}
-                                            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 gap-2">
-                                            <X className="w-4 h-4" /> Reject
-                                        </Button>
-                                        <Button 
-                                            onClick={async () => {
-                                                try {
-                                                    await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'preparing');
-                                                    toast.success("Order marked as preparing");
-                                                    fetchOrders(); // Optimistic update or wait for poll
-                                                } catch(e) { toast.error("Failed to update status"); }
-                                            }}
-                                            className="bg-gutzo-primary hover:bg-gutzo-primary-hover text-white gap-2">
-                                            <ChefHat className="w-4 h-4" /> Start Preparing
-                                        </Button>
-                                    </>
-                                ) : order.status === 'preparing' ? (
-                                    <Button 
-                                        onClick={async () => {
-                                            try {
-                                                await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'ready');
-                                                toast.success("Order marked as ready");
-                                            } catch(e) { toast.error("Failed to update status"); }
-                                        }}
-                                        className="bg-green-600 hover:bg-green-700 text-white gap-2">
-                                        <Check className="w-4 h-4" /> Mark Ready
-                                    </Button>
-                                ) : null}
-                             </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                                                 <div className="bg-gray-50 p-4 rounded-lg mb-4 space-y-2">
+                                                    {order.items.map((item, idx) => (
+                                                        <div key={idx} className="flex justify-between text-sm">
+                                                            <div>
+                                                                <span className="font-medium mr-2">{item.quantity}x</span>
+                                                                {item.product_name}
+                                                                {item.customizations && <div className="text-xs text-gray-500 ml-6">{item.customizations}</div>}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                 </div>
+
+                                                 {/* Action Buttons */}
+                                                 <div className="flex justify-end gap-3">
+                                                    {order.status === 'placed' || order.status === 'paid' || order.status === 'confirmed' ? (
+                                                        <>
+                                                            <Button 
+                                                                variant="outline"
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    if (confirm('Are you sure you want to reject this order?')) {
+                                                                        try {
+                                                                            await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'rejected');
+                                                                            toast.success("Order rejected");
+                                                                            fetchOrders();
+                                                                        } catch(e) { 
+                                                                            console.error(e);
+                                                                            toast.error("Failed to reject order"); 
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 gap-2">
+                                                                <X className="w-4 h-4" /> Reject
+                                                            </Button>
+                                                            <Button 
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    try {
+                                                                        await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'preparing');
+                                                                        toast.success("Order marked as preparing");
+                                                                        fetchOrders();
+                                                                    } catch(e) { toast.error("Failed to update status"); }
+                                                                }}
+                                                                className="bg-gutzo-primary hover:bg-gutzo-primary-hover text-white gap-2">
+                                                                <ChefHat className="w-4 h-4" /> Start Preparing
+                                                            </Button>
+                                                        </>
+                                                    ) : order.status === 'preparing' ? (
+                                                        <Button 
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'ready');
+                                                                    toast.success("Order marked as ready");
+                                                                    fetchOrders(); 
+                                                                } catch(e) { toast.error("Failed to update status"); }
+                                                            }}
+                                                            className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                                                            <Check className="w-4 h-4" /> Mark Ready
+                                                        </Button>
+                                                    ) : null}
+                                                 </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         )}
     </div>
