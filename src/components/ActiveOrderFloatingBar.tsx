@@ -84,8 +84,8 @@ export function ActiveOrderFloatingBar() {
     }
   };
 
-  // Hide on tracking page
-  if (currentRoute.startsWith('/tracking/')) return null;
+  // Hide on tracking page and partner dashboard
+  if (currentRoute.startsWith('/tracking/') || currentRoute.startsWith('/partner/')) return null;
 
   // Render even if delivered (per user request)
   // if (displayOrder?.status === 'delivered') return null;
