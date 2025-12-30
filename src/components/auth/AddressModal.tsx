@@ -25,6 +25,7 @@ import {
   reverseGeocode,
   extractAreaFromDetailedAddress,
   extractCityFromDetailedAddress,
+  extractStateFromDetailedAddress,
   extractZipcodeFromAddress,
   parseAddressString,
   type DetailedAddress,
@@ -624,6 +625,8 @@ export function AddressModal({
             longitude: editingAddress.longitude,
             isDefault: editingAddress.is_default,
             zipcode: editingAddress.postal_code,
+            city: editingAddress.city,
+            state: editingAddress.state
         };
     }
     return {
@@ -633,7 +636,9 @@ export function AddressModal({
         landmark: '',
         fullAddress: '',
         isDefault: false,
-        zipcode: ''
+        zipcode: '',
+        city: '',
+        state: ''
     };
   });
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
@@ -685,6 +690,7 @@ export function AddressModal({
           // Extract address components
           const area = extractAreaFromDetailedAddress(detailedAddress);
           const city = extractCityFromDetailedAddress(detailedAddress);
+          const state = extractStateFromDetailedAddress(detailedAddress);
           
           // Update address system
           setAddressData(prev => ({
@@ -694,7 +700,9 @@ export function AddressModal({
             fullAddress: detailedAddress.formattedAddress || address,
             street: address.split(',')[0]?.trim() || '', // Extract first part as street
             area: area || '',
-            zipcode: detailedAddress.postalCode // EXTRACT ZIPCODE
+            zipcode: detailedAddress.postalCode,
+            city: city || '',
+            state: state || ''
           }));
         } else {
           // Fallback to basic string parsing if geocoding fails
@@ -703,6 +711,7 @@ export function AddressModal({
           
           const area = fallbackParsed.area || extractAreaFromAddress(address);
           const city = fallbackParsed.city || extractCityFromAddress(address);
+          const state = fallbackParsed.state || "";
           const zipcode = extractZipcodeFromAddress(address);
 
           // Update address system
@@ -713,7 +722,9 @@ export function AddressModal({
             fullAddress: address,
             street: address.split(',')[0]?.trim() || '',
             area: area || '',
-            zipcode: zipcode || '641001' // Use extracted zipcode or safer default
+            zipcode: zipcode || '', // Use extracted zipcode or safer default
+            city: city || '',
+            state: state || ''
           }));
         }
       } catch (error) {
@@ -722,6 +733,8 @@ export function AddressModal({
         // Final fallback
         const fallbackParsed = parseAddressString(address);
         const area = fallbackParsed.area || extractAreaFromAddress(address);
+        const city = fallbackParsed.city || extractCityFromAddress(address);
+        const state = fallbackParsed.state || "";
         const zipcode = extractZipcodeFromAddress(address);
 
         // Update address system
@@ -732,7 +745,9 @@ export function AddressModal({
           fullAddress: address,
           street: address.split(',')[0]?.trim() || '',
           area: area || '',
-          zipcode: zipcode || '641001'
+          zipcode: zipcode || '',
+          city: city || '',
+          state: state || ''
         }));
       }
     },
@@ -932,8 +947,8 @@ export function AddressModal({
         area: addressData.area || '',
         landmark: addressData.landmark || '',
         full_address: addressData.fullAddress || '',
-        city: '', // Default city
-        state: '', // Default state
+        city: addressData.city || '', // Use city from state
+        state: addressData.state || '', // Use state from state
         zipcode: addressData.zipcode || '', // Fallback zipcode if not extracted
         latitude: addressData.latitude,
         longitude: addressData.longitude,

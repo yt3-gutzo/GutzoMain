@@ -44,6 +44,8 @@ export interface AddressFormData {
   longitude?: number;
   isDefault?: boolean; // (was is_default)
   zipcode?: string; // Added for backend validation
+  city?: string;
+  state?: string;
 }
 
 export interface AddressTypeOption {

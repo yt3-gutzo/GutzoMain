@@ -235,27 +235,69 @@ export function extractCityFromDetailedAddress(
     "";
 }
 
+export function extractStateFromDetailedAddress(
+  detailedAddress: DetailedAddress | null,
+): string {
+  if (!detailedAddress) return "";
+  return detailedAddress.state || "";
+}
+
 // Fallback function for simple address string parsing (when geocoding fails)
 export function parseAddressString(
   address: string,
-): { area: string; city: string } {
-  if (!address) return { area: "", city: "" };
+): { area: string; city: string; state: string } {
+  if (!address) return { area: "", city: "", state: "" };
 
   const parts = address.split(",").map((part) => part.trim());
+  let area = "";
+  let city = "";
+  let state = "";
+
+  // Try to parse from the end: Country, State Pincode, City, Area, Street
+  // Example: "Bangalore Palace, Palace Cross Rd, Vasant Nagar, Bengaluru, Karnataka 560006, India"
+  // parts[-1] = India
+  // parts[-2] = Karnataka 560006
+  // parts[-3] = Bengaluru
+  // parts[-4] = Vasant Nagar
 
   if (parts.length >= 3) {
-    return {
-      area: parts[1] || "",
-      city: parts[2] || "",
-    };
+    // Check for state/pincode in second to last if last is Country
+    // Or last if country is missing
+
+    const potentialStatePart = parts[parts.length - 2];
+    // simple check if it has state-like words or numbers
+
+    if (potentialStatePart) {
+      // Remove digits (pincode)
+      const stateClean = potentialStatePart.replace(/\d+/g, "").trim();
+      if (stateClean) state = stateClean;
+    }
+
+    // City is usually before state
+    if (parts.length >= 3) {
+      city = parts[parts.length - 3];
+    }
+
+    // Area is usually before city
+    if (parts.length >= 4) {
+      area = parts[parts.length - 4];
+    } else {
+      // Fallback if structure is shorter
+      area = parts[1] || "";
+    }
   } else if (parts.length >= 2) {
-    return {
-      area: parts[1] || "",
-      city: parts[1] || "",
-    };
+    area = parts[0] || "";
+    city = parts[1] || "";
   }
 
-  return { area: "", city: "" };
+  // Cleanup
+  if (city === state && parts.length > 2) {
+    // sometimes structure is different, fallback to simple index
+    area = parts[1] || "";
+    city = parts[2] || "";
+  }
+
+  return { area, city, state };
 }
 
 export function extractZipcodeFromAddress(address: string): string {
