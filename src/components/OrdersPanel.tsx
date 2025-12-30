@@ -230,7 +230,7 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
                             ? 'bg-blue-50 text-blue-600'
                             : 'bg-gray-100 text-gray-600'
                         }`}>
-                          {order.status}
+                          {order.status === 'confirmed' ? 'Waiting for acceptance' : order.status}
                         </span>
                       </div>
 

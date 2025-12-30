@@ -72,6 +72,15 @@ export function ActiveOrderFloatingBar() {
                 text: 'text-green-700',
                 label: 'DELIVERED'
             };
+        case 'rejected':
+            return {
+                title: 'Order Rejected',
+                subtext: 'Refund Initiated',
+                icon: <X size={14} className="text-red-600" />,
+                bg: 'bg-red-50',
+                text: 'text-red-600',
+                label: 'REFUND INITIATED'
+            };
         default:
             return {
                 title: 'Spice of Bangalore',

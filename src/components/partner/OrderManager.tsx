@@ -38,7 +38,8 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
     try {
       // Don't set loading true on background refreshes to avoid flickering
       if (orders.length === 0) setLoading(true);
-      const response = await nodeApiService.getVendorOrders(vendorId, 'placed,confirmed,paid,preparing,ready');
+      // Show only orders where payment is successful (confirmed/paid)
+      const response = await nodeApiService.getVendorOrders(vendorId, 'confirmed,paid,preparing,ready');
       console.log('📦 Orders API Response:', response);
       // Backend returns { success: true, data: { orders: [...] } }
       setOrders(response?.data?.orders || []);
@@ -180,17 +181,38 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
                              {/* Action Buttons */}
                              <div className="flex justify-end gap-3">
                                 {order.status === 'placed' || order.status === 'paid' || order.status === 'confirmed' ? (
-                                    <Button 
-                                        onClick={async () => {
-                                            try {
-                                                await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'preparing');
-                                                toast.success("Order marked as preparing");
-                                                // Realtime will auto-update the UI, but we can optimistically update too if needed
-                                            } catch(e) { toast.error("Failed to update status"); }
-                                        }}
-                                        className="bg-gutzo-primary hover:bg-gutzo-primary-hover text-white gap-2">
-                                        <ChefHat className="w-4 h-4" /> Start Preparing
-                                    </Button>
+                                    <>
+                                        <Button 
+                                            variant="outline"
+                                            onClick={async () => {
+                                                if (confirm('Are you sure you want to reject this order?')) {
+                                                    try {
+                                                        await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'rejected'); // or 'cancelled' if that maps better
+                                                        // NOTE: Backend needs to handle 'rejected' status. 
+                                                        // If it only allows 'preparing', 'ready', 'completed' in route validation, we must update the backend too.
+                                                        toast.success("Order rejected");
+                                                        fetchOrders();
+                                                    } catch(e) { 
+                                                        console.error(e);
+                                                        toast.error("Failed to reject order"); 
+                                                    }
+                                                }
+                                            }}
+                                            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 gap-2">
+                                            <X className="w-4 h-4" /> Reject
+                                        </Button>
+                                        <Button 
+                                            onClick={async () => {
+                                                try {
+                                                    await nodeApiService.updateVendorOrderStatus(vendorId, order.id, 'preparing');
+                                                    toast.success("Order marked as preparing");
+                                                    fetchOrders(); // Optimistic update or wait for poll
+                                                } catch(e) { toast.error("Failed to update status"); }
+                                            }}
+                                            className="bg-gutzo-primary hover:bg-gutzo-primary-hover text-white gap-2">
+                                            <ChefHat className="w-4 h-4" /> Start Preparing
+                                        </Button>
+                                    </>
                                 ) : order.status === 'preparing' ? (
                                     <Button 
                                         onClick={async () => {

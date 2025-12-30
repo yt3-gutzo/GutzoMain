@@ -411,7 +411,7 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
     const { id, orderId } = req.params;
     const { status } = req.body;
 
-    if (!['preparing', 'ready', 'completed'].includes(status)) {
+    if (!['preparing', 'ready', 'completed', 'rejected'].includes(status)) {
         throw new ApiError(400, 'Invalid status update');
     }
 
@@ -479,6 +479,14 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
             type: 'order_update',
             title: 'Order Ready! 🍽️',
             message: `Your order #${order.order_number} is ready for pickup/delivery`,
+            data: { order_id: order.id }
+        });
+   } else if (status === 'rejected') {
+        await supabaseAdmin.from('notifications').insert({
+            user_id: order.user_id,
+            type: 'refund_initiated',
+            title: 'Order Rejected & Refund Initiated',
+            message: `We're sorry, but vendor rejected your order #${order.order_number}. A refund has been initiated to your source payment method.`,
             data: { order_id: order.id }
         });
    }
