@@ -14,8 +14,9 @@ const generateOrderNumber = () => {
   const date = new Date();
   const prefix = 'GZ';
   const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+  const timeStr = `${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `${prefix}${dateStr}${random}`;
+  return `${prefix}${dateStr}${timeStr}${random}`;
 };
 
 // ============================================
