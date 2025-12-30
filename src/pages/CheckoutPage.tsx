@@ -337,7 +337,7 @@ export function CheckoutPage() {
    
    const donation = isDonationChecked ? donationAmount : 0;
    const grandTotal = itemTotal + deliveryFee + PLATFORM_FEE + donation;
-   const savings = 153; 
+   const savings = Math.round(grandTotal * 0.15); 
 
    const handleQuantityChange = async (productId: string, newQty: number) => {
      if (newQty <= 0) return removeItem(productId);
@@ -830,10 +830,7 @@ export function CheckoutPage() {
                                     <span>₹{PLATFORM_FEE.toFixed(2)}</span>
                                 </div>
 
-                                <div className="flex justify-between">
-                                    <span>GST & Restaurant Charges</span>
-                                    <span>₹{(0).toFixed(2)}</span>
-                                </div>
+
                                 
                                 {isDonationChecked && (
                                      <div className="flex justify-between">
@@ -900,7 +897,7 @@ export function CheckoutPage() {
                                  </div>
                              ) : (
                                  <div className="flex items-center gap-2">
-                                     <span className="text-lg font-semibold">Proceed to Pay</span>
+                                     <span className="text-lg font-bold">Pay ₹{grandTotal.toFixed(2)}</span>
                                       <span className="text-xl">→</span>
                                  </div>
                              )}
@@ -973,8 +970,7 @@ export function CheckoutPage() {
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2">
-                                     <span className="text-lg font-semibold">Proceed to Pay</span>
-                                     <span className="text-xl">→</span>
+                                     <span className="text-lg font-bold">Pay ₹{grandTotal.toFixed(2)}</span>
                                 </div>
                             )}
                         </button>
