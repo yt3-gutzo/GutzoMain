@@ -34,17 +34,19 @@ async function checkOrder() {
       }
   } else {
       console.log("No Order ID provided. Listing last 5 orders:");
-      const { data: orders, error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
-        .select('order_number, status, delivery_status, created_at, payment_status')
+        .select('id, order_number, status, total_amount, user_id, created_at')
         .order('created_at', { ascending: false })
         .limit(5);
-
-      if (error) {
-          console.error("Error listing orders:", error);
-      } else {
-          console.table(orders);
-      }
+        
+    if (error) {
+        console.error('Error listing orders:', error);
+        return;
+    }
+    
+    console.log(`Found ${data.length} orders.`);
+    console.log(JSON.stringify(data, null, 2));
   }
 }
 

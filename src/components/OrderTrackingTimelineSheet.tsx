@@ -3,18 +3,19 @@ import { Phone, Utensils, ChevronRight, ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 
 interface OrderTrackingTimelineSheetProps {
-  status: 'placed' | 'preparing' | 'ready' | 'picked_up' | 'on_way' | 'delivered';
+  status: 'placed' | 'preparing' | 'ready' | 'picked_up' | 'on_way' | 'delivered' | 'driver_assigned';
   driver?: {
     name: string;
     phone: string;
     image?: string;
   };
   vendorName?: string;
+  deliveryOtp?: string;
 }
 
 import { useOrderTracking } from '../contexts/OrderTrackingContext';
 
-export function OrderTrackingTimelineSheet({ status, driver, vendorName }: OrderTrackingTimelineSheetProps) {
+export function OrderTrackingTimelineSheet({ status, driver, vendorName, deliveryOtp }: OrderTrackingTimelineSheetProps) {
   const { activeOrder } = useOrderTracking();
   
   return (
@@ -44,7 +45,7 @@ export function OrderTrackingTimelineSheet({ status, driver, vendorName }: Order
             </div>
 
             {/* Green Status Banner */}
-            <div className="border rounded-xl p-4 mb-6 flex items-center justify-between" style={{ backgroundColor: '#e7fdf3', borderColor: '#d1f7e6' }}>
+            <div className="border rounded-xl p-4 mb-4 flex items-center justify-between" style={{ backgroundColor: '#e7fdf3', borderColor: '#d1f7e6' }}>
                 <div>
                     <p className="text-sm font-bold" style={{ color: '#0d8e54' }}>
                         {status === 'placed' ? "Waiting for restaurant confirmation" :
@@ -63,6 +64,19 @@ export function OrderTrackingTimelineSheet({ status, driver, vendorName }: Order
                   </div>
                 )}
             </div>
+
+            {/* Delivery OTP - Show only when picked up or on way */}
+            {deliveryOtp && (status === 'picked_up' || status === 'on_way' || status === 'driver_assigned' || status === 'ready') && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 flex justify-between items-center shadow-sm">
+                    <div>
+                        <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-0.5">Share with Rider</p>
+                        <p className="text-sm text-blue-800">Delivery OTP</p>
+                    </div>
+                    <div className="text-3xl font-mono font-bold text-gray-900 tracking-widest bg-white px-3 py-1 rounded border border-blue-200">
+                        {deliveryOtp}
+                    </div>
+                </div>
+            )}
 
             {/* Action List */}
             <div className="space-y-6">

@@ -96,6 +96,15 @@ export function ActiveOrderFloatingBar() {
                 text: 'text-red-600',
                 label: 'REFUND INITIATED'
             };
+        case 'cancelled':
+            return {
+                title: 'Order Cancelled',
+                subtext: 'This order was cancelled',
+                icon: <X size={14} className="text-red-500" />,
+                bg: 'bg-red-50',
+                text: 'text-red-500',
+                label: 'CANCELLED'
+            };
         default:
             return {
                 title: 'Loading Order...',

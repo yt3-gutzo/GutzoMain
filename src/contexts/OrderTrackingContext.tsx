@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRouter } from '../components/Router';
 import { toast } from 'sonner';
 
-type OrderStatus = 'placed' | 'preparing' | 'ready' | 'picked_up' | 'on_way' | 'delivered';
+type OrderStatus = 'placed' | 'preparing' | 'ready' | 'picked_up' | 'on_way' | 'delivered' | 'rejected' | 'cancelled';
 
 interface TrackingState {
   orderId: string | null;
@@ -35,7 +35,15 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
   const [activeOrder, setActiveOrder] = useState<TrackingState | null>(() => {
     try {
         const saved = localStorage.getItem('activeOrder');
-        return saved ? JSON.parse(saved) : null;
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // Auto-clear if older than 12 hours
+            if (parsed.startTime && (Date.now() - parsed.startTime > 12 * 60 * 60 * 1000)) {
+                return null;
+            }
+            return parsed;
+        }
+        return null;
     } catch {
         return null;
     }
@@ -139,6 +147,8 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
                 else if (s === 'picked_up' || s === 'driver_assigned' || s === 'out_for_delivery') mappedStatus = 'picked_up';
                 else if (s === 'on_way' || s === 'allotted' || s === 'reached_location') mappedStatus = 'on_way';
                 else if (s === 'delivered' || s === 'completed') mappedStatus = 'delivered';
+                else if (s === 'rejected') mappedStatus = 'rejected';
+                else if (s === 'cancelled') mappedStatus = 'cancelled';
                 else {
                     console.log('⚠️ Unknown status:', s);
                 }

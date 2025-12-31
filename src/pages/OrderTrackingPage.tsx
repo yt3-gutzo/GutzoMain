@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Minimize2, Share2, Phone } from 'lucide-react';
+import { Minimize2, Share2, Phone, AlertCircle } from 'lucide-react';
 import { OrderTrackingMap } from '../components/OrderTrackingMap';
 import { OrderTrackingTimelineSheet } from '../components/OrderTrackingTimelineSheet';
 import { useOrderTracking } from '../contexts/OrderTrackingContext';
 import { useRouter } from '../components/Router';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { Button } from '../components/ui/button';
 
 export function OrderTrackingPage() {
   const { currentRoute, navigate: routerNavigate } = useRouter();
@@ -19,6 +20,7 @@ export function OrderTrackingPage() {
   // LOCAL STATE REWIRING
   const [localOrder, setLocalOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const orderId = pathId || contextOrder?.orderId;
   const [userName, setUserName] = useState('there');
 
@@ -43,7 +45,11 @@ export function OrderTrackingPage() {
 
   // Poll for order details directly
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderId) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+    }
 
     // Start context tracking just to keep it in sync for background, 
     // but we use local state for display.
@@ -85,6 +91,13 @@ export function OrderTrackingPage() {
                     'Content-Type': 'application/json'
                 }
             });
+
+            if (res.status === 404) {
+               setNotFound(true);
+               setLoading(false);
+               return;
+            }
+
             const data = await res.json();
             
             if (res.ok) {
@@ -155,6 +168,28 @@ export function OrderTrackingPage() {
   const userLocation = { lat: 12.9516, lng: 77.6046 }; 
   const driverLoc = localOrder?.rider_coordinates || contextOrder?.rider_coordinates;
 
+  if (notFound) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-gray-50 p-6 text-center">
+            <div className="bg-white p-8 rounded-2xl shadow-sm mb-6 max-w-sm w-full">
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="w-8 h-8 text-red-500" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Order Details Not Found</h2>
+                <p className="text-gray-500 mb-6 text-sm">
+                    We couldn't find the order #{orderId?.slice(0,8)}. It may have been cancelled or belongs to a different account.
+                </p>
+                <Button 
+                    onClick={() => window.location.href = '/home'} 
+                    className="w-full bg-gutzo-primary hover:bg-gutzo-primary-hover text-white"
+                >
+                    Go to Home
+                </Button>
+            </div>
+        </div>
+      );
+  }
+
   return (
     <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
@@ -195,13 +230,14 @@ export function OrderTrackingPage() {
             </div>
         </div>
 
-        {/* Absolute positioned coupon banner - MOVED OUTSIDE HEADER FOR Z-INDEX FIX */}
+        {/* Absolute positioned coupon banner - MOVED OUTSIDE HEADER FOR Z-INDEX FIX - TEMPORARILY DISABLED
         <div className="absolute top-[180px] left-4 right-4 bg-white rounded-xl shadow-lg p-3 flex items-center gap-3 z-[60]">
                 <div className="w-8 h-8 flex-shrink-0 bg-blue-100 rounded-lg flex items-center justify-center text-xl">🎁</div>
                 <p className="text-xs text-gray-600 leading-tight">
                 Hey {userName}, sit back while we discover hidden coupons near you 💰
                 </p>
         </div>
+        */}
 
         {/* Map Background - Full Space */}
         <div className="flex-1 w-full h-full relative bg-gray-100 z-10 pt-10">
@@ -217,7 +253,8 @@ export function OrderTrackingPage() {
         <OrderTrackingTimelineSheet 
             status={displayStatus as any}
             vendorName={localOrder?.vendor?.name || contextOrder?.vendorName}
-            driver={displayStatus === 'picked_up' || displayStatus === 'on_way' || displayStatus === 'delivered' ? {
+            deliveryOtp={localOrder?.delivery_otp || localOrder?.delivery_partner_details?.drop_otp || contextOrder?.delivery_otp}
+            driver={displayStatus === 'picked_up' || displayStatus === 'on_way' || displayStatus === 'delivered' || displayStatus === 'driver_assigned' ? {
                 name: localOrder?.riders?.name || contextOrder?.rider_name || "Assigned Driver",
                 phone: localOrder?.riders?.phone || contextOrder?.rider_phone || ""
             } : undefined} 

@@ -28,6 +28,14 @@ interface Order {
     };
     delivery_status?: string;
     pickup_otp?: string;
+    delivery_partner_details?: {
+        provider: string;
+        pickup_otp?: string;
+        drop_otp?: string;
+        rider_name?: string;
+        rider_phone?: string;
+        flash_order_id?: string;
+    };
 }
 
 
@@ -215,12 +223,20 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
                                                                 {order.delivery_status.replace('_', ' ')}
                                                             </div>
                                                         )}
-                                                        {(order as any).pickup_otp && (
-                                                            <div className="mt-2 flex flex-col items-end">
-                                                                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Pickup OTP</span>
-                                                                <div className="font-mono font-bold text-xl text-gutzo-primary bg-green-50 px-3 py-1 rounded-md border border-green-200 shadow-sm">
-                                                                    {(order as any).pickup_otp}
+                                                        {/* Show Shadowfax Request Status / Details */}
+                                                        {order.delivery_partner_details && (
+                                                            <div className="mt-2 text-right space-y-1">
+                                                                <div className="text-xs text-xs font-semibold text-gray-500">
+                                                                    via {order.delivery_partner_details.provider}
                                                                 </div>
+                                                                {order.delivery_partner_details.pickup_otp && (
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Pickup OTP</span>
+                                                                        <div className="font-mono font-bold text-xl text-gutzo-primary bg-green-50 px-3 py-1 rounded-md border border-green-200 shadow-sm">
+                                                                            {order.delivery_partner_details.pickup_otp}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
@@ -296,7 +312,7 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
                                                                 } catch(e) { toast.error("Failed to update status"); }
                                                             }}
                                                             className="bg-green-600 hover:bg-green-700 text-white gap-2">
-                                                            <Check className="w-4 h-4" /> Mark Ready
+                                                            <Check className="w-4 h-4" /> Food Prepared
                                                         </Button>
                                                     ) : null}
                                                  </div>

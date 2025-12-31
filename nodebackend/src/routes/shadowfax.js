@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Shadowfax Config
 const SHADOWFAX_BASE_URL = process.env.SHADOWFAX_URL || 'https://hlbackend.staging.shadowfax.in';
-const SHADOWFAX_TOKEN = process.env.SHADOWFAX_TOKEN;
+const SHADOWFAX_TOKEN = process.env.SHADOWFAX_API_TOKEN;
 
 /**
  * POST /api/shadowfax/create-order
@@ -27,9 +27,10 @@ router.post('/create-order', async (req, res) => {
         if (!orderId) return res.status(400).json({ error: 'Order ID is required' });
 
         // 1. Fetch Order Details from Supabase
+        // 1. Fetch Order Details from Supabase
         const { data: order, error } = await supabaseAdmin
             .from('orders')
-            .select('*')
+            .select('*, vendor:vendors(*)')
             .eq('id', orderId)
             .single();
 
@@ -42,53 +43,58 @@ router.post('/create-order', async (req, res) => {
         // For now, assuming delivery_address contains valid fields.
         
         // Mock/Default lat/lng if missing (Safe fallback for dev)
-        const pickupLat = 12.9716; 
-        const pickupLng = 77.5946;
-        const dropLat = order.delivery_address?.latitude || 12.9352;
-        const dropLng = order.delivery_address?.longitude || 77.6245;
+        const pickupLat = Number(order.vendor?.latitude); 
+        const pickupLng = Number(order.vendor?.longitude);
+        const dropLat = order.delivery_address?.latitude;
+        const dropLng = order.delivery_address?.longitude;
 
         const payload = {
-            "communications": {
-                "is_whatsapp_enabled": true,
-                "is_sms_enabled": true
+            "pickup_details": {
+                "name": order.vendor?.name || "Vendor",
+                "contact_number": order.vendor?.phone || "9999999999",
+                "address": order.vendor?.address ? `${order.vendor.address}${order.vendor.city ? ', ' + order.vendor.city : ''}` : "18, Sampige Rd, Malleshwaram, Bengaluru, Karnataka 560003",
+                "landmark": "",
+                "latitude": pickupLat,
+                "longitude": pickupLng
             },
-            "validations": {
-                "is_serviceability_check_required": false, // Skip for forced creation, or true if strict
-                "is_duplicate_check_required": true
-            },
-            "user_details": {
+            "drop_details": {
                 "name": order.delivery_address?.name || "Customer",
-                "contact_number": order.delivery_phone || "9999999999"
+                "contact_number": order.delivery_phone || "9999999999",
+                "is_contact_number_masked": false,
+                "address": order.delivery_address?.address || "Customer Address",
+                "landmark": order.delivery_address?.landmark || "",
+                "latitude": dropLat,
+                "longitude": dropLng
             },
             "order_details": {
-                "client_order_id": order.order_number, // Unique reference
-                "pickup_location_details": {
-                    "address_line_1": "Vendor Shop Address", // TODO: Fetch dynamic vendor address
-                    "address_line_2": "",
-                    "city": "Bangalore",
-                    "state": "Karnataka",
-                    "pincode": "560001",
-                    "latitude": pickupLat,
-                    "longitude": pickupLng
+                "order_id": order.order_number, // User example uses 'order_id' here
+                "is_prepaid": true,
+                "cash_to_be_collected": 0,
+                "delivery_charge_to_be_collected_from_customer": false,
+                "rts_required": true
+            },
+            "user_details": {
+                "contact_number": process.env.SHADOWFAX_CONTACT_NUMBER,
+                "credits_key": process.env.SHADOWFAX_CREDITS_KEY // Optional if needed
+            },
+            "validations": {
+                "pickup": {
+                    "is_otp_required": true,
+                    "otp": "1234"
                 },
-                "drop_location_details": {
-                    "address_line_1": order.delivery_address?.address || "Customer Address",
-                    "address_line_2": order.delivery_address?.landmark || "",
-                    "city": order.delivery_address?.city || "Bangalore",
-                    "state": order.delivery_address?.state || "Karnataka",
-                    "pincode": order.delivery_address?.pincode || "560001",
-                    "latitude": dropLat,
-                    "longitude": dropLng
+                "drop": {
+                    "is_otp_required": true,
+                    "otp": "1234"
                 },
-                "order_items": [
-                    {
-                        "name": "Food Items",
-                        "quantity": 1,
-                        "price": order.total_amount
-                    }
-                ],
-                "total_amount": order.total_amount,
-                "payment_mode": "PREPAID" // Assuming prepaid for now based on 'paid' status requirement
+                "rts": {
+                    "is_otp_required": true,
+                    "otp": "5678"
+                }
+            },
+            "communications": {
+                "send_sms_to_pickup_person": true,
+                "send_sms_to_drop_person": true,
+                "send_rts_sms_to_pickup_person": true
             }
         };
 
@@ -97,7 +103,7 @@ router.post('/create-order', async (req, res) => {
         // 3. Call Shadowfax API
         const sfResponse = await axios.post(`${SHADOWFAX_BASE_URL}/order/create/`, payload, {
             headers: {
-                'Authorization': `Token ${SHADOWFAX_TOKEN}`,
+                'Authorization': SHADOWFAX_TOKEN,
                 'Content-Type': 'application/json'
             }
         });
@@ -122,12 +128,7 @@ router.post('/create-order', async (req, res) => {
 
     } catch (err) {
         console.error('Shadowfax API Exception:', err.response?.data || err.message);
-        // Fallback for dev if API fails (so we can still test UI flow)
-        if (process.env.NODE_ENV === 'development') {
-             console.warn('⚠️ Dev Mode: Simulating Shadowfax Success');
-             return res.json({ success: true, shadowfax_order_id: `SFX-SIM-${Date.now()}` });
-        }
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: err.message, details: err.response?.data });
     }
 });
 

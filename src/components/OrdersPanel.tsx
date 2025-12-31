@@ -295,14 +295,14 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
                   )}
 
                   {/* Bottom: Action Button */}
-                  <div className="pt-2 sm:pt-0">
+                  <div className="pt-2 sm:pt-0 flex gap-2">
                     <Button
                       variant={expanded ? "ghost" : "outline"}
                       size="sm"
-                      className={`w-full h-10 text-sm font-medium transition-colors ${
+                      className={`flex-1 h-10 text-sm font-medium transition-colors ${
                         expanded 
                           ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' 
-                          : 'border-gutzo-primary text-gutzo-primary hover:bg-gutzo-primary/5 hover:text-gutzo-primary-hover'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                       }`}
                       onClick={(e) => {
                          e.stopPropagation(); 
@@ -314,7 +314,23 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
                         });
                       }}
                     >
-                      {expanded ? 'Collapse Details' : 'View Details'}
+                      {expanded ? 'Collapse' : 'Details'}
+                    </Button>
+
+                    <Button
+                      variant="default" 
+                      size="sm"
+                      className="flex-1 h-10 bg-gutzo-primary hover:bg-gutzo-primary-hover text-white font-medium shadow-sm"
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          if (onViewOrderDetails) {
+                             onViewOrderDetails(order); // Keep existing hook just in case
+                          }
+                          // Navigate to tracking
+                          window.location.href = `/tracking/${order.order_number}`;
+                      }}
+                    >
+                      Track Order
                     </Button>
                   </div>
                 </div>
