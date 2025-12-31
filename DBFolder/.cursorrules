@@ -5,3 +5,6 @@ You must always consider the context from the following SQL files when answering
 - `nodebackend/SupabaseSelfhostSqlFiles/backup.sql`
 
 If any other `.sql` files are added to the project, please consider them as well particularly when making changes to the database or understanding the data model.
+
+# File Creation Rules
+Any new SQL files created should be placed in this `DBFolder` directory.
