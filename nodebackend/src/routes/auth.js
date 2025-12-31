@@ -324,6 +324,25 @@ router.post('/create-user', asyncHandler(async (req, res) => {
     .single();
 
   if (existingUser) {
+    // If user exists, update their profile with provided name/email (if new ones match signup intent)
+    // This fixes the issue where verify-otp creates a shell user and create-user was ignoring the name payload
+    const updates = {};
+    if (name) updates.name = name;
+    if (email) updates.email = email;
+    
+    if (Object.keys(updates).length > 0) {
+      const { data: updatedUser, error: updateError } = await supabaseAdmin
+        .from('users')
+        .update(updates)
+        .eq('phone', phone)
+        .select()
+        .single();
+        
+       if (!updateError && updatedUser) {
+         return successResponse(res, { user: updatedUser }, 'User profile updated', 200);
+       }
+    }
+
     // console.log('User already exists, returning existing profile:', phone);
     return successResponse(res, { user: existingUser }, 'User already exists', 200);
   }
