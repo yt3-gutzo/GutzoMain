@@ -1,0 +1,7 @@
+# Global Rules
+
+You must always consider the context from the following SQL files when answering questions or performing tasks involving database schema, data flow, or backend logic:
+
+- `nodebackend/SupabaseSelfhostSqlFiles/backup.sql`
+
+If any other `.sql` files are added to the project, please consider them as well particularly when making changes to the database or understanding the data model.

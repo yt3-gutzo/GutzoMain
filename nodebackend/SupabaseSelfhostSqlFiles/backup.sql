@@ -3444,6 +3444,9 @@ CREATE TABLE public.cart (
     quantity integer DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
+    variant_id uuid,
+    addons jsonb,
+    special_instructions text,
     CONSTRAINT chk_quantity_positive CHECK ((quantity > 0))
 );
 
@@ -3619,6 +3622,10 @@ CREATE TABLE public.meal_plan_day_menu (
     total_calories integer,
     notes text,
     created_at timestamp with time zone DEFAULT now(),
+    breakfast_item text,
+    lunch_item text,
+    dinner_item text,
+    snack_item text,
     CONSTRAINT meal_plan_day_menu_day_of_week_check CHECK (((day_of_week >= 0) AND (day_of_week <= 6)))
 );
 
@@ -3679,9 +3686,6 @@ CREATE TABLE public.meal_plans (
     banner_url text,
     video_url text,
     price_display text NOT NULL,
-    price_per_day numeric(10,2),
-    price_per_week numeric(10,2),
-    trial_price numeric(10,2),
     schedule text NOT NULL,
     features text[] DEFAULT '{}'::text[],
     plan_type text,
@@ -3701,6 +3705,12 @@ CREATE TABLE public.meal_plans (
     sort_order integer DEFAULT 0,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
+    trust_text text DEFAULT ' 96% choose to continue'::text,
+    vendor_name text,
+    price_breakfast numeric(10,2) DEFAULT 89.00,
+    price_lunch numeric(10,2) DEFAULT 129.00,
+    price_dinner numeric(10,2) DEFAULT 129.00,
+    price_snack numeric(10,2) DEFAULT 49.00,
     CONSTRAINT meal_plans_dietary_type_check CHECK ((dietary_type = ANY (ARRAY['veg'::text, 'non-veg'::text, 'vegan'::text, 'eggetarian'::text]))),
     CONSTRAINT meal_plans_plan_type_check CHECK ((plan_type = ANY (ARRAY['weight_loss'::text, 'muscle_gain'::text, 'balanced'::text, 'detox'::text, 'keto'::text, 'general'::text])))
 );
@@ -3834,7 +3844,14 @@ CREATE TABLE public.orders (
     invoice_number text,
     invoice_url text,
     order_source text DEFAULT 'app'::text,
-    device_type text
+    device_type text,
+    shadowfax_order_id text,
+    pickup_otp text,
+    rider_name text,
+    rider_phone text,
+    rider_coordinates jsonb,
+    delivery_status text,
+    delivery_partner_details jsonb
 );
 
 
@@ -3845,6 +3862,20 @@ ALTER TABLE public.orders OWNER TO postgres;
 --
 
 COMMENT ON COLUMN public.orders.delivery_otp IS '4-digit verification code for delivery';
+
+
+--
+-- Name: COLUMN orders.shadowfax_order_id; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.orders.shadowfax_order_id IS 'Order ID returned by Shadowfax API';
+
+
+--
+-- Name: COLUMN orders.rider_coordinates; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.orders.rider_coordinates IS 'Latest known {lat, lng} of the rider';
 
 
 --
@@ -4028,7 +4059,11 @@ CREATE TABLE public.products (
     stock_quantity integer,
     max_order_qty integer DEFAULT 10,
     min_order_qty integer DEFAULT 1,
-    available_days integer[]
+    available_days integer[],
+    rating numeric(2,1),
+    review_count integer DEFAULT 0,
+    addon_ids uuid[] DEFAULT '{}'::uuid[],
+    is_veg boolean DEFAULT true
 );
 
 
@@ -4039,6 +4074,13 @@ ALTER TABLE public.products OWNER TO postgres;
 --
 
 COMMENT ON COLUMN public.products.type IS 'veg, non-veg, or egg';
+
+
+--
+-- Name: COLUMN products.addon_ids; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.products.addon_ids IS 'List of product IDs that are addons for this product';
 
 
 --
@@ -4423,6 +4465,42 @@ COMMENT ON TABLE public.vendor_delivery_zones IS 'Vendor to zone mapping with cu
 
 
 --
+-- Name: vendor_leads; Type: TABLE; Schema: public; Owner: supabase_admin
+--
+
+CREATE TABLE public.vendor_leads (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    kitchen_name text NOT NULL,
+    contact_name text NOT NULL,
+    phone text NOT NULL,
+    email text,
+    city text NOT NULL,
+    food_type text,
+    status text DEFAULT 'open'::text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    remarks text,
+    CONSTRAINT vendor_leads_status_check CHECK ((status = ANY (ARRAY['open'::text, 'in-progress'::text, 'approved'::text, 'rejected'::text])))
+);
+
+
+ALTER TABLE public.vendor_leads OWNER TO supabase_admin;
+
+--
+-- Name: TABLE vendor_leads; Type: COMMENT; Schema: public; Owner: supabase_admin
+--
+
+COMMENT ON TABLE public.vendor_leads IS 'Stores potential vendor interest leads';
+
+
+--
+-- Name: COLUMN vendor_leads.status; Type: COMMENT; Schema: public; Owner: supabase_admin
+--
+
+COMMENT ON COLUMN public.vendor_leads.status IS 'Current status of the lead in the onboarding pipeline';
+
+
+--
 -- Name: vendor_payouts; Type: TABLE; Schema: public; Owner: supabase_admin
 --
 
@@ -4538,7 +4616,24 @@ CREATE TABLE public.vendors (
     bank_account jsonb,
     commission_rate numeric(5,2) DEFAULT 15,
     payout_frequency text DEFAULT 'weekly'::text,
-    status text DEFAULT 'approved'::text
+    status text DEFAULT 'approved'::text,
+    latitude double precision,
+    longitude double precision,
+    is_blacklisted boolean DEFAULT false,
+    password text DEFAULT "substring"((gen_random_uuid())::text, 1, 8),
+    otp text,
+    otp_expires_at timestamp with time zone,
+    pincode text,
+    company_reg_no text,
+    owner_aadhar_no text,
+    pan_card_no text,
+    bank_account_no text,
+    ifsc_code text,
+    bank_name text,
+    account_holder_name text,
+    owner_name text,
+    company_type text,
+    CONSTRAINT vendors_company_type_check CHECK ((company_type = ANY (ARRAY['Sole Proprietorship'::text, 'Partnership'::text, 'LLP'::text, 'Pvt Ltd'::text, 'OPC'::text])))
 );
 
 
@@ -4549,6 +4644,76 @@ ALTER TABLE public.vendors OWNER TO postgres;
 --
 
 COMMENT ON COLUMN public.vendors.commission_rate IS 'Platform commission percentage';
+
+
+--
+-- Name: COLUMN vendors.pincode; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.pincode IS 'Postal code of the vendor location';
+
+
+--
+-- Name: COLUMN vendors.company_reg_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.company_reg_no IS 'Company Registration Number / CIN';
+
+
+--
+-- Name: COLUMN vendors.owner_aadhar_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.owner_aadhar_no IS 'Aadhar Number of the owner';
+
+
+--
+-- Name: COLUMN vendors.pan_card_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.pan_card_no IS 'PAN Card Number';
+
+
+--
+-- Name: COLUMN vendors.bank_account_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.bank_account_no IS 'Bank Account Number for payouts';
+
+
+--
+-- Name: COLUMN vendors.ifsc_code; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.ifsc_code IS 'IFSC Code for the bank account';
+
+
+--
+-- Name: COLUMN vendors.bank_name; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.bank_name IS 'Name of the Bank';
+
+
+--
+-- Name: COLUMN vendors.account_holder_name; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.account_holder_name IS 'Name of the account holder as per bank records';
+
+
+--
+-- Name: COLUMN vendors.owner_name; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.owner_name IS 'Full name of the business owner';
+
+
+--
+-- Name: COLUMN vendors.company_type; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.company_type IS 'Type of company registration';
 
 
 --
@@ -4598,10 +4763,10 @@ PARTITION BY RANGE (inserted_at);
 ALTER TABLE realtime.messages OWNER TO supabase_realtime_admin;
 
 --
--- Name: messages_2025_11_12; Type: TABLE; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_26; Type: TABLE; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE TABLE realtime.messages_2025_11_12 (
+CREATE TABLE realtime.messages_2025_12_26 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -4613,13 +4778,13 @@ CREATE TABLE realtime.messages_2025_11_12 (
 );
 
 
-ALTER TABLE realtime.messages_2025_11_12 OWNER TO supabase_admin;
+ALTER TABLE realtime.messages_2025_12_26 OWNER TO supabase_admin;
 
 --
--- Name: messages_2025_11_13; Type: TABLE; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_27; Type: TABLE; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE TABLE realtime.messages_2025_11_13 (
+CREATE TABLE realtime.messages_2025_12_27 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -4631,13 +4796,13 @@ CREATE TABLE realtime.messages_2025_11_13 (
 );
 
 
-ALTER TABLE realtime.messages_2025_11_13 OWNER TO supabase_admin;
+ALTER TABLE realtime.messages_2025_12_27 OWNER TO supabase_admin;
 
 --
--- Name: messages_2025_11_14; Type: TABLE; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_28; Type: TABLE; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE TABLE realtime.messages_2025_11_14 (
+CREATE TABLE realtime.messages_2025_12_28 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -4649,13 +4814,13 @@ CREATE TABLE realtime.messages_2025_11_14 (
 );
 
 
-ALTER TABLE realtime.messages_2025_11_14 OWNER TO supabase_admin;
+ALTER TABLE realtime.messages_2025_12_28 OWNER TO supabase_admin;
 
 --
--- Name: messages_2025_11_15; Type: TABLE; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_29; Type: TABLE; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE TABLE realtime.messages_2025_11_15 (
+CREATE TABLE realtime.messages_2025_12_29 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -4667,13 +4832,13 @@ CREATE TABLE realtime.messages_2025_11_15 (
 );
 
 
-ALTER TABLE realtime.messages_2025_11_15 OWNER TO supabase_admin;
+ALTER TABLE realtime.messages_2025_12_29 OWNER TO supabase_admin;
 
 --
--- Name: messages_2025_11_16; Type: TABLE; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_30; Type: TABLE; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE TABLE realtime.messages_2025_11_16 (
+CREATE TABLE realtime.messages_2025_12_30 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -4685,7 +4850,61 @@ CREATE TABLE realtime.messages_2025_11_16 (
 );
 
 
-ALTER TABLE realtime.messages_2025_11_16 OWNER TO supabase_admin;
+ALTER TABLE realtime.messages_2025_12_30 OWNER TO supabase_admin;
+
+--
+-- Name: messages_2025_12_31; Type: TABLE; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE TABLE realtime.messages_2025_12_31 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+ALTER TABLE realtime.messages_2025_12_31 OWNER TO supabase_admin;
+
+--
+-- Name: messages_2026_01_01; Type: TABLE; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE TABLE realtime.messages_2026_01_01 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+ALTER TABLE realtime.messages_2026_01_01 OWNER TO supabase_admin;
+
+--
+-- Name: messages_2026_01_02; Type: TABLE; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE TABLE realtime.messages_2026_01_02 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+ALTER TABLE realtime.messages_2026_01_02 OWNER TO supabase_admin;
 
 --
 -- Name: schema_migrations; Type: TABLE; Schema: realtime; Owner: supabase_admin
@@ -4992,38 +5211,59 @@ CREATE TABLE supabase_functions.migrations (
 ALTER TABLE supabase_functions.migrations OWNER TO supabase_functions_admin;
 
 --
--- Name: messages_2025_11_12; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_26; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_12 FOR VALUES FROM ('2025-11-12 00:00:00') TO ('2025-11-13 00:00:00');
-
-
---
--- Name: messages_2025_11_13; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
---
-
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_13 FOR VALUES FROM ('2025-11-13 00:00:00') TO ('2025-11-14 00:00:00');
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_12_26 FOR VALUES FROM ('2025-12-26 00:00:00') TO ('2025-12-27 00:00:00');
 
 
 --
--- Name: messages_2025_11_14; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_27; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_14 FOR VALUES FROM ('2025-11-14 00:00:00') TO ('2025-11-15 00:00:00');
-
-
---
--- Name: messages_2025_11_15; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
---
-
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_15 FOR VALUES FROM ('2025-11-15 00:00:00') TO ('2025-11-16 00:00:00');
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_12_27 FOR VALUES FROM ('2025-12-27 00:00:00') TO ('2025-12-28 00:00:00');
 
 
 --
--- Name: messages_2025_11_16; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_28; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_16 FOR VALUES FROM ('2025-11-16 00:00:00') TO ('2025-11-17 00:00:00');
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_12_28 FOR VALUES FROM ('2025-12-28 00:00:00') TO ('2025-12-29 00:00:00');
+
+
+--
+-- Name: messages_2025_12_29; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_12_29 FOR VALUES FROM ('2025-12-29 00:00:00') TO ('2025-12-30 00:00:00');
+
+
+--
+-- Name: messages_2025_12_30; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_12_30 FOR VALUES FROM ('2025-12-30 00:00:00') TO ('2025-12-31 00:00:00');
+
+
+--
+-- Name: messages_2025_12_31; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_12_31 FOR VALUES FROM ('2025-12-31 00:00:00') TO ('2026-01-01 00:00:00');
+
+
+--
+-- Name: messages_2026_01_01; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_01_01 FOR VALUES FROM ('2026-01-01 00:00:00') TO ('2026-01-02 00:00:00');
+
+
+--
+-- Name: messages_2026_01_02; Type: TABLE ATTACH; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_01_02 FOR VALUES FROM ('2026-01-02 00:00:00') TO ('2026-01-03 00:00:00');
 
 
 --
@@ -5038,6 +5278,947 @@ ALTER TABLE ONLY auth.refresh_tokens ALTER COLUMN id SET DEFAULT nextval('auth.r
 --
 
 ALTER TABLE ONLY supabase_functions.hooks ALTER COLUMN id SET DEFAULT nextval('supabase_functions.hooks_id_seq'::regclass);
+
+
+--
+-- Data for Name: extensions; Type: TABLE DATA; Schema: _realtime; Owner: supabase_admin
+--
+
+COPY _realtime.extensions (id, type, settings, tenant_external_id, inserted_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: schema_migrations; Type: TABLE DATA; Schema: _realtime; Owner: supabase_admin
+--
+
+COPY _realtime.schema_migrations (version, inserted_at) FROM stdin;
+20210706140551	2025-11-13 14:03:52
+20220329161857	2025-11-13 14:03:52
+20220410212326	2025-11-13 14:03:52
+20220506102948	2025-11-13 14:03:53
+20220527210857	2025-11-13 14:03:53
+20220815211129	2025-11-13 14:03:53
+20220815215024	2025-11-13 14:03:53
+20220818141501	2025-11-13 14:03:53
+20221018173709	2025-11-13 14:03:53
+20221102172703	2025-11-13 14:03:53
+20221223010058	2025-11-13 14:03:53
+20230110180046	2025-11-13 14:03:53
+20230810220907	2025-11-13 14:03:53
+20230810220924	2025-11-13 14:03:53
+20231024094642	2025-11-13 14:03:53
+20240306114423	2025-11-13 14:03:53
+20240418082835	2025-11-13 14:03:53
+20240625211759	2025-11-13 14:03:53
+20240704172020	2025-11-13 14:03:53
+20240902173232	2025-11-13 14:03:53
+20241106103258	2025-11-13 14:03:53
+20250424203323	2025-11-13 14:03:53
+20250613072131	2025-11-13 14:03:53
+20250711044927	2025-11-13 14:03:53
+20250811121559	2025-11-13 14:03:53
+20250926223044	2025-11-13 14:03:53
+\.
+
+
+--
+-- Data for Name: tenants; Type: TABLE DATA; Schema: _realtime; Owner: supabase_admin
+--
+
+COPY _realtime.tenants (id, name, external_id, jwt_secret, max_concurrent_users, inserted_at, updated_at, max_events_per_second, postgres_cdc_default, max_bytes_per_second, max_channels_per_client, max_joins_per_second, suspend, jwt_jwks, notify_private_alpha, private_only, migrations_ran, broadcast_adapter, max_presence_events_per_second, max_payload_size_in_kb) FROM stdin;
+\.
+
+
+--
+-- Data for Name: audit_log_entries; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.audit_log_entries (instance_id, id, payload, created_at, ip_address) FROM stdin;
+\.
+
+
+--
+-- Data for Name: flow_state; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.flow_state (id, user_id, auth_code, code_challenge_method, code_challenge, provider_type, provider_access_token, provider_refresh_token, created_at, updated_at, authentication_method, auth_code_issued_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: identities; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: instances; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.instances (id, uuid, raw_base_config, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: mfa_amr_claims; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.mfa_amr_claims (session_id, created_at, updated_at, authentication_method, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: mfa_challenges; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.mfa_challenges (id, factor_id, created_at, verified_at, ip_address, otp_code, web_authn_session_data) FROM stdin;
+\.
+
+
+--
+-- Data for Name: mfa_factors; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret, phone, last_challenged_at, web_authn_credential, web_authn_aaguid, last_webauthn_challenge_data) FROM stdin;
+\.
+
+
+--
+-- Data for Name: oauth_authorizations; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.oauth_authorizations (id, authorization_id, client_id, user_id, redirect_uri, scope, state, resource, code_challenge, code_challenge_method, response_type, status, authorization_code, created_at, expires_at, approved_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: oauth_clients; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.oauth_clients (id, client_secret_hash, registration_type, redirect_uris, grant_types, client_name, client_uri, logo_uri, created_at, updated_at, deleted_at, client_type) FROM stdin;
+\.
+
+
+--
+-- Data for Name: oauth_consents; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.oauth_consents (id, user_id, client_id, scopes, granted_at, revoked_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: one_time_tokens; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.one_time_tokens (id, user_id, token_type, token_hash, relates_to, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: refresh_tokens; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.refresh_tokens (instance_id, id, token, user_id, revoked, created_at, updated_at, parent, session_id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: saml_providers; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.saml_providers (id, sso_provider_id, entity_id, metadata_xml, metadata_url, attribute_mapping, created_at, updated_at, name_id_format) FROM stdin;
+\.
+
+
+--
+-- Data for Name: saml_relay_states; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.saml_relay_states (id, sso_provider_id, request_id, for_email, redirect_to, created_at, updated_at, flow_state_id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: schema_migrations; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.schema_migrations (version) FROM stdin;
+20171026211738
+20171026211808
+20171026211834
+20180103212743
+20180108183307
+20180119214651
+20180125194653
+00
+20210710035447
+20210722035447
+20210730183235
+20210909172000
+20210927181326
+20211122151130
+20211124214934
+20211202183645
+20220114185221
+20220114185340
+20220224000811
+20220323170000
+20220429102000
+20220531120530
+20220614074223
+20220811173540
+20221003041349
+20221003041400
+20221011041400
+20221020193600
+20221021073300
+20221021082433
+20221027105023
+20221114143122
+20221114143410
+20221125140132
+20221208132122
+20221215195500
+20221215195800
+20221215195900
+20230116124310
+20230116124412
+20230131181311
+20230322519590
+20230402418590
+20230411005111
+20230508135423
+20230523124323
+20230818113222
+20230914180801
+20231027141322
+20231114161723
+20231117164230
+20240115144230
+20240214120130
+20240306115329
+20240314092811
+20240427152123
+20240612123726
+20240729123726
+20240802193726
+20240806073726
+20241009103726
+20250717082212
+20250731150234
+20250804100000
+20250901200500
+20250903112500
+20250904133000
+20250925093508
+20251007112900
+\.
+
+
+--
+-- Data for Name: sessions; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.sessions (id, user_id, created_at, updated_at, factor_id, aal, not_after, refreshed_at, user_agent, ip, tag, oauth_client_id, refresh_token_hmac_key, refresh_token_counter) FROM stdin;
+\.
+
+
+--
+-- Data for Name: sso_domains; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.sso_domains (id, sso_provider_id, domain, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: sso_providers; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.sso_providers (id, resource_id, created_at, updated_at, disabled) FROM stdin;
+\.
+
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, invited_at, confirmation_token, confirmation_sent_at, recovery_token, recovery_sent_at, email_change_token_new, email_change, email_change_sent_at, last_sign_in_at, raw_app_meta_data, raw_user_meta_data, is_super_admin, created_at, updated_at, phone, phone_confirmed_at, phone_change, phone_change_token, phone_change_sent_at, email_change_token_current, email_change_confirm_status, banned_until, reauthentication_token, reauthentication_sent_at, is_sso_user, deleted_at, is_anonymous) FROM stdin;
+\.
+
+
+--
+-- Data for Name: activity_logs; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.activity_logs (id, user_id, action, entity_type, entity_id, metadata, device_type, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: cart; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.cart (id, user_phone, product_id, vendor_id, quantity, created_at, updated_at, variant_id, addons, special_instructions) FROM stdin;
+\.
+
+
+--
+-- Data for Name: categories; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.categories (id, name, description, image_url, icon_name, sort_order, is_active, created_at, banner_url, parent_category_id, slug, is_featured) FROM stdin;
+38c74be4-10cd-4cc8-b8f0-ca7cf386c730	Salads	\N	https://storage.googleapis.com/gutzo/category/salads.png	\N	1	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+594c03cb-653d-43c6-8cd5-165487ca9196	Smoothies	\N	https://storage.googleapis.com/gutzo/category/smoothies.png	\N	2	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+d84a30a7-8b90-4950-a23f-bbe4124261db	Bowls	\N	https://storage.googleapis.com/gutzo/category/bowls.png	\N	3	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+e49c0bc4-a3c1-40c3-bf93-7290dbbc4181	Protein	\N	https://storage.googleapis.com/gutzo/category/protein.png	\N	4	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+8ace91c9-bd51-4787-8c10-e5436a61bd83	Wraps	\N	https://storage.googleapis.com/gutzo/category/wraps.png	\N	5	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+a12862ff-cfdf-4d74-9f6a-afce7dd275a1	Juices	\N	https://storage.googleapis.com/gutzo/category/juices.png	\N	6	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+7d8c8c21-28f2-4f70-b53a-aa49d924da77	Oats	\N	https://storage.googleapis.com/gutzo/category/oats.png	\N	7	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+01c90458-aa88-496f-b2eb-3988e0640fec	Breakfast	\N	https://storage.googleapis.com/gutzo/category/breakfast.png	\N	8	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+d588e7c1-3348-4611-838e-fef0567ff832	Low-Cal	\N	https://storage.googleapis.com/gutzo/category/lowcal.png	\N	9	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+d25bf6b0-9df4-4407-a5b7-6090463a5138	Soups	\N	https://storage.googleapis.com/gutzo/category/soups.png	\N	10	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+34e60f82-0d35-4668-ad16-9d278209efa9	Snacks	\N	https://storage.googleapis.com/gutzo/category/snacks.png	\N	11	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+f0e86853-06e7-420d-b81a-43ef3f3dcd88	Fruits	\N	https://storage.googleapis.com/gutzo/category/fruits.png	\N	12	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+f58012be-0b22-45cd-9ac9-c520a25347b3	Detox	\N	https://storage.googleapis.com/gutzo/category/detox.png	\N	13	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+9616fc93-c646-4193-aa0b-f314876f9b08	Fit Meals	\N	https://storage.googleapis.com/gutzo/category/fitmeals.png	\N	14	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+f7358447-a096-4763-b99d-64bf2e813f7a	Keto	\N	https://storage.googleapis.com/gutzo/category/keto.png	\N	15	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+b779e062-ad63-448e-815e-707e387bf430	Vegan	\N	https://storage.googleapis.com/gutzo/category/vegan.png	\N	16	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+34764e6b-8cac-4786-9e49-f00d26fda0af	Specials	\N	https://storage.googleapis.com/gutzo/category/specials.png	\N	17	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+fff1c898-3b5d-42c9-b3b6-261f02ca4365	Combos	\N	https://storage.googleapis.com/gutzo/category/combos.png	\N	18	t	2025-12-21 17:39:28.482243+00	\N	\N	\N	f
+\.
+
+
+--
+-- Data for Name: coupon_usage; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.coupon_usage (id, coupon_id, user_id, order_id, discount_applied, used_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: coupons; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.coupons (id, code, name, description, discount_type, discount_value, minimum_order, maximum_discount, usage_limit, usage_per_user, used_count, valid_from, valid_until, is_active, vendor_id, applicable_categories, first_order_only, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: delivery_zones; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.delivery_zones (id, name, city, state, center_lat, center_lng, radius_km, polygon, is_active, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: inventory_logs; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.inventory_logs (id, product_id, vendor_id, change_type, quantity_change, quantity_before, quantity_after, reason, created_by, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: kv_store_6985f4e9; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.kv_store_6985f4e9 (key, value) FROM stdin;
+\.
+
+
+--
+-- Data for Name: meal_plan_day_menu; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.meal_plan_day_menu (id, meal_plan_id, day_of_week, day_name, day_theme, breakfast_product_id, breakfast_image, lunch_product_id, lunch_image, dinner_product_id, dinner_image, snack_product_id, snack_image, total_calories, notes, created_at, breakfast_item, lunch_item, dinner_item, snack_item) FROM stdin;
+\.
+
+
+--
+-- Data for Name: meal_plan_subscriptions; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.meal_plan_subscriptions (id, user_id, meal_plan_id, chosen_meals, chosen_days, custom_times, duration, start_date, end_date, total_amount, delivery_address, status, payment_id, payment_status, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: meal_plans; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.meal_plans (id, vendor_id, title, description, thumbnail, banner_url, video_url, price_display, schedule, features, plan_type, dietary_type, calories_per_day, includes_breakfast, includes_lunch, includes_dinner, includes_snacks, rating, review_count, min_duration_days, max_duration_days, terms_conditions, is_active, is_featured, sort_order, created_at, updated_at, trust_text, vendor_name, price_breakfast, price_lunch, price_dinner, price_snack) FROM stdin;
+\.
+
+
+--
+-- Data for Name: notification_preferences; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.notification_preferences (id, user_id, order_updates, subscription_alerts, promotional, review_requests, channel, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: notifications; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.notifications (id, user_id, type, title, message, data, is_read, read_at, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: order_items; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.order_items (id, order_id, product_id, vendor_id, product_name, product_description, product_image_url, quantity, unit_price, total_price, special_instructions, customizations, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: orders; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.orders (id, user_id, vendor_id, order_number, status, order_type, subtotal, delivery_fee, packaging_fee, taxes, discount_amount, total_amount, delivery_address, delivery_phone, estimated_delivery_time, actual_delivery_time, payment_id, payment_method, payment_status, special_instructions, created_at, updated_at, platform_fee, gst_items, gst_fees, rider_id, tip_amount, delivery_otp, cancelled_by, cancellation_reason, refund_status, refund_amount, rating, feedback, feedback_at, invoice_number, invoice_url, order_source, device_type, shadowfax_order_id, pickup_otp, rider_name, rider_phone, rider_coordinates, delivery_status, delivery_partner_details) FROM stdin;
+\.
+
+
+--
+-- Data for Name: otp_verification; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.otp_verification (id, phone, otp, expires_at, verified, attempts, created_at, verified_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: payments; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.payments (id, order_id, subscription_id, mode, gateway, transaction_id, merchant_order_id, amount, currency, status, gateway_response, refund_id, refunded_amount, refunded_at, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: product_addons; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.product_addons (id, product_id, name, price, image, is_veg, max_quantity, is_available, sort_order, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: product_subscriptions; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.product_subscriptions (id, user_id, vendor_id, subscription_name, frequency, duration_weeks, start_date, end_date, total_amount, amount_per_delivery, status, delivery_time, delivery_days, delivery_address, payment_id, payment_method, payment_status, created_at, updated_at, menu_ids, next_delivery_date, per_delivery_amount, auto_renew, pause_start_date, pause_end_date, pause_reason, skip_dates) FROM stdin;
+\.
+
+
+--
+-- Data for Name: product_variants; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.product_variants (id, product_id, name, price, calories, image, is_default, is_available, sort_order, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: products; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.products (id, vendor_id, name, description, price, image_url, category, tags, is_available, preparation_time, nutritional_info, ingredients, allergens, portion_size, spice_level, is_featured, sort_order, created_at, updated_at, thumbnail, gallery_images, video_url, type, discount_price, discount_percent, is_bestseller, calories, serves, stock_quantity, max_order_qty, min_order_qty, available_days, rating, review_count, addon_ids, is_veg) FROM stdin;
+\.
+
+
+--
+-- Data for Name: promo_banners; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.promo_banners (id, title, subtitle, image_url, mobile_image_url, link_type, link_target_id, link_url, "position", sort_order, start_date, end_date, is_active, clicks, impressions, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: referrals; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.referrals (id, referrer_id, referee_id, referral_code, status, referrer_reward, referee_reward, first_order_id, completed_at, expires_at, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: review_votes; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.review_votes (id, review_id, user_id, is_helpful, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: reviews; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.reviews (id, user_id, vendor_id, product_id, order_id, rating, comment, images, is_verified_purchase, status, vendor_reply, replied_at, helpful_count, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: riders; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.riders (id, name, phone, email, profile_image, vehicle_type, vehicle_number, license_number, active_status, current_lat, current_lng, current_order_id, total_deliveries, avg_rating, bank_account, is_verified, is_active, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: search_logs; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.search_logs (id, user_id, query, results_count, clicked_product_id, clicked_vendor_id, device_type, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: subscription_deliveries; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.subscription_deliveries (id, subscription_id, order_id, scheduled_date, delivery_status, delivered_at, notes, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: subscription_items; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.subscription_items (id, subscription_id, product_id, product_name, quantity, unit_price, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: support_tickets; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.support_tickets (id, user_id, order_id, subject, description, category, priority, status, assigned_to, attachments, resolution, resolved_at, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: user_addresses; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.user_addresses (id, user_id, type, label, street, area, landmark, full_address, city, state, country, postal_code, latitude, longitude, delivery_instructions, is_default, created_at, updated_at, custom_label, zipcode, delivery_notes) FROM stdin;
+\.
+
+
+--
+-- Data for Name: user_favorites; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.user_favorites (id, user_id, vendor_id, product_id, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.users (id, phone, name, email, verified, created_at, updated_at, profile_image, date_of_birth, gender, language_preference, dietary_preference, allergies, health_goals, referral_code, referred_by, total_orders, total_spent, loyalty_points, membership_tier, device_tokens, last_order_at, last_login_at, is_blocked, blocked_reason) FROM stdin;
+\.
+
+
+--
+-- Data for Name: vendor_delivery_zones; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.vendor_delivery_zones (id, vendor_id, zone_id, delivery_fee, min_delivery_time, max_delivery_time, minimum_order, is_active, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: vendor_leads; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.vendor_leads (id, kitchen_name, contact_name, phone, email, city, food_type, status, created_at, updated_at, remarks) FROM stdin;
+\.
+
+
+--
+-- Data for Name: vendor_payouts; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.vendor_payouts (id, vendor_id, period_start, period_end, gross_amount, commission, tax_deducted, net_amount, order_count, status, payment_reference, paid_at, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: vendor_schedules; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.vendor_schedules (id, vendor_id, day_of_week, opening_time, closing_time, is_closed, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: vendor_special_hours; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.vendor_special_hours (id, vendor_id, special_date, opening_time, closing_time, is_closed, reason, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: vendors; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.vendors (id, name, description, image, rating, delivery_time, minimum_order, delivery_fee, cuisine_type, address, phone, is_active, is_featured, opening_hours, tags, created_at, updated_at, logo, banner_url, total_orders, total_reviews, whatsapp_number, email, is_open, is_verified, gst_number, fssai_license, bank_account, commission_rate, payout_frequency, status, latitude, longitude, is_blacklisted, password, otp, otp_expires_at, pincode, company_reg_no, owner_aadhar_no, pan_card_no, bank_account_no, ifsc_code, bank_name, account_holder_name, owner_name, company_type) FROM stdin;
+\.
+
+
+--
+-- Data for Name: waitlist; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.waitlist (id, user_id, type, target_id, user_phone, user_email, notified, notified_at, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2025_12_26; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2025_12_26 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2025_12_27; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2025_12_27 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2025_12_28; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2025_12_28 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2025_12_29; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2025_12_29 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2025_12_30; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2025_12_30 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2025_12_31; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2025_12_31 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2026_01_01; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2026_01_01 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: messages_2026_01_02; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.messages_2026_01_02 (topic, extension, payload, event, private, updated_at, inserted_at, id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: schema_migrations; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.schema_migrations (version, inserted_at) FROM stdin;
+20211116024918	2025-11-13 14:03:59
+20211116045059	2025-11-13 14:03:59
+20211116050929	2025-11-13 14:04:00
+20211116051442	2025-11-13 14:04:00
+20211116212300	2025-11-13 14:04:00
+20211116213355	2025-11-13 14:04:00
+20211116213934	2025-11-13 14:04:00
+20211116214523	2025-11-13 14:04:00
+20211122062447	2025-11-13 14:04:00
+20211124070109	2025-11-13 14:04:00
+20211202204204	2025-11-13 14:04:00
+20211202204605	2025-11-13 14:04:00
+20211210212804	2025-11-13 14:04:00
+20211228014915	2025-11-13 14:04:00
+20220107221237	2025-11-13 14:04:00
+20220228202821	2025-11-13 14:04:00
+20220312004840	2025-11-13 14:04:00
+20220603231003	2025-11-13 14:04:00
+20220603232444	2025-11-13 14:04:00
+20220615214548	2025-11-13 14:04:00
+20220712093339	2025-11-13 14:04:00
+20220908172859	2025-11-13 14:04:00
+20220916233421	2025-11-13 14:04:00
+20230119133233	2025-11-13 14:04:00
+20230128025114	2025-11-13 14:04:00
+20230128025212	2025-11-13 14:04:00
+20230227211149	2025-11-13 14:04:00
+20230228184745	2025-11-13 14:04:00
+20230308225145	2025-11-13 14:04:00
+20230328144023	2025-11-13 14:04:00
+20231018144023	2025-11-13 14:04:00
+20231204144023	2025-11-13 14:04:00
+20231204144024	2025-11-13 14:04:00
+20231204144025	2025-11-13 14:04:00
+20240108234812	2025-11-13 14:04:00
+20240109165339	2025-11-13 14:04:00
+20240227174441	2025-11-13 14:04:00
+20240311171622	2025-11-13 14:04:00
+20240321100241	2025-11-13 14:04:00
+20240401105812	2025-11-13 14:04:01
+20240418121054	2025-11-13 14:04:01
+20240523004032	2025-11-13 14:04:01
+20240618124746	2025-11-13 14:04:01
+20240801235015	2025-11-13 14:04:01
+20240805133720	2025-11-13 14:04:01
+20240827160934	2025-11-13 14:04:01
+20240919163303	2025-11-13 14:04:01
+20240919163305	2025-11-13 14:04:01
+20241019105805	2025-11-13 14:04:01
+20241030150047	2025-11-13 14:04:01
+20241108114728	2025-11-13 14:04:01
+20241121104152	2025-11-13 14:04:01
+20241130184212	2025-11-13 14:04:01
+20241220035512	2025-11-13 14:04:01
+20241220123912	2025-11-13 14:04:01
+20241224161212	2025-11-13 14:04:01
+20250107150512	2025-11-13 14:04:01
+20250110162412	2025-11-13 14:04:01
+20250123174212	2025-11-13 14:04:01
+20250128220012	2025-11-13 14:04:01
+20250506224012	2025-11-13 14:04:01
+20250523164012	2025-11-13 14:04:01
+20250714121412	2025-11-13 14:04:01
+20250905041441	2025-11-13 14:04:01
+20251103001201	2025-11-13 14:04:01
+\.
+
+
+--
+-- Data for Name: subscription; Type: TABLE DATA; Schema: realtime; Owner: supabase_admin
+--
+
+COPY realtime.subscription (id, subscription_id, entity, filters, claims, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: buckets; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.buckets (id, name, owner, created_at, updated_at, public, avif_autodetection, file_size_limit, allowed_mime_types, owner_id, type) FROM stdin;
+Gutzo	Gutzo	\N	2025-11-01 13:24:10.778274+00	2025-11-01 13:24:10.778274+00	t	f	\N	\N	\N	STANDARD
+vendor	vendor	\N	2025-12-21 15:53:43.994217+00	2025-12-21 15:53:43.994217+00	t	f	\N	\N	\N	STANDARD
+\.
+
+
+--
+-- Data for Name: buckets_analytics; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.buckets_analytics (id, type, format, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: buckets_vectors; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.buckets_vectors (id, type, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: iceberg_namespaces; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.iceberg_namespaces (id, bucket_id, name, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: iceberg_tables; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.iceberg_tables (id, namespace_id, bucket_id, name, location, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: migrations; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.migrations (id, name, hash, executed_at) FROM stdin;
+0	create-migrations-table	e18db593bcde2aca2a408c4d1100f6abba2195df	2025-11-13 14:04:00.031263
+1	initialmigration	6ab16121fbaa08bbd11b712d05f358f9b555d777	2025-11-13 14:04:00.046327
+2	storage-schema	5c7968fd083fcea04050c1b7f6253c9771b99011	2025-11-13 14:04:00.055363
+3	pathtoken-column	2cb1b0004b817b29d5b0a971af16bafeede4b70d	2025-11-13 14:04:00.097128
+4	add-migrations-rls	427c5b63fe1c5937495d9c635c263ee7a5905058	2025-11-13 14:04:00.143705
+5	add-size-functions	79e081a1455b63666c1294a440f8ad4b1e6a7f84	2025-11-13 14:04:00.152887
+6	change-column-name-in-get-size	f93f62afdf6613ee5e7e815b30d02dc990201044	2025-11-13 14:04:00.162207
+7	add-rls-to-buckets	e7e7f86adbc51049f341dfe8d30256c1abca17aa	2025-11-13 14:04:00.177288
+8	add-public-to-buckets	fd670db39ed65f9d08b01db09d6202503ca2bab3	2025-11-13 14:04:00.184733
+9	fix-search-function	3a0af29f42e35a4d101c259ed955b67e1bee6825	2025-11-13 14:04:00.192212
+10	search-files-search-function	68dc14822daad0ffac3746a502234f486182ef6e	2025-11-13 14:04:00.206439
+11	add-trigger-to-auto-update-updated_at-column	7425bdb14366d1739fa8a18c83100636d74dcaa2	2025-11-13 14:04:00.219585
+12	add-automatic-avif-detection-flag	8e92e1266eb29518b6a4c5313ab8f29dd0d08df9	2025-11-13 14:04:00.235383
+13	add-bucket-custom-limits	cce962054138135cd9a8c4bcd531598684b25e7d	2025-11-13 14:04:00.249375
+14	use-bytes-for-max-size	941c41b346f9802b411f06f30e972ad4744dad27	2025-11-13 14:04:00.270523
+15	add-can-insert-object-function	934146bc38ead475f4ef4b555c524ee5d66799e5	2025-11-13 14:04:00.316536
+16	add-version	76debf38d3fd07dcfc747ca49096457d95b1221b	2025-11-13 14:04:00.327865
+17	drop-owner-foreign-key	f1cbb288f1b7a4c1eb8c38504b80ae2a0153d101	2025-11-13 14:04:00.33241
+18	add_owner_id_column_deprecate_owner	e7a511b379110b08e2f214be852c35414749fe66	2025-11-13 14:04:00.33712
+19	alter-default-value-objects-id	02e5e22a78626187e00d173dc45f58fa66a4f043	2025-11-13 14:04:00.346936
+20	list-objects-with-delimiter	cd694ae708e51ba82bf012bba00caf4f3b6393b7	2025-11-13 14:04:00.354282
+21	s3-multipart-uploads	8c804d4a566c40cd1e4cc5b3725a664a9303657f	2025-11-13 14:04:00.36442
+22	s3-multipart-uploads-big-ints	9737dc258d2397953c9953d9b86920b8be0cdb73	2025-11-13 14:04:00.411989
+23	optimize-search-function	9d7e604cddc4b56a5422dc68c9313f4a1b6f132c	2025-11-13 14:04:00.466541
+24	operation-function	8312e37c2bf9e76bbe841aa5fda889206d2bf8aa	2025-11-13 14:04:00.484814
+25	custom-metadata	d974c6057c3db1c1f847afa0e291e6165693b990	2025-11-13 14:04:00.494024
+26	objects-prefixes	ef3f7871121cdc47a65308e6702519e853422ae2	2025-11-13 14:04:00.502071
+27	search-v2	33b8f2a7ae53105f028e13e9fcda9dc4f356b4a2	2025-11-13 14:04:00.545557
+28	object-bucket-name-sorting	ba85ec41b62c6a30a3f136788227ee47f311c436	2025-11-13 14:04:00.900192
+29	create-prefixes	a7b1a22c0dc3ab630e3055bfec7ce7d2045c5b7b	2025-11-13 14:04:00.908714
+30	update-object-levels	6c6f6cc9430d570f26284a24cf7b210599032db7	2025-11-13 14:04:00.914958
+31	objects-level-index	33f1fef7ec7fea08bb892222f4f0f5d79bab5eb8	2025-11-13 14:04:00.997162
+32	backward-compatible-index-on-objects	2d51eeb437a96868b36fcdfb1ddefdf13bef1647	2025-11-13 14:04:01.02426
+33	backward-compatible-index-on-prefixes	fe473390e1b8c407434c0e470655945b110507bf	2025-11-13 14:04:01.045895
+34	optimize-search-function-v1	82b0e469a00e8ebce495e29bfa70a0797f7ebd2c	2025-11-13 14:04:01.049951
+35	add-insert-trigger-prefixes	63bb9fd05deb3dc5e9fa66c83e82b152f0caf589	2025-11-13 14:04:01.063766
+36	optimise-existing-functions	81cf92eb0c36612865a18016a38496c530443899	2025-11-13 14:04:01.067982
+37	add-bucket-name-length-trigger	3944135b4e3e8b22d6d4cbb568fe3b0b51df15c1	2025-11-13 14:04:01.085546
+38	iceberg-catalog-flag-on-buckets	19a8bd89d5dfa69af7f222a46c726b7c41e462c5	2025-11-13 14:04:01.095566
+39	add-search-v2-sort-support	39cf7d1e6bf515f4b02e41237aba845a7b492853	2025-11-13 14:04:01.143673
+40	fix-prefix-race-conditions-optimized	fd02297e1c67df25a9fc110bf8c8a9af7fb06d1f	2025-11-13 14:04:01.150381
+41	add-object-level-update-trigger	44c22478bf01744b2129efc480cd2edc9a7d60e9	2025-11-13 14:04:01.164999
+42	rollback-prefix-triggers	f2ab4f526ab7f979541082992593938c05ee4b47	2025-11-13 14:04:01.17338
+43	fix-object-level	ab837ad8f1c7d00cc0b7310e989a23388ff29fc6	2025-11-13 14:04:01.181468
+44	vector-bucket-type	99c20c0ffd52bb1ff1f32fb992f3b351e3ef8fb3	2025-11-13 14:04:01.185993
+45	vector-buckets	049e27196d77a7cb76497a85afae669d8b230953	2025-11-13 14:04:01.191344
+\.
+
+
+--
+-- Data for Name: objects; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.objects (id, bucket_id, name, owner, created_at, updated_at, last_accessed_at, metadata, version, owner_id, user_metadata, level) FROM stdin;
+c2e15ed8-6422-43a7-a210-cb0e7786f9ca	Gutzo	GUTZO11.svg	\N	2025-12-26 15:03:17.158508+00	2025-12-26 15:21:33.117187+00	2025-12-26 15:03:17.158508+00	{"eTag": "\\"43907dd14b38f348d62754e0a9025bd2\\"", "size": 3776, "mimetype": "image/svg+xml", "cacheControl": "max-age=3600", "lastModified": "2025-12-26T15:21:33.106Z", "contentLength": 3776, "httpStatusCode": 200}	8d3bfefb-2139-43df-8a8d-c7aa9f089ac6	\N	\N	1
+0ac486d3-374f-4380-9785-bca28aeaa796	Gutzo	GUTZO.svg	\N	2025-12-10 08:10:48.688873+00	2025-12-26 15:21:39.072417+00	2025-12-10 08:10:48.688873+00	{"eTag": "\\"80a0ca7c26cab9f5f7f9b0ac0e2ecb42\\"", "size": 9099, "mimetype": "image/svg+xml", "cacheControl": "max-age=3600", "lastModified": "2025-12-26T15:21:39.068Z", "contentLength": 9099, "httpStatusCode": 200}	d760ca60-f08b-4a4b-8b1e-c35b55b7f9b8	\N	\N	1
+60eebc6c-c821-474b-ba90-68e01e8ebbfe	Gutzo	GUTZO1.svg	\N	2025-11-13 18:16:06.056134+00	2025-12-10 08:11:17.189254+00	2025-11-13 18:16:06.056134+00	{"eTag": "\\"f2a8222fa3b7ecd65ca4b3128aa28334\\"", "size": 6837, "mimetype": "image/svg+xml", "cacheControl": "max-age=3600", "lastModified": "2025-12-10T08:11:17.182Z", "contentLength": 6837, "httpStatusCode": 200}	930eec41-9181-4dcd-8c5b-276051c070dc	\N	\N	1
+\.
+
+
+--
+-- Data for Name: prefixes; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.prefixes (bucket_id, name, created_at, updated_at) FROM stdin;
+vendor	Category	2025-12-21 15:58:37.05636+00	2025-12-21 15:58:37.05636+00
+\.
+
+
+--
+-- Data for Name: s3_multipart_uploads; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.s3_multipart_uploads (id, in_progress_size, upload_signature, bucket_id, key, version, owner_id, created_at, user_metadata) FROM stdin;
+\.
+
+
+--
+-- Data for Name: s3_multipart_uploads_parts; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.s3_multipart_uploads_parts (id, upload_id, size, part_number, bucket_id, key, etag, owner_id, version, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: vector_indexes; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
+--
+
+COPY storage.vector_indexes (id, name, bucket_id, data_type, dimension, distance_metric, metadata_configuration, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: hooks; Type: TABLE DATA; Schema: supabase_functions; Owner: supabase_functions_admin
+--
+
+COPY supabase_functions.hooks (id, hook_table_id, hook_name, created_at, request_id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: migrations; Type: TABLE DATA; Schema: supabase_functions; Owner: supabase_functions_admin
+--
+
+COPY supabase_functions.migrations (version, inserted_at) FROM stdin;
+initial	2025-11-13 14:03:27.122288+00
+20210809183423_update_grants	2025-11-13 14:03:27.122288+00
+\.
+
+
+--
+-- Data for Name: secrets; Type: TABLE DATA; Schema: vault; Owner: supabase_admin
+--
+
+COPY vault.secrets (id, name, description, secret, key_id, nonce, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Name: refresh_tokens_id_seq; Type: SEQUENCE SET; Schema: auth; Owner: supabase_auth_admin
+--
+
+SELECT pg_catalog.setval('auth.refresh_tokens_id_seq', 1, false);
+
+
+--
+-- Name: subscription_id_seq; Type: SEQUENCE SET; Schema: realtime; Owner: supabase_admin
+--
+
+SELECT pg_catalog.setval('realtime.subscription_id_seq', 130, true);
+
+
+--
+-- Name: hooks_id_seq; Type: SEQUENCE SET; Schema: supabase_functions; Owner: supabase_functions_admin
+--
+
+SELECT pg_catalog.setval('supabase_functions.hooks_id_seq', 1, false);
 
 
 --
@@ -5673,6 +6854,14 @@ ALTER TABLE ONLY public.vendor_delivery_zones
 
 
 --
+-- Name: vendor_leads vendor_leads_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.vendor_leads
+    ADD CONSTRAINT vendor_leads_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: vendor_payouts vendor_payouts_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
 --
 
@@ -5737,43 +6926,67 @@ ALTER TABLE ONLY realtime.messages
 
 
 --
--- Name: messages_2025_11_12 messages_2025_11_12_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_26 messages_2025_12_26_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY realtime.messages_2025_11_12
-    ADD CONSTRAINT messages_2025_11_12_pkey PRIMARY KEY (id, inserted_at);
-
-
---
--- Name: messages_2025_11_13 messages_2025_11_13_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
---
-
-ALTER TABLE ONLY realtime.messages_2025_11_13
-    ADD CONSTRAINT messages_2025_11_13_pkey PRIMARY KEY (id, inserted_at);
+ALTER TABLE ONLY realtime.messages_2025_12_26
+    ADD CONSTRAINT messages_2025_12_26_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
--- Name: messages_2025_11_14 messages_2025_11_14_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_27 messages_2025_12_27_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY realtime.messages_2025_11_14
-    ADD CONSTRAINT messages_2025_11_14_pkey PRIMARY KEY (id, inserted_at);
-
-
---
--- Name: messages_2025_11_15 messages_2025_11_15_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
---
-
-ALTER TABLE ONLY realtime.messages_2025_11_15
-    ADD CONSTRAINT messages_2025_11_15_pkey PRIMARY KEY (id, inserted_at);
+ALTER TABLE ONLY realtime.messages_2025_12_27
+    ADD CONSTRAINT messages_2025_12_27_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
--- Name: messages_2025_11_16 messages_2025_11_16_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_28 messages_2025_12_28_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY realtime.messages_2025_11_16
-    ADD CONSTRAINT messages_2025_11_16_pkey PRIMARY KEY (id, inserted_at);
+ALTER TABLE ONLY realtime.messages_2025_12_28
+    ADD CONSTRAINT messages_2025_12_28_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_12_29 messages_2025_12_29_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages_2025_12_29
+    ADD CONSTRAINT messages_2025_12_29_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_12_30 messages_2025_12_30_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages_2025_12_30
+    ADD CONSTRAINT messages_2025_12_30_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_12_31 messages_2025_12_31_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages_2025_12_31
+    ADD CONSTRAINT messages_2025_12_31_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2026_01_01 messages_2026_01_01_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages_2026_01_01
+    ADD CONSTRAINT messages_2026_01_01_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2026_01_02 messages_2026_01_02_pkey; Type: CONSTRAINT; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY realtime.messages_2026_01_02
+    ADD CONSTRAINT messages_2026_01_02_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
@@ -6850,38 +8063,59 @@ CREATE INDEX messages_inserted_at_topic_index ON ONLY realtime.messages USING bt
 
 
 --
--- Name: messages_2025_11_12_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_26_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE INDEX messages_2025_11_12_inserted_at_topic_idx ON realtime.messages_2025_11_12 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
-
-
---
--- Name: messages_2025_11_13_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
---
-
-CREATE INDEX messages_2025_11_13_inserted_at_topic_idx ON realtime.messages_2025_11_13 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+CREATE INDEX messages_2025_12_26_inserted_at_topic_idx ON realtime.messages_2025_12_26 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 
 --
--- Name: messages_2025_11_14_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_27_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE INDEX messages_2025_11_14_inserted_at_topic_idx ON realtime.messages_2025_11_14 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
-
-
---
--- Name: messages_2025_11_15_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
---
-
-CREATE INDEX messages_2025_11_15_inserted_at_topic_idx ON realtime.messages_2025_11_15 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+CREATE INDEX messages_2025_12_27_inserted_at_topic_idx ON realtime.messages_2025_12_27 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 
 --
--- Name: messages_2025_11_16_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+-- Name: messages_2025_12_28_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
 --
 
-CREATE INDEX messages_2025_11_16_inserted_at_topic_idx ON realtime.messages_2025_11_16 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+CREATE INDEX messages_2025_12_28_inserted_at_topic_idx ON realtime.messages_2025_12_28 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_12_29_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE INDEX messages_2025_12_29_inserted_at_topic_idx ON realtime.messages_2025_12_29 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_12_30_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE INDEX messages_2025_12_30_inserted_at_topic_idx ON realtime.messages_2025_12_30 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_12_31_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE INDEX messages_2025_12_31_inserted_at_topic_idx ON realtime.messages_2025_12_31 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2026_01_01_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE INDEX messages_2026_01_01_inserted_at_topic_idx ON realtime.messages_2026_01_01 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2026_01_02_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: supabase_admin
+--
+
+CREATE INDEX messages_2026_01_02_inserted_at_topic_idx ON realtime.messages_2026_01_02 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 
 --
@@ -6990,73 +8224,115 @@ CREATE INDEX supabase_functions_hooks_request_id_idx ON supabase_functions.hooks
 
 
 --
--- Name: messages_2025_11_12_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+-- Name: messages_2025_12_26_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
 --
 
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_11_12_inserted_at_topic_idx;
-
-
---
--- Name: messages_2025_11_12_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_11_12_pkey;
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_12_26_inserted_at_topic_idx;
 
 
 --
--- Name: messages_2025_11_13_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+-- Name: messages_2025_12_26_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
 --
 
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_11_13_inserted_at_topic_idx;
-
-
---
--- Name: messages_2025_11_13_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_11_13_pkey;
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_12_26_pkey;
 
 
 --
--- Name: messages_2025_11_14_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+-- Name: messages_2025_12_27_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
 --
 
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_11_14_inserted_at_topic_idx;
-
-
---
--- Name: messages_2025_11_14_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_11_14_pkey;
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_12_27_inserted_at_topic_idx;
 
 
 --
--- Name: messages_2025_11_15_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+-- Name: messages_2025_12_27_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
 --
 
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_11_15_inserted_at_topic_idx;
-
-
---
--- Name: messages_2025_11_15_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_11_15_pkey;
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_12_27_pkey;
 
 
 --
--- Name: messages_2025_11_16_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+-- Name: messages_2025_12_28_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
 --
 
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_11_16_inserted_at_topic_idx;
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_12_28_inserted_at_topic_idx;
 
 
 --
--- Name: messages_2025_11_16_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+-- Name: messages_2025_12_28_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
 --
 
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_11_16_pkey;
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_12_28_pkey;
+
+
+--
+-- Name: messages_2025_12_29_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_12_29_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_12_29_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_12_29_pkey;
+
+
+--
+-- Name: messages_2025_12_30_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_12_30_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_12_30_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_12_30_pkey;
+
+
+--
+-- Name: messages_2025_12_31_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_12_31_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_12_31_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_12_31_pkey;
+
+
+--
+-- Name: messages_2026_01_01_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2026_01_01_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2026_01_01_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2026_01_01_pkey;
+
+
+--
+-- Name: messages_2026_01_02_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2026_01_02_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2026_01_02_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: supabase_realtime_admin
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2026_01_02_pkey;
 
 
 --
@@ -7916,6 +9192,13 @@ ALTER TABLE auth.sso_providers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: categories Enable read access for all users; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "Enable read access for all users" ON public.categories FOR SELECT USING (true);
+
+
+--
 -- Name: promo_banners Public can view active banners; Type: POLICY; Schema: public; Owner: supabase_admin
 --
 
@@ -8126,6 +9409,12 @@ ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.cart ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: categories; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: coupon_usage; Type: ROW SECURITY; Schema: public; Owner: supabase_admin
@@ -8411,6 +9700,29 @@ CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, tr
 
 
 ALTER PUBLICATION supabase_realtime OWNER TO postgres;
+
+--
+-- Name: supabase_realtime_messages_publication; Type: PUBLICATION; Schema: -; Owner: supabase_admin
+--
+
+CREATE PUBLICATION supabase_realtime_messages_publication WITH (publish = 'insert, update, delete, truncate');
+
+
+ALTER PUBLICATION supabase_realtime_messages_publication OWNER TO supabase_admin;
+
+--
+-- Name: supabase_realtime orders; Type: PUBLICATION TABLE; Schema: public; Owner: postgres
+--
+
+ALTER PUBLICATION supabase_realtime ADD TABLE ONLY public.orders;
+
+
+--
+-- Name: supabase_realtime_messages_publication messages; Type: PUBLICATION TABLE; Schema: realtime; Owner: supabase_admin
+--
+
+ALTER PUBLICATION supabase_realtime_messages_publication ADD TABLE ONLY realtime.messages;
+
 
 --
 -- Name: SCHEMA auth; Type: ACL; Schema: -; Owner: supabase_admin
@@ -9979,6 +11291,16 @@ GRANT ALL ON TABLE public.vendor_delivery_zones TO service_role;
 
 
 --
+-- Name: TABLE vendor_leads; Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE public.vendor_leads TO postgres;
+GRANT ALL ON TABLE public.vendor_leads TO anon;
+GRANT ALL ON TABLE public.vendor_leads TO authenticated;
+GRANT ALL ON TABLE public.vendor_leads TO service_role;
+
+
+--
 -- Name: TABLE vendor_payouts; Type: ACL; Schema: public; Owner: supabase_admin
 --
 
@@ -10039,43 +11361,67 @@ GRANT SELECT,INSERT,UPDATE ON TABLE realtime.messages TO service_role;
 
 
 --
--- Name: TABLE messages_2025_11_12; Type: ACL; Schema: realtime; Owner: supabase_admin
+-- Name: TABLE messages_2025_12_26; Type: ACL; Schema: realtime; Owner: supabase_admin
 --
 
-GRANT ALL ON TABLE realtime.messages_2025_11_12 TO postgres;
-GRANT ALL ON TABLE realtime.messages_2025_11_12 TO dashboard_user;
-
-
---
--- Name: TABLE messages_2025_11_13; Type: ACL; Schema: realtime; Owner: supabase_admin
---
-
-GRANT ALL ON TABLE realtime.messages_2025_11_13 TO postgres;
-GRANT ALL ON TABLE realtime.messages_2025_11_13 TO dashboard_user;
+GRANT ALL ON TABLE realtime.messages_2025_12_26 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2025_12_26 TO dashboard_user;
 
 
 --
--- Name: TABLE messages_2025_11_14; Type: ACL; Schema: realtime; Owner: supabase_admin
+-- Name: TABLE messages_2025_12_27; Type: ACL; Schema: realtime; Owner: supabase_admin
 --
 
-GRANT ALL ON TABLE realtime.messages_2025_11_14 TO postgres;
-GRANT ALL ON TABLE realtime.messages_2025_11_14 TO dashboard_user;
-
-
---
--- Name: TABLE messages_2025_11_15; Type: ACL; Schema: realtime; Owner: supabase_admin
---
-
-GRANT ALL ON TABLE realtime.messages_2025_11_15 TO postgres;
-GRANT ALL ON TABLE realtime.messages_2025_11_15 TO dashboard_user;
+GRANT ALL ON TABLE realtime.messages_2025_12_27 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2025_12_27 TO dashboard_user;
 
 
 --
--- Name: TABLE messages_2025_11_16; Type: ACL; Schema: realtime; Owner: supabase_admin
+-- Name: TABLE messages_2025_12_28; Type: ACL; Schema: realtime; Owner: supabase_admin
 --
 
-GRANT ALL ON TABLE realtime.messages_2025_11_16 TO postgres;
-GRANT ALL ON TABLE realtime.messages_2025_11_16 TO dashboard_user;
+GRANT ALL ON TABLE realtime.messages_2025_12_28 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2025_12_28 TO dashboard_user;
+
+
+--
+-- Name: TABLE messages_2025_12_29; Type: ACL; Schema: realtime; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE realtime.messages_2025_12_29 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2025_12_29 TO dashboard_user;
+
+
+--
+-- Name: TABLE messages_2025_12_30; Type: ACL; Schema: realtime; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE realtime.messages_2025_12_30 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2025_12_30 TO dashboard_user;
+
+
+--
+-- Name: TABLE messages_2025_12_31; Type: ACL; Schema: realtime; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE realtime.messages_2025_12_31 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2025_12_31 TO dashboard_user;
+
+
+--
+-- Name: TABLE messages_2026_01_01; Type: ACL; Schema: realtime; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE realtime.messages_2026_01_01 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2026_01_01 TO dashboard_user;
+
+
+--
+-- Name: TABLE messages_2026_01_02; Type: ACL; Schema: realtime; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE realtime.messages_2026_01_02 TO postgres;
+GRANT ALL ON TABLE realtime.messages_2026_01_02 TO dashboard_user;
 
 
 --
