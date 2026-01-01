@@ -36,7 +36,7 @@ import shadowfaxRoutes from './routes/shadowfax.js'; // [NEW]
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT;
 
 // Trust proxy
 app.use(cors({
@@ -117,7 +117,7 @@ app.get('/api/health', (req, res) => {
     message: 'Gutzo API is running',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV
   });
 });
 
@@ -162,7 +162,7 @@ app.listen(PORT, '0.0.0.0', () => {
 ║       🍽️  GUTZO API SERVER STARTED  🍽️         ║
 ╠═══════════════════════════════════════════════╣
 ║  Port:        ${PORT}                              ║
-║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(28)}║
+║  Environment: ${(process.env.NODE_ENV).padEnd(28)}║
 ║  Health:      http://localhost:${PORT}/api/health   ║
 ╚═══════════════════════════════════════════════╝
   `);

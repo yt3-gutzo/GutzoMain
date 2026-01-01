@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const router = express.Router();
 
 // Shadowfax API Config
-const SHADOWFAX_API_URL = process.env.SHADOWFAX_API_URL || 'https://flash-api.shadowfax.in';
+const SHADOWFAX_API_URL = process.env.SHADOWFAX_API_URL;
 const SHADOWFAX_API_TOKEN = process.env.SHADOWFAX_API_TOKEN;
 
 router.post('/serviceability', async (req, res) => {

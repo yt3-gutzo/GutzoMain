@@ -13,7 +13,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Shadowfax Config
-const SHADOWFAX_BASE_URL = process.env.SHADOWFAX_URL || 'https://hlbackend.staging.shadowfax.in';
+const SHADOWFAX_BASE_URL = process.env.SHADOWFAX_URL;
 const SHADOWFAX_TOKEN = process.env.SHADOWFAX_API_TOKEN;
 
 /**

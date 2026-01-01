@@ -22,7 +22,7 @@ export const sendVendorLeadNotification = async (leadData) => {
 
   const mailOptions = {
     from: process.env.EMAIL_USER,
-    to: process.env.OPS_EMAIL || process.env.EMAIL_USER, // Default to sender if OPS_EMAIL not set
+    to: process.env.OPS_EMAIL,
     subject: `🚨 New Vendor Interest: ${kitchen_name}`,
     html: `
       <h2>New Vendor Lead Received</h2>

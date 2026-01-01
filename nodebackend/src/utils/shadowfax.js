@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-const SHADOWFAX_API_URL = process.env.SHADOWFAX_API_URL || 'https://flash-api.shadowfax.in';
+const SHADOWFAX_API_URL = process.env.SHADOWFAX_API_URL;
 const SHADOWFAX_API_TOKEN = process.env.SHADOWFAX_API_TOKEN;
 
 export const createShadowfaxOrder = async (order, vendor) => {

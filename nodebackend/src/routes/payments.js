@@ -9,9 +9,9 @@ const router = express.Router();
 // Paytm Environment variables
 const PAYTM_MID = process.env.PAYTM_MID;
 const PAYTM_MERCHANT_KEY = process.env.PAYTM_MERCHANT_KEY;
-const PAYTM_WEBSITE_NAME = process.env.PAYTM_WEBSITE_NAME || 'WEBSTAGING';
-const PAYTM_CALLBACK_URL = process.env.PAYTM_CALLBACK_URL || 'gutzo.in/paytm-callback';
-const PAYTM_ENV = process.env.PAYTM_ENV || 'staging';
+const PAYTM_WEBSITE_NAME = process.env.PAYTM_WEBSITE_NAME;
+const PAYTM_CALLBACK_URL = process.env.PAYTM_CALLBACK_URL;
+const PAYTM_ENV = process.env.PAYTM_ENV;
 
 // Paytm URLs based on environment
 const PAYTM_BASE_URL = PAYTM_ENV === 'production' 

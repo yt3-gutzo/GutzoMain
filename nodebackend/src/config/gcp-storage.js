@@ -9,14 +9,14 @@ dotenv.config();
 // We expect GOOGLE_APPLICATION_CREDENTIALS to be set in .env or the key file to be present
 // For now, we'll try to use a standard file name if env is not set
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const keyFilePath = process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(__dirname, '../../service-account-key.json');
+const keyFilePath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
 const storage = new Storage({
   keyFilename: keyFilePath,
   projectId: process.env.GCP_PROJECT_ID, // Optional if key file has it
 });
 
-const bucketName = process.env.GCP_BUCKET_NAME || 'gutzo-vendor-assets'; // Default or from env
+const bucketName = process.env.GCP_BUCKET_NAME;
 const bucket = storage.bucket(bucketName);
 
 export { storage, bucket, bucketName };

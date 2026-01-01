@@ -42,7 +42,7 @@ async function testCallback() {
     const params = new URLSearchParams(mockParams);
 
     // Use env var or default to localhost
-    const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001';
+    const API_BASE_URL = process.env.API_BASE_URL;
     console.log(`📡 Sending callback to: ${API_BASE_URL}/api/payments/callback`);
 
     const response = await fetch(`${API_BASE_URL}/api/payments/callback`, {
