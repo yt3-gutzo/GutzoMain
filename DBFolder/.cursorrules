@@ -8,3 +8,6 @@ If any other `.sql` files are added to the project, please consider them as well
 
 # File Creation Rules
 Any new SQL files created should be placed in this `DBFolder` directory.
+
+# Environment Variable Rules
+Do not add fallbacks/defaults for `process.env` variables (e.g., `process.env.VAR || 'default'`). Let the application fail if the variable is missing.
