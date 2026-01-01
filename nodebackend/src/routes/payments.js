@@ -93,12 +93,17 @@ router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
   try {
     // const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams), PAYTM_MERCHANT_KEY);
     // console.log('Generated Paytm Checksum:', checksum);
+
+    console.log('[Paytm Initiate] Params:', JSON.stringify(paytmParams, null, 2));
+
     const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams), PAYTM_MERCHANT_KEY);
 
     const payload = {
       body: paytmParams,
       head: { signature: checksum }
     };
+
+    console.log('[Paytm Initiate] Payload:', JSON.stringify(payload, null, 2));
 
     const response = await fetch(
       `${PAYTM_BASE_URL}/theia/api/v1/initiateTransaction?mid=${PAYTM_MID}&orderId=${order.order_number}`,
@@ -110,7 +115,7 @@ router.post('/initiate', authenticate, asyncHandler(async (req, res) => {
     );
 
     const data = await response.json();
-    // console.log('Paytm initiateTransaction response:', data);
+    console.log('[Paytm Initiate] Response:', JSON.stringify(data, null, 2));
 
     // Create payment record
     await supabaseAdmin.from('payments').insert({

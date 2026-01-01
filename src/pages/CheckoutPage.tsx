@@ -408,6 +408,7 @@ export function CheckoutPage() {
          } else {
              // Real Payment Flow
              const data = await (apiService as any).initiatePaytmPayment(userPhone, orderId, amount, user?.id || userPhone);
+             console.log('[Frontend] Initiate Payment Response:', data);
              
              const responseData = data.data || data; 
              const paytmResp = responseData.paytmResponse || responseData.initiateTransactionResponse;
