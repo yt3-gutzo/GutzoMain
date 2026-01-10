@@ -4,7 +4,7 @@ import { useRouter } from '../components/Router';
 import { toast } from 'sonner';
 import { useAuth } from './AuthContext'; // Fix: Proper Import
 
-type OrderStatus = 'placed' | 'preparing' | 'ready' | 'picked_up' | 'on_way' | 'delivered' | 'rejected' | 'cancelled' | 'searching_rider';
+type OrderStatus = 'created' | 'placed' | 'preparing' | 'ready' | 'picked_up' | 'on_way' | 'delivered' | 'rejected' | 'cancelled' | 'searching_rider';
 
 interface TrackingState {
   orderId: string | null;
@@ -84,11 +84,17 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
                  const latest = sorted[0];
 
                  // Check if it is "Live"
-                 const status = (latest.status || '').toLowerCase();
-                 const deliveryStatus = (latest.delivery_status || '').toLowerCase();
+                 // Strict Check: Status is critical
+                 if (!latest.status) {
+                     console.error("Skipping invalid order (missing status):", latest.id);
+                     return;
+                 }
+
+                 const status = latest.status.toLowerCase();
+                 const deliveryStatus = latest.delivery_status ? latest.delivery_status.toLowerCase() : null;
                  
                  const isLive = !['delivered', 'completed', 'cancelled', 'rejected'].includes(status) && 
-                                !['delivered', 'completed'].includes(deliveryStatus);
+                                (!deliveryStatus || !['delivered', 'completed'].includes(deliveryStatus));
 
                  if (isLive) {
                      console.log('🔄 Auto-Restoring Active Order:', latest.order_number);
@@ -175,12 +181,13 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
                     s = deliveryStatus;
                 }
 
-                if (s === 'placed' || s === 'pending' || s === 'confirmed' || s === 'paid') mappedStatus = 'placed';
+                if (s === 'created') mappedStatus = 'created';
+                else if (s === 'placed' || s === 'pending' || s === 'confirmed' || s === 'paid') mappedStatus = 'placed';
                 else if (s === 'searching_rider') mappedStatus = 'searching_rider';
                 else if (s === 'preparing' || s === 'accepted') mappedStatus = 'preparing';
                 else if (s === 'ready' || s === 'ready_for_pickup') mappedStatus = 'ready';
                 else if (s === 'picked_up' || s === 'driver_assigned' || s === 'out_for_delivery') mappedStatus = 'picked_up';
-                else if (s === 'on_way' || s === 'allotted' || s === 'reached_location') mappedStatus = 'on_way';
+                else if (s === 'on_way' || s === 'allotted' || s === 'reached_location' || s === 'arrived_at_drop') mappedStatus = 'on_way';
                 else if (s === 'delivered' || s === 'completed') mappedStatus = 'delivered';
                 else if (s === 'rejected') mappedStatus = 'rejected';
                 else if (s === 'cancelled') mappedStatus = 'cancelled';
@@ -225,9 +232,9 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
             }
         } catch (err: any) {
             console.error("Tracking Poll Error:", err);
-            // If order is not found (404) or generalized error, clear tracking to prevent zombie bar
+            // ZOMBIE KILLER: If order is 404/Not Found, KILL IT immediately from local storage
             if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('No order'))) {
-               console.log('Order not found on server, clearing tracking.');
+               console.error('💀 Zombie Order Detected (404). Purging tracking state.');
                setActiveOrder(null);
                localStorage.removeItem('activeOrder');
                return;

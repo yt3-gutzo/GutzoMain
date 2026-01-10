@@ -228,18 +228,29 @@ router.post('/webhook', async (req, res) => {
         // Base payload for ORDERS table 
         // INFO: 'orders' table does NOT have delivery_status, rider_name, rider_phone.
         // It likely only has 'status'.
+        // ADAPTIVE STATUS MAPPING (API Spec -> Internal)
+        // API: ALLOTTED, ACCEPTED, ARRIVED, COLLECTED, CUSTOMER_DOOR_STEP, DELIVERED
+        let internalStatus = status.toLowerCase(); // Default
+
+        if (status === 'ARRIVED') internalStatus = 'reached_location';
+        else if (status === 'COLLECTED') internalStatus = 'picked_up';
+        else if (status === 'CUSTOMER_DOOR_STEP') internalStatus = 'arrived_at_drop';
+
+        // Base payload for ORDERS table 
         const orderPayload = {};
 
-        // Only update Main Order Status if it's a major milestone
+        // Sync Major Milestones to ORDERS status
         if (status === 'DELIVERED') {
              orderPayload.status = 'completed'; 
-        } else if (status === 'PICKED_UP') {
-             // orderPayload.status = 'on_way'; // Uncomment if schema supports 'on_way'
+        } else if (status === 'COLLECTED') {
+             // Order is now officially ON THE WAY
+             orderPayload.status = 'on_way'; 
+             // Note: 'on_way' might trigger 'picked_up' UI in frontend depending on mapping
         }
 
-        // Full payload for DELIVERIES table (Schema v2)
+        // Full payload for DELIVERIES table
         const deliveryPayload = {
-            status: status.toLowerCase(),
+            status: internalStatus,
             rider_name: data.rider_name || data.rider_details?.name,
             rider_phone: data.rider_contact_number || data.rider_details?.contact || data.rider_details?.contact_number,
             
@@ -305,9 +316,9 @@ router.post('/webhook', async (req, res) => {
                 .single();
 
             const newHistoryItem = {
-                status: status,
+                status: internalStatus,
                 timestamp: new Date().toISOString(),
-                note: `Webhook Update: ${status}`
+                note: `Webhook Update: ${status} -> ${internalStatus}`
             };
 
             const updatedHistory = currentDelivery?.history 

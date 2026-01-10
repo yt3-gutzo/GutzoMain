@@ -78,14 +78,17 @@ export function ActiveOrderFloatingBar() {
                 text: 'text-[#1BA672]',
                 label: 'PICKED UP'
             };
+
+        case 'reached_location':
+        case 'arrived_at_drop':
         case 'on_way':
             return {
-                title: 'Order Arriving',
-                subtext: 'Rider is nearby',
+                title: status === 'arrived_at_drop' ? 'Valet at Doorstep' : 'Order Arriving',
+                subtext: status === 'arrived_at_drop' ? 'Valet has arrived!' : 'Rider is nearby',
                 icon: <Clock size={14} className="text-[#1BA672]" />,
                 bg: 'bg-green-50',
                 text: 'text-[#1BA672]',
-                label: 'ARRIVING'
+                label: status === 'arrived_at_drop' ? 'AT DOORSTEP' : 'ARRIVING'
             };
         case 'delivered':
             return {

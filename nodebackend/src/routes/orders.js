@@ -211,7 +211,7 @@ router.post('/', validate(schemas.createOrder), asyncHandler(async (req, res) =>
       discount_amount: calculation.discount,
       tip_amount,
       total_amount: calculation.total + tip_amount,
-      status: 'placed',
+      status: 'created', // Changed from 'placed' to distinguish initial state
       payment_method,
       payment_status: payment_method === 'cod' ? 'pending' : 'pending',
       special_instructions,
@@ -452,7 +452,7 @@ router.post('/:id/cancel', asyncHandler(async (req, res) => {
   if (error || !order) throw new ApiError(404, 'Order not found');
 
   // Can only cancel if order is in initial stages
-  const cancelableStatuses = ['placed', 'confirmed'];
+  const cancelableStatuses = ['created', 'placed', 'confirmed'];
   if (!cancelableStatuses.includes(order.status)) {
     throw new ApiError(400, `Cannot cancel order in '${order.status}' status`);
   }

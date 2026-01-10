@@ -173,8 +173,8 @@ export function OrderTrackingPage() {
        if (['created', 'placed'].includes(status)) return 1;
        if (['searching_rider', 'preparing', 'accepted'].includes(status)) return 2;
        if (['allotted', 'driver_assigned', 'rider_assigned'].includes(status)) return 3;
-       if (['arrived', 'reached_location'].includes(status)) return 4;
-       if (['picked_up', 'out_for_delivery', 'on_way'].includes(status)) return 5;
+       if (['arrived', 'reached_location', 'on_way'].includes(status)) return 4;
+       if (['picked_up', 'out_for_delivery', 'arrived_at_drop'].includes(status)) return 5;
        if (['delivered', 'completed'].includes(status)) return 6;
        return 0;
    };
@@ -231,13 +231,18 @@ export function OrderTrackingPage() {
           case 'ready': return 'Food is Ready • Waiting for Pickup';
           case 'picked_up': 
           case 'driver_assigned': return 'Driver Assigned';
-          case 'on_way': return 'Order on the way';
+          case 'on_way': 
+          case 'reached_location': return 'Order on the way';
+          case 'arrived_at_drop': return 'Valet at Doorstep';
           case 'delivered': return 'Order Delivered';
           default: return s; // Fallback
       }
   };
 
 
+
+  // ETA State
+  const [eta, setEta] = useState<string>('Updating...');
 
   return (
     <motion.div 
@@ -269,7 +274,7 @@ export function OrderTrackingPage() {
                 
                 {/* Time Pill */}
                 <div className="inline-flex items-center rounded-lg px-4 py-2 gap-2" style={{ backgroundColor: '#14885E' }}>
-                    <span className="text-white font-semibold text-lg">36 mins</span>
+                    <span className="text-white font-semibold text-lg">{eta}</span>
                     <span className="w-1 h-1 bg-white rounded-full opacity-50"></span>
                     <span className="text-green-100 font-medium">On time</span>
                 </div>
@@ -283,6 +288,7 @@ export function OrderTrackingPage() {
                 userLocation={userLocation}
                 driverLocation={mergedDelivery?.rider_location || driverLoc}
                 status={displayStatus as any}
+                onDurationUpdate={(time) => setEta(time)}
             />
 
             {/* Shadowfax Order Details Card - Updated Visibility */}

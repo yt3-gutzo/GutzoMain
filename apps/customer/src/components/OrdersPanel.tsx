@@ -226,11 +226,14 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
                             ? 'bg-green-100 text-green-700'
                             : order.status === 'cancelled'
                             ? 'bg-red-100 text-red-700'
-                            : order.status === 'preparing'
+                            : order.status === 'preparing' || order.status === 'arrived_at_drop' || order.status === 'on_way'
                             ? 'bg-blue-50 text-blue-600'
                             : 'bg-gray-100 text-gray-600'
                         }`}>
-                          {order.status === 'confirmed' ? 'Waiting for acceptance' : order.status}
+						  {order.status === 'confirmed' ? 'Waiting for acceptance' : 
+                           order.status === 'arrived_at_drop' ? 'Valet at Doorstep' :
+                           order.status === 'reached_location' ? 'Rider at Restaurant' :
+                           order.status.replace(/_/g, ' ')}
                         </span>
                       </div>
 
