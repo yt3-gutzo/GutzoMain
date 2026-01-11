@@ -483,6 +483,19 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
             data: { order_id: order.id }
         });
    } else if (status === 'rejected') {
+        // 🚀 TRIGGER SHADOWFAX CANCELLATION
+        // Use Client Order ID (order_number) as 'order_id' for cancellation
+        try {
+            const { cancelShadowfaxOrder } = await import('../utils/shadowfax.js');
+            // send order_number e.g. "GZ2026..." which was sent as 'order_id' during creation
+            const cancelResp = await cancelShadowfaxOrder(order.order_number, "Rejected by Vendor");
+            if (cancelResp.success) {
+               console.log("✅ Shadowfax Order Cancelled due to Vendor Rejection");
+            }
+        } catch (err) {
+            console.error("❌ Failed to cancel Shadowfax order:", err);
+        }
+
         await supabaseAdmin.from('notifications').insert({
             user_id: order.user_id,
             type: 'refund_initiated',

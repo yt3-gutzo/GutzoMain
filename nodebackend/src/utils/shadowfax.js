@@ -180,3 +180,40 @@ export const trackShadowfaxOrder = async (flashOrderId) => {
         return null;
     }
 };
+
+export const cancelShadowfaxOrder = async (flashOrderId, reason = "Vendor Rejected") => {
+    if (!SHADOWFAX_API_TOKEN || !flashOrderId) return null;
+
+    const payload = {
+        order_id: flashOrderId,
+        cancellation_reason: reason
+    };
+
+    console.log("🚚 Cancelling Shadowfax Order:", JSON.stringify(payload, null, 2));
+
+    try {
+        // Try standard cancel endpoint
+        const response = await fetch(`${SHADOWFAX_API_URL}/order/cancel/`, { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': SHADOWFAX_API_TOKEN
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.is_cancelled) {
+            console.error(`❌ Shadowfax Cancel Failed [${response.status}]:`, JSON.stringify(data));
+            return { success: false, error: data.message || "Cancellation failed" };
+        }
+        
+        console.log("✅ Shadowfax Cancel Success:", data);
+        return { success: true, data };
+
+    } catch (e) {
+        console.error("Shadowfax Cancellation Error:", e);
+        return { success: false, error: e.message };
+    }
+};
