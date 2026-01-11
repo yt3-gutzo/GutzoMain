@@ -381,7 +381,8 @@ router.get('/:id/products', asyncHandler(async (req, res) => {
       .from('orders')
       .select(`
         *,
-        items:order_items(*)
+        items:order_items(*),
+        delivery:deliveries(*)
       `)
       .eq('vendor_id', id)
       .order('created_at', { ascending: false })

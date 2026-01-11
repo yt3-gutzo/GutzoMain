@@ -36,6 +36,7 @@ interface Order {
         rider_phone?: string;
         flash_order_id?: string;
     };
+    delivery?: any; // Added for relation access
 }
 
 
@@ -70,8 +71,8 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
       // Don't set loading true on background refreshes to avoid flickering
       if (orders.length === 0) setLoading(true);
       
-      // Show only orders where payment is successful (confirmed/paid)
-      const response = await nodeApiService.getVendorOrders(vendorId, 'confirmed,paid,preparing,ready');
+      // Show only orders where payment is successful (confirmed/paid) OR newly placed
+      const response = await nodeApiService.getVendorOrders(vendorId, 'placed,confirmed,paid,preparing,ready');
       // console.log('📦 Orders API Response:', response);
       
       const newOrders = response?.data?.orders || [];
@@ -81,7 +82,7 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
       if (ordersRef.current.length > 0) {
           const previousIds = new Set(ordersRef.current.map(o => o.id));
           const hasNewConfirmedOrder = newOrders.some((o: Order) => 
-              !previousIds.has(o.id) && ['confirmed', 'paid'].includes(o.status)
+              !previousIds.has(o.id) && ['placed', 'confirmed', 'paid'].includes(o.status)
           );
           
           if (hasNewConfirmedOrder) {
@@ -224,16 +225,16 @@ export function OrderManager({ vendorId }: { vendorId: string }) {
                                                             </div>
                                                         )}
                                                         {/* Show Shadowfax Request Status / Details */}
-                                                        {order.delivery_partner_details && (
+                                                        {(order.delivery_partner_details || (order.delivery && (Array.isArray(order.delivery) ? order.delivery[0] : order.delivery))) && (
                                                             <div className="mt-2 text-right space-y-1">
                                                                 <div className="text-xs text-xs font-semibold text-gray-500">
-                                                                    via {order.delivery_partner_details.provider}
+                                                                    via {(order.delivery_partner_details?.provider) || 'Shadowfax'}
                                                                 </div>
-                                                                {order.delivery_partner_details.pickup_otp && (
+                                                                {(order.delivery_partner_details?.pickup_otp || (order.delivery && (Array.isArray(order.delivery) ? order.delivery[0]?.pickup_otp : order.delivery?.pickup_otp))) && (
                                                                     <div className="flex flex-col items-end">
                                                                         <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Pickup OTP</span>
                                                                         <div className="font-mono font-bold text-xl text-gutzo-primary bg-green-50 px-3 py-1 rounded-md border border-green-200 shadow-sm">
-                                                                            {order.delivery_partner_details.pickup_otp}
+                                                                            {order.delivery_partner_details?.pickup_otp || (order.delivery && (Array.isArray(order.delivery) ? order.delivery[0]?.pickup_otp : order.delivery?.pickup_otp))}
                                                                         </div>
                                                                     </div>
                                                                 )}
