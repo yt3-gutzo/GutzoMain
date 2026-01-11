@@ -324,7 +324,7 @@ export function OrdersPanel({ className = "", onViewOrderDetails, recentOrderDat
                       variant="default" 
                       size="sm"
                       className="flex-1 h-10 bg-gutzo-primary hover:bg-gutzo-primary-hover text-white font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={order.status === 'cancelled' || order.status === 'rejected'}
+                      disabled={['cancelled', 'rejected', 'delivered', 'completed'].includes(order.status)}
                       onClick={(e) => {
                           e.stopPropagation();
                           if (onViewOrderDetails) {
