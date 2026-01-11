@@ -54,9 +54,11 @@ export function OrderTrackingTimelineSheet({ status, driver, vendorName, deliver
                          status === 'preparing' ? "Your order is being prepared" :
                          status === 'ready' ? "Your order is ready at the restaurant" :
                          status === 'picked_up' ? "Order picked up by valet" :
+                         status === 'driver_assigned' ? "Rider assigned • On the way to restaurant" :
                          status === 'on_way' ? "Valet is near your location" :
                          status === 'arrived_at_drop' ? "Valet has arrived at your doorstep" :
-                         "Your order has been delivered"}
+                         status === 'delivered' ? "Your order has been delivered" :
+                         "Order Status: " + status}
                     </p>
                 </div>
                 {(status === 'preparing' || status === 'searching_rider') && (

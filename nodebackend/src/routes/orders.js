@@ -408,6 +408,22 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
   if (error || !order) throw new ApiError(404, 'Order not found');
 
+  // Verify delivery attachment and Normalize (Supabase 1:1 returns Object, Frontend expects Array)
+  if (order.delivery) {
+      if (!Array.isArray(order.delivery)) {
+          order.delivery = [order.delivery];
+          console.log(`[FIX] Normalized order.delivery from Object to Array`);
+      }
+      
+      if (order.delivery.length > 0) {
+          console.log(`[DEBUG] Order found with Delivery:`, JSON.stringify(order.delivery[0], null, 2));
+      } else {
+          console.warn(`[DEBUG] Order ${id} found but 'delivery' array is empty!`);
+      }
+  } else {
+      console.warn(`[DEBUG] Order ${id} found but NO 'delivery' relation data attached!`);
+  }
+
   successResponse(res, order);
 }));
 
