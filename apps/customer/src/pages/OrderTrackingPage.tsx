@@ -290,8 +290,8 @@ export function OrderTrackingPage() {
             </div>
         </div>
 
-        {/* Tracking Details Overlay */}
-        <div className="flex-1 w-full h-full relative bg-gray-100 z-10 pt-10">
+        {/* Map Container - Full Height */}
+        <div className="flex-1 w-full h-full relative bg-gray-100 z-10">
              <OrderTrackingMap 
                 storeLocation={storeLocation}
                 userLocation={userLocation}
@@ -299,65 +299,16 @@ export function OrderTrackingPage() {
                 status={displayStatus as any}
                 onDurationUpdate={(time) => setEta(time)}
             />
-
-            {/* Shadowfax Order Details Card - Hidden if Cancelled */}
-            {displayStatus !== 'cancelled' && (
-                <div className="absolute top-4 left-4 right-4 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-gray-200 p-4 z-40">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                            Live Delivery Updates
-                        </h3>
-                        {mergedDelivery?.partner_order_id && (
-                            <span className="text-[10px] text-gray-400 font-mono">ID: {mergedDelivery.partner_order_id}</span>
-                        )}
-                    </div>
-                    
-                    <div className="space-y-3">
-                        {/* Delivery Partner Info */}
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
-                                <span className="text-xl">🛵</span>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Delivery Partner</p>
-                                <p className="text-sm font-semibold text-gray-900">Shadowfax</p>
-                            </div>
-                        </div>
-
-                        {/* Rider Info (Live from Tracking API) */}
-                        {!isFindingRider ? (
-                            <div className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
-                                <div>
-                                    <p className="text-xs text-gray-500">Rider</p>
-                                    <p className="text-sm font-medium">{mergedDelivery.rider_name}</p>
-                                    {mergedDelivery.rider_phone && <p className="text-xs text-gray-400">{mergedDelivery.rider_phone}</p>}
-                                </div>
-                                {mergedDelivery.delivery_otp && (
-                                    <div className="text-center">
-                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest">Share OTP</p>
-                                        <p className="text-lg font-bold text-gutzo-primary">{mergedDelivery.delivery_otp}</p>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="bg-amber-50 rounded-lg p-3 text-center">
-                                <p className="text-xs text-amber-700 italic">Finding nearest delivery partner...</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
 
         {/* Bottom Sheet UI */}
         <OrderTrackingTimelineSheet 
             status={displayStatus === 'searching_rider' ? 'searching_rider' : (displayStatus as any)}
             vendorName={localOrder?.vendor?.name || contextOrder?.vendorName}
-            deliveryOtp={activeDelivery?.delivery_otp || localOrder?.delivery_otp || contextOrder?.delivery_otp}
+            deliveryOtp={mergedDelivery?.delivery_otp || activeDelivery?.delivery_otp || localOrder?.delivery_otp || contextOrder?.delivery_otp}
             driver={displayStatus === 'picked_up' || displayStatus === 'on_way' || displayStatus === 'delivered' || displayStatus === 'driver_assigned' ? {
-                name: activeDelivery?.rider_name || contextOrder?.rider_name,
-                phone: activeDelivery?.rider_phone || contextOrder?.rider_phone || ""
+                name: mergedDelivery?.rider_name || activeDelivery?.rider_name || contextOrder?.rider_name,
+                phone: mergedDelivery?.rider_phone || activeDelivery?.rider_phone || contextOrder?.rider_phone || ""
             } : undefined} 
         />
     </motion.div>

@@ -78,8 +78,46 @@ export function OrderTrackingTimelineSheet({ status, driver, vendorName, deliver
                 )}
             </div>
 
-            {/* Delivery OTP - Show only when picked up or on way */}
-            {deliveryOtp && (status === 'picked_up' || status === 'on_way' || status === 'driver_assigned' || status === 'ready') && (
+            {/* Delivery Partner & Rider Info - Show when driver is assigned */}
+            {driver?.name && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                        <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Live Delivery Updates</h4>
+                    </div>
+                    
+                    <div className="space-y-3">
+                        {/* Delivery Partner */}
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
+                                <span className="text-xl">🛵</span>
+                            </div>
+                            <div>
+                                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Delivery Partner</p>
+                                <p className="text-sm font-semibold text-gray-900">Shadowfax</p>
+                            </div>
+                        </div>
+
+                        {/* Rider Info */}
+                        <div className="bg-white rounded-lg p-3 flex justify-between items-center shadow-sm">
+                            <div>
+                                <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">Rider</p>
+                                <p className="text-sm font-semibold text-gray-900">{driver.name}</p>
+                                {driver.phone && <p className="text-xs text-gray-500 mt-0.5">{driver.phone}</p>}
+                            </div>
+                            {deliveryOtp && (
+                                <div className="text-center">
+                                    <p className="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Share OTP</p>
+                                    <p className="text-xl font-bold text-gutzo-primary">{deliveryOtp}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delivery OTP - Show only when picked up or on way and NO driver yet */}
+            {deliveryOtp && !driver?.name && (status === 'picked_up' || status === 'on_way' || status === 'driver_assigned' || status === 'ready') && (
                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 flex justify-between items-center shadow-sm">
                     <div>
                         <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-0.5">Share with Rider</p>
