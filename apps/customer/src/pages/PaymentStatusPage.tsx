@@ -67,9 +67,11 @@ export default function PaymentStatusPage() {
               await clearCart();
             }
 
-            // Redirect to tracking page abruptly
+            // Redirect to tracking page using the correct GZ ID from backend response
+            const trackingId = result?.body?.transactionId || result?.transactionId || result?.data?.transactionId || id;
+            
             setTimeout(() => {
-              window.location.href = `/tracking/${id}`;
+              window.location.href = `/tracking/${trackingId}`;
             }, 100);
           }
           return;

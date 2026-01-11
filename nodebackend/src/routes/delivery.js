@@ -177,6 +177,12 @@ router.get('/track/:orderId', async (req, res) => {
         }
         // ---------------------------------------------------
 
+        if (delivery) {
+             // INJECT INTERNAL OTPs into the response
+             trackingInfo.delivery_otp = delivery.delivery_otp;
+             trackingInfo.pickup_otp = delivery.pickup_otp; // Included for Vendor/Debug visibility
+        }
+
         res.json({ success: true, data: trackingInfo });
 
     } catch (e) {

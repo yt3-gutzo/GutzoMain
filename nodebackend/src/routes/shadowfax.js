@@ -188,46 +188,17 @@ router.post('/webhook', async (req, res) => {
         console.log('📥 Shadowfax Webhook:', JSON.stringify(data, null, 2));
 
         // ADAPTIVE PAYLOAD PARSING
-        // Supports both 'order_id' (Shadowfax ID) and 'coid' (Client Order ID)
-        // User Docs show: { coid, status, rider_name, ... }
+        // OFFICIAL PAYLOAD PARSING (OrderCallbackRequest)
+        // Spec: coid, status, action_time, rider_id, rider_contact_number, rider_latitude, rider_longitude, rider_name
         
-        const sfOrderId = data.order_id || data.sfx_order_id;
-        const clientOrderId = data.coid; // Client Order ID (e.g. GZ...)
+        const clientOrderId = data.coid; 
+        const sfOrderId = data.sfx_order_id; // Keeping just in case, but relying on coid
         const status = data.status; 
         
-        if (!sfOrderId && !clientOrderId) return res.status(200).send('OK (No ID detected)');
+        if (!clientOrderId && !sfOrderId) return res.status(200).send('OK (No ID detected)');
 
-        const updatePayload = {
-            delivery_status: status
-        };
+        console.log(`📥 Webhook: ${status} for ${clientOrderId || 'Unknown'}`);
 
-        // Map Rider Details (Doc shows top-level snake_case)
-        if (data.rider_name || data.rider_details) {
-            updatePayload.rider_name = data.rider_name || data.rider_details?.name;
-            updatePayload.rider_phone = data.rider_contact_number || data.rider_details?.contact || data.rider_details?.contact_number;
-        }
-
-        // Map Coordinates
-        if (data.rider_latitude && data.rider_longitude) {
-            updatePayload.rider_coordinates = {
-                latitude: data.rider_latitude,
-                longitude: data.rider_longitude
-            };
-        } else if (data.rider_details?.current_location) {
-             updatePayload.rider_coordinates = data.rider_details.current_location;
-        }
-
-        // Map OTPs (if present)
-        // Note: OTPs usually belong in 'deliveries' table, not 'orders' table
-        // We will separate the payloads to avoid "Column not found" errors
-
-        // Map OTPs (if present)
-        // Note: OTPs usually belong in 'deliveries' table, not 'orders' table
-        // We will separate the payloads to avoid "Column not found" errors
-
-        // Base payload for ORDERS table 
-        // INFO: 'orders' table does NOT have delivery_status, rider_name, rider_phone.
-        // It likely only has 'status'.
         // ADAPTIVE STATUS MAPPING (API Spec -> Internal)
         // API: ALLOTTED, ACCEPTED, ARRIVED, COLLECTED, CUSTOMER_DOOR_STEP, DELIVERED
         let internalStatus = status.toLowerCase(); // Default
@@ -235,6 +206,8 @@ router.post('/webhook', async (req, res) => {
         if (status === 'ARRIVED') internalStatus = 'reached_location';
         else if (status === 'COLLECTED') internalStatus = 'picked_up';
         else if (status === 'CUSTOMER_DOOR_STEP') internalStatus = 'arrived_at_drop';
+        else if (status === 'ALLOTTED') internalStatus = 'allotted';
+        else if (status === 'DELIVERED') internalStatus = 'delivered'; // Explicit map
 
         // Base payload for ORDERS table 
         const orderPayload = {};
@@ -245,35 +218,29 @@ router.post('/webhook', async (req, res) => {
         } else if (status === 'COLLECTED') {
              // Order is now officially ON THE WAY
              orderPayload.status = 'on_way'; 
-             // Note: 'on_way' might trigger 'picked_up' UI in frontend depending on mapping
         }
 
         // Full payload for DELIVERIES table
         const deliveryPayload = {
             status: internalStatus,
-            rider_name: data.rider_name || data.rider_details?.name,
-            rider_phone: data.rider_contact_number || data.rider_details?.contact || data.rider_details?.contact_number,
-            
-            // New Schema v2 Fields
+            rider_name: data.rider_name,
+            rider_phone: data.rider_contact_number,
             rider_id: data.rider_id ? String(data.rider_id) : null,
-            cancellation_reason: data.cancel_reason,
+            rider_coordinates: (data.rider_latitude && data.rider_longitude) ? {
+                latitude: data.rider_latitude,
+                longitude: data.rider_longitude
+            } : null,
+            
+            cancellation_reason: data.cancel_reason || data.rts_reason,
             cancelled_by: data.cancelled_by,
             courier_response_payload: data, // Store RAW payload
             
-            updated_at: new Date().toISOString()
+            updated_at: data.action_time || new Date().toISOString()
         };
 
-        if (data.rider_latitude && data.rider_longitude) {
-            deliveryPayload.rider_coordinates = {
-                latitude: data.rider_latitude,
-                longitude: data.rider_longitude
-            };
-        } else if (data.rider_details?.current_location) {
-             deliveryPayload.rider_coordinates = data.rider_details.current_location;
-        }
-
-        if (data.pickup_otp) deliveryPayload.pickup_otp = data.pickup_otp;
-        if (data.delivery_otp) deliveryPayload.delivery_otp = data.delivery_otp;
+        // PREVENT OVERWRITE: Internal OTP generation source of truth
+        // if (data.pickup_otp) deliveryPayload.pickup_otp = data.pickup_otp;
+        // if (data.delivery_otp) deliveryPayload.delivery_otp = data.delivery_otp;
 
 
         // Execute Update on ORDERS table

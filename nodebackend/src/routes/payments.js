@@ -223,19 +223,59 @@ router.post('/callback', asyncHandler(async (req, res) => {
                 }
           }
 
-          const sfResponse = await createShadowfaxOrder(updatedOrder, updatedOrder.vendor);
+          // Generate OTPs HERE (Controller Side) to ensure we have them
+          const pickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
+          const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+          // Pass OTPs to Shadowfax Service
+          const sfResponse = await createShadowfaxOrder(updatedOrder, updatedOrder.vendor, { pickup_otp: pickupOtp, delivery_otp: deliveryOtp });
 
           if (sfResponse && sfResponse.success) {
               const shadowfaxId = sfResponse.data.sfx_order_id || sfResponse.data.flash_order_id || sfResponse.data.client_order_id || sfResponse.data.id;
-              console.log(`[Shadowfax] Order ${orderId} accepted. ID: ${shadowfaxId}`);
               
-              // Update delivery status
-              await supabaseAdmin.from('deliveries').insert({
+              console.log(`[Shadowfax] Order ${orderId} accepted. ID: ${shadowfaxId}. OTPs: ${pickupOtp}/${deliveryOtp}`);
+              
+              const insertPayload = {
                   order_id: updatedOrder.id,
                   partner_id: 'shadowfax',
-                  partner_order_id: shadowfaxId, 
-                  status: 'searching_rider'
-              });
+                  external_order_id: shadowfaxId, 
+                  status: 'searching_rider',
+                  pickup_otp: pickupOtp,
+                  delivery_otp: deliveryOtp
+              };
+              console.log('[Debug] Insert Payload:', insertPayload);
+
+              // Update delivery status (Use upsert to handle race condition with Webhook)
+              const { data: insertedDelivery, error: insertError } = await supabaseAdmin
+                  .from('deliveries')
+                  .upsert(insertPayload, { onConflict: 'order_id' })
+                  .select()
+                  .single();
+
+              if (insertError) {
+                  console.error("❌ Delivery Insert Error:", insertError);
+              } else {
+                  console.log("✅ Delivery Row Created:", insertedDelivery?.id);
+                  
+                  // FORCE UPDATE to ensure OTPs stick (Paranoid Check)
+                  const { error: forceError } = await supabaseAdmin.from('deliveries')
+                    .update({ 
+                        pickup_otp: pickupOtp,
+                        delivery_otp: deliveryOtp 
+                    })
+                    .eq('id', insertedDelivery.id);
+                    
+                  if (forceError) console.error("❌ Force OTP Update Error:", forceError);
+                  else console.log("✅ OTPs Force Updated.");
+
+                  // PARANOID VERIFICATION: Read it back
+                  const { data: verifyRow } = await supabaseAdmin.from('deliveries')
+                    .select('pickup_otp, delivery_otp')
+                    .eq('id', insertedDelivery.id)
+                    .single();
+                  
+                  console.log("🔍 [VERIFY ID]", insertedDelivery.id, "OTPs in DB:", verifyRow);
+              }
 
               // CRITICAL: Update ORDERS table so Webhook can find it later
               await supabaseAdmin.from('orders')
@@ -548,17 +588,27 @@ router.post('/webhook/refund', asyncHandler(async (req, res) => {
 router.get('/:id/status', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const { data: order, error } = await supabaseAdmin
+  // Check if id is UUID
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  let query = supabaseAdmin
     .from('orders')
-    .select('payment_status, id')
-    .eq('order_number', id)
-    .single();
+    .select('payment_status, id, order_number');
+    
+  if (isUUID) {
+      query = query.eq('id', id);
+  } else {
+      query = query.eq('order_number', id);
+  }
+
+  const { data: order, error } = await query.single();
 
   if (error || !order) {
     // Try checking payments table directly if order not found
+    // Payments table uses merchant_order_id (usually GZ)
     const { data: payment } = await supabaseAdmin
       .from('payments')
-      .select('status')
+      .select('status, merchant_order_id')
       .eq('merchant_order_id', id)
       .maybeSingle();
       
@@ -574,7 +624,11 @@ router.get('/:id/status', asyncHandler(async (req, res) => {
          state = 'FAILED';
        }
        
-       return successResponse(res, { code, state });
+       return successResponse(res, { 
+           code, 
+           state,
+           transactionId: payment.merchant_order_id // Return the GZ ID
+       });
     }
     return res.status(404).json({ success: false, message: 'Order not found' });
   }
@@ -594,7 +648,7 @@ router.get('/:id/status', asyncHandler(async (req, res) => {
   successResponse(res, {
     code,
     state,
-    transactionId: id
+    transactionId: order.order_number // ALWAYS return the GZ ID
   });
 }));
 

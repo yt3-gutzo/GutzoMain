@@ -154,35 +154,42 @@ export function OrderTrackingMap({
   }, [status, driverLocation, storeLocation]);
 
   // 3. Routing Logic (Directions API)
+  // 3. Routing & Marker Logic
   useEffect(() => {
       if (!isMapLoaded || !directionsServiceRef.current || !directionsRendererRef.current) return;
 
-      // Determine Route based on Status
-      // Stage 1: Driver -> Restaurant (driver_assigned, searching, allotted)
-      // Stage 2: Driver -> Customer (picked_up, on_way, arrived_at_drop, reached_location?? No reached is stage 1 end)
-      
-      let origin: Coordinates | null = null;
-      let destination: Coordinates | null = null;
-      
-      const isPickUpPhase = ['driver_assigned', 'allotted', 'reached_location'].includes(status);
+      const isSearching = status === 'searching_rider' || status === 'placed' || status === 'preparing' || status === 'ready';
+      // Phase 2: ONLY when moving TO the store. Once reached, we show the next leg.
+      const isPickUpPhase = ['driver_assigned', 'allotted'].includes(status);
       const isDeliveryPhase = ['picked_up', 'on_way', 'arrived_at_drop', 'out_for_delivery'].includes(status);
 
-      // Default to stored driver pos or store location
-      const startPoint = driverLocation || storeLocation;
+      // A. Marker Visibility
+      if (driverMarkerRef.current) {
+          // Hide rider marker if we are still searching
+          driverMarkerRef.current.setVisible(!isSearching);
+      }
 
-      if (isPickUpPhase) {
-          // Path: Driver -> Restaurant
-          origin = startPoint;
-          destination = storeLocation;
-      } else if (isDeliveryPhase) {
-          // Path: Driver -> Customer (BUT if picked up, origin is driver, dest is user)
-          // Wait, if driver moves, the path shrinks. That's good.
-          origin = startPoint;
-          destination = userLocation;
-      } else {
-          // Default: Restaurant -> User (Static path if no driver yet or completed)
+      // B. Routing Logic
+      let origin: Coordinates | null = null;
+      let destination: Coordinates | null = null;
+
+      if (isSearching) {
+          // Phase 1: searching -> Static Path (Store -> User)
+          // No rider to track yet.
           origin = storeLocation;
           destination = userLocation;
+      } else if (isPickUpPhase) {
+          // Phase 2: Rider Assigned -> Rider is coming to Store
+          origin = driverLocation || storeLocation; // Fallback to store if loc missing (e.g. just assigned)
+          destination = storeLocation;
+      } else if (isDeliveryPhase) {
+          // Phase 3: Order Picked Up -> Rider is coming to User
+          origin = driverLocation || storeLocation; 
+          destination = userLocation;
+      } else {
+           // Completed / Default
+           origin = storeLocation;
+           destination = userLocation;
       }
 
       if (origin && destination) {

@@ -98,7 +98,9 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
 
                  if (isLive) {
                      console.log('🔄 Auto-Restoring Active Order:', latest.order_number);
-                     startTracking(latest.id || latest.order_id);
+                     // Use order_number (GZ...) instead of UUID if available
+                     const trackingId = latest.order_number || latest.id || latest.order_id;
+                     startTracking(trackingId);
                  }
              }
           } catch(e) {
@@ -129,11 +131,14 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
   }, [activeOrder, router]);
 
   const maximizeOrder = useCallback(() => {
-    if (activeOrder && activeOrder.orderId) {
+    if (activeOrder) {
       const updated = { ...activeOrder, isMinimized: false };
       setActiveOrder(updated);
       localStorage.setItem('activeOrder', JSON.stringify(updated));
-      router.navigate(`/tracking/${activeOrder.orderId}`);
+      
+      // Navigate using GZ Number if available, fallback to ID
+      const targetId = activeOrder.orderNumber || activeOrder.orderId;
+      router.navigate(`/tracking/${targetId}`);
     }
   }, [activeOrder, router]);
 

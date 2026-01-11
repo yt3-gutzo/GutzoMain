@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 const SHADOWFAX_API_URL = process.env.SHADOWFAX_API_URL;
 const SHADOWFAX_API_TOKEN = process.env.SHADOWFAX_API_TOKEN;
 
-export const createShadowfaxOrder = async (order, vendor) => {
+export const createShadowfaxOrder = async (order, vendor, otps = {}) => {
     if (!SHADOWFAX_API_TOKEN) {
         console.warn("⚠️ SHADOWFAX_API_TOKEN missing. Skipping delivery creation.");
         return { success: false, error: "SHADOWFAX_TOKEN_MISSING" };
@@ -48,9 +48,12 @@ export const createShadowfaxOrder = async (order, vendor) => {
 
     const dropAddress = buildAddressString(order.delivery_address, dropLat, dropLng);
 
+    // Use passed OTPs or Generate 4-digit OTPs
+    const pickupOtp = otps.pickup_otp || Math.floor(1000 + Math.random() * 9000).toString();
+    const deliveryOtp = otps.delivery_otp || Math.floor(1000 + Math.random() * 9000).toString();
+
     const payload = {
         order_details: {
-            // ... (keep existing)
             order_id: order.order_number,
             actual_order_value: Number(order.total_amount),
             paid: isPrepaid,
@@ -88,11 +91,11 @@ export const createShadowfaxOrder = async (order, vendor) => {
         validations: {
             pickup: {
                 is_otp_required: true,
-                otp: "1234"
+                otp: pickupOtp
             },
             drop: {
                 is_otp_required: true,
-                otp: "1234"
+                otp: deliveryOtp
             }
         }
     };
@@ -116,7 +119,15 @@ export const createShadowfaxOrder = async (order, vendor) => {
             return { success: false, error: data.message || "Failed to create delivery order", details: data };
         }
         
-        return { success: true, data }; // Returns Shadowfax Order ID usually
+        // Return Shadowfax ID + Generated OTPs
+        return { 
+            success: true, 
+            data: {
+                ...data,
+                generated_pickup_otp: pickupOtp,
+                generated_delivery_otp: deliveryOtp
+            } 
+        }; 
     } catch (e) {
         console.error("Shadowfax Integration Error:", e);
         return { success: false, error: e.message }; 
