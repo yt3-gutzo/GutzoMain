@@ -690,7 +690,7 @@ export function ResponsiveProductDetails({
       {/* Side Panel */}
       <div 
         ref={panelRef}
-        className={`fixed top-0 right-0 h-full w-[95%] max-w-lg lg:w-[50%] lg:max-w-[600px] bg-white product-details-panel z-50 ${
+        className={`fixed top-0 right-0 h-full w-[95%] max-w-[600px] bg-white product-details-panel z-50 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         role="dialog"

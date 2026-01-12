@@ -129,14 +129,14 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
             <div className="hidden md:flex flex-1 items-center max-w-2xl">
               <div className="flex flex-1 items-center border border-gray-200 rounded-08rem bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] min-h-[60px]">
                 {/* Location Selector with Dropdown */}
-                <div className="relative min-w-[130px] lg:min-w-[180px]">
+                <div className="relative flex-shrink-0" style={{ width: '200px', maxWidth: '200px' }}>
                   <div 
-                    className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50/50 transition-colors w-full"
                     onClick={() => setShowLocationDropdown(!showLocationDropdown)}
                     title="Click to select location"
                   >
                     {isLoading ? (
-                      <div className="flex flex-col gap-1 w-full max-w-[140px] py-1">
+                      <div className="flex flex-col gap-1 w-full py-1">
                         <div className="h-2.5 bg-gray-200 rounded animate-pulse w-1/3"></div>
                         <div className="h-3.5 bg-gray-200 rounded animate-pulse w-3/4"></div>
                       </div>
@@ -147,15 +147,15 @@ export function Header({ onShowLogin, onLogout, onShowProfile, onShowCart, onSho
                         ) : (
                           <MapPin className="h-5 w-5 text-gutzo-primary flex-shrink-0" />
                         )}
-                        <div className="flex flex-col min-w-0 justify-center">
+                        <div className="flex flex-col min-w-0 justify-center flex-1">
                           {error ? (
                             <span className="truncate font-medium text-gray-900 whitespace-nowrap">Location Error</span>
                           ) : locationLabel ? (
                             <>
-                              <span className="text-[11px] font-bold text-gray-900 leading-tight uppercase tracking-wide">
+                              <span className="text-[11px] font-bold text-gray-900 leading-tight uppercase tracking-wide truncate">
                                 {locationLabel}
                               </span>
-                              <span className="truncate text-sm font-medium text-gray-600 leading-tight max-w-[200px]">
+                              <span className="truncate text-sm font-medium text-gray-600 leading-tight">
                                 {locationDisplay}
                               </span>
                             </>

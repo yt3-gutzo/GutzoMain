@@ -30,8 +30,8 @@ import { UserAddress } from "../types/address";
 import { LocationSearchInput } from "./common/LocationSearchInput";
 import { LocationService } from "../utils/locationService";
 import { LoadingScreen } from "./common/LoadingScreen";
-
 import { useAddresses } from "../hooks/useAddresses";
+import { useMediaQuery } from "../hooks/use-media-query";
 
 export interface LocationBottomSheetProps {
   isOpen: boolean;
@@ -42,6 +42,8 @@ export interface LocationBottomSheetProps {
 }
 
 export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddress, refreshTrigger }: LocationBottomSheetProps) {
+  const isDesktop = useMediaQuery("(min-width: 850px)");
+
   const {
     addresses,
     loading: addressesLoading,
@@ -68,15 +70,7 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
     }
   }, [isOpen, refreshTrigger, refreshAddresses]);
 
-
-
-
   const navigate = useNavigate();
-
-  // Close menu on outside click
-
-
-
 
   const handleAddAddress = () => {
     onAddAddress?.();
@@ -108,8 +102,6 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
           }
       }
   };
-
-
 
   /* 
      State to track if user is searching.
@@ -192,8 +184,6 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
                 timestamp: Date.now()
              };
 
-            // console.log("📍 Location details fetched:", selectedLocation);
-
             // Override location in context
             if (context?.overrideLocation) {
                 await context.overrideLocation(selectedLocation);
@@ -219,36 +209,45 @@ export function LocationBottomSheet({ isOpen, onClose, onAddAddress, onEditAddre
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
-        side="bottom"
-        className="rounded-t-3xl p-0 w-full max-w-full left-0 right-0 transition-transform duration-300 ease-in-out"
-        style={{ top: '104px', bottom: 0, height: 'calc(100vh - 104px)', position: 'fixed', zIndex: 1100 }}
+        side={isDesktop ? "right" : "bottom"}
+        className={`
+            p-0 bg-white transition-transform duration-300 ease-in-out
+            ${isDesktop 
+                ? "h-full w-[95%] max-w-[600px] border-l border-gray-200 shadow-2xl" 
+                : "rounded-t-3xl w-full max-w-full fixed bottom-0 left-0 right-0 z-[1100]"
+            }
+        `}
+        style={isDesktop ? {} : { 
+            top: '104px', 
+            height: 'calc(100vh - 104px)',
+            // zIndex is handled by class orSheet default, but explicit for mobile as per original
+            zIndex: 1100 
+        }}
       >
         <style>{`
+          /* Hide close button if needed, but Sheet usually handles it. */
           [data-slot="sheet-content"] > button[class*="absolute"] {
             display: none !important;
           }
-          [data-slot="sheet-content"][data-state="closed"] {
-            animation: slideDown 300ms ease-in-out;
-          }
-          [data-slot="sheet-content"][data-state="open"] {
-            animation: slideUp 300ms ease-in-out;
-          }
-          @keyframes slideUp {
-            from {
-              transform: translateY(100%);
+          
+          /* Custom animations - applied mostly for mobile slide up/down feel if default isn't enough */
+          ${!isDesktop ? `
+            [data-slot="sheet-content"][data-state="closed"] {
+                animation: slideDown 300ms ease-in-out;
             }
-            to {
-              transform: translateY(0);
+            [data-slot="sheet-content"][data-state="open"] {
+                animation: slideUp 300ms ease-in-out;
             }
-          }
-          @keyframes slideDown {
-            from {
-              transform: translateY(0);
+            @keyframes slideUp {
+                from { transform: translateY(100%); }
+                to { transform: translateY(0); }
             }
-            to {
-              transform: translateY(100%);
+            @keyframes slideDown {
+                from { transform: translateY(0); }
+                to { transform: translateY(100%); }
             }
-          }
+          ` : ''}
+
           .scrollbar-hide::-webkit-scrollbar {
             display: none;
           }

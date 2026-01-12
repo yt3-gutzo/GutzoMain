@@ -171,7 +171,7 @@ export function PaymentPanel({
       />
       
       {/* Panel */}
-      <div className="fixed top-0 right-0 h-full w-[95%] max-w-lg lg:w-[50%] lg:max-w-[600px] bg-white shadow-2xl z-[70] transform transition-transform duration-300 product-details-panel">
+      <div className="fixed top-0 right-0 h-full w-[95%] max-w-[600px] bg-white shadow-2xl z-[70] transform transition-transform duration-300 product-details-panel">
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gutzo-highlight/15 to-gutzo-primary/10">
