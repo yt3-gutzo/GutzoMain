@@ -79,7 +79,7 @@ export const createShadowfaxOrder = async (order, vendor, otps = {}) => {
              ...(dropLat && dropLng ? { latitude: dropLat, longitude: dropLng } : {})
         },
         user_details: {
-            name: "Gutzo Admin",
+            name: "Gutzo",
             contact_number: process.env.SHADOWFAX_CONTACT_NUMBER, // Use env or throw if missing
             credits_key: process.env.SHADOWFAX_CREDITS_KEY
         },
