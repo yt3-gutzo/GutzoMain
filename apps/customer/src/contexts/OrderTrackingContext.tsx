@@ -26,6 +26,7 @@ interface OrderTrackingContextType {
   minimizeOrder: () => void;
   maximizeOrder: () => void;
   closeTracking: () => void;
+  clearActiveOrder: () => void;
   storeLocation: { lat: number; lng: number };
   userLocation: { lat: number; lng: number };
 }
@@ -97,9 +98,31 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
                                 (!deliveryStatus || !['delivered', 'completed'].includes(deliveryStatus));
 
                  if (isLive) {
-                     console.log('🔄 Auto-Restoring Active Order:', latest.order_number);
-                     // Use order_number (GZ...) instead of UUID if available
                      const trackingId = latest.order_number || latest.id || latest.order_id;
+
+                     // ZOMBIE CHECK: Verify with live API before restoring
+                     // The DB might be stale ("searching_rider"), but Shadowfax might say "Cancelled" (or 404).
+                     try {
+                        const liveCheck = await nodeApiService.trackOrder(user.phone, trackingId);
+                        
+                        if (liveCheck.success && liveCheck.data) {
+                            const ls = (liveCheck.data.status || '').toLowerCase();
+                            if (ls === 'cancelled' || ls === 'rejected' || ls === 'vendor_rejected') {
+                                console.warn('🛑 Auto-Restore Blocked: Order is CANCELLED in live system:', trackingId);
+                                return; 
+                            }
+                        }
+                     } catch (e: any) {
+                         // If 404, it is definitely dead/cancelled.
+                         if (e.message && (e.message.includes('404') || e.message.includes('not found') || e.message.includes('No order'))) {
+                             console.warn('🛑 Auto-Restore Blocked: Order not found (404) in live system:', trackingId);
+                             return;
+                         }
+                         // For other errors (network?), we cautiously proceed or log.
+                         // But for now, we assume if track fails, we shouldn't show a zombie "Searching" bar.
+                     }
+
+                     console.log('🔄 Auto-Restoring Active Order:', latest.order_number);
                      startTracking(trackingId);
                  }
              }
@@ -144,6 +167,12 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
 
   const closeTracking = useCallback(() => {
     setActiveOrder(null);
+    localStorage.removeItem('activeOrder');
+  }, []);
+
+  const clearActiveOrder = useCallback(() => {
+    setActiveOrder(null);
+    localStorage.removeItem('activeOrder');
   }, []);
 
   // Real-time Polling for Active Order
@@ -156,79 +185,139 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
 
     let isMounted = true;
     
+    // Helper: Define Status Priority to prevent downgrading (same as OrderTrackingPage)
+    const getStatusPriority = (s: string | undefined | null) => {
+        if (!s) return 0;
+        const status = s.toLowerCase();
+        /*
+          Priority Hierarchy:
+          0: unknown
+          1: created, placed
+          2: searching_rider, preparing
+          3: allotted, driver_assigned, rider_assigned
+          4: arrived, reached_location
+          5: picked_up, on_way
+          6: delivered, completed
+          7: cancelled, rejected
+        */
+        if (['created', 'placed'].includes(status)) return 1;
+        if (['searching_rider', 'preparing', 'accepted'].includes(status)) return 2;
+        if (['allotted', 'driver_assigned', 'rider_assigned'].includes(status)) return 3;
+        if (['arrived', 'reached_location', 'on_way'].includes(status)) return 4;
+        if (['picked_up', 'out_for_delivery', 'arrived_at_drop'].includes(status)) return 5;
+        if (['delivered', 'completed'].includes(status)) return 6;
+        if (['cancelled', 'rejected'].includes(status)) return 7; 
+        return 0;
+    };
+
     const pollOrder = async () => {
         try {
-            // Use user phone from context/closure
             const phone = user?.phone;
-            
             if (!phone) return;
 
-            console.log('Poll Order running...', { phone, orderId: activeOrder.orderId });
+            // console.log('Poll Order running...', { phone, orderId: activeOrder.orderId });
 
             const { nodeApiService } = await import('../utils/nodeApi');
+            
+            // 1. Fetch DB Order
             const response = await nodeApiService.getOrder(phone, activeOrder.orderId!);
             
-            console.log('Poll Response:', response);
-
             if (!isMounted) return;
 
-            // Handle potential response structure differences
-            const order = response.data || response; // Support both wrapped and unwrapped
+            const order = response.data || response;
             
             if (order && order.id) {
-                // Map status
-                let mappedStatus: OrderStatus = 'placed'; // Default
-                
-                const deliveryStatus = (order.delivery_status || '').toLowerCase();
-                const internalStatus = (order.status || '').toLowerCase();
-                
-                // FORCE: Cancellation Priority
-                if (internalStatus === 'cancelled' || internalStatus === 'rejected' || deliveryStatus === 'cancelled') {
-                    mappedStatus = 'cancelled';
-                } else {
-                    // Determine effect status
-                    let s = internalStatus;
-                    
-                    // Allow delivery status to override ONLY if it's significant (post-kitchen)
-                    if (['picked_up', 'driver_assigned', 'out_for_delivery', 'on_way', 'allotted', 'reached_location', 'delivered', 'completed'].includes(deliveryStatus)) {
-                        s = deliveryStatus;
-                    }
+                // 1. Extract DB Delivery
+                // Fix: Create a copy to avoid mutation
+                const activeDelivery = order.delivery && Array.isArray(order.delivery) && order.delivery.length > 0
+                    ? [...order.delivery].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+                    : null;
 
-                    if (s === 'created') mappedStatus = 'created';
-                    else if (s === 'placed' || s === 'pending' || s === 'confirmed' || s === 'paid') mappedStatus = 'placed';
-                    else if (s === 'searching_rider') mappedStatus = 'searching_rider';
-                    else if (s === 'preparing' || s === 'accepted') mappedStatus = 'preparing';
-                    else if (s === 'ready' || s === 'ready_for_pickup') mappedStatus = 'ready';
-                    else if (s === 'picked_up' || s === 'driver_assigned' || s === 'out_for_delivery') mappedStatus = 'picked_up';
-                    else if (s === 'on_way' || s === 'allotted' || s === 'reached_location' || s === 'arrived_at_drop') mappedStatus = 'on_way';
-                    else if (s === 'delivered' || s === 'completed') mappedStatus = 'delivered';
-                    else {
-                        console.log('⚠️ Unknown status:', s);
-                    }
+                // 2. Fetch Live Tracking (if active)
+                let liveTracking: any = null;
+                const dbStatus = activeDelivery?.status;
+                
+                // Only track if not obviously finished/cancelled in DB (optimization)
+                // But we still fetch if it's "placing" to catch "cancelled" updates from shadowfax
+                if (!['delivered', 'completed', 'cancelled', 'rejected'].includes((order.status || '').toLowerCase())) {
+                     try {
+                        // Use Order Number for tracking if available (matches OrderTrackingPage behavior)
+                        const trackingIdentifier = order.order_number || order.id;
+                        const trackRes = await nodeApiService.trackOrder(phone, trackingIdentifier);
+                        
+                        if (trackRes.success && trackRes.data) {
+                             liveTracking = trackRes.data;
+                        }
+                     } catch (e: any) {
+                         // 404 means dead
+                         if (e.message && (e.message.includes('404') || e.message.includes('not found'))) {
+                             liveTracking = { status: 'cancelled' }; 
+                         }
+                     }
                 }
 
-                // Extract Vendor Name securely
-                // Check order.vendor object OR order.vendor_name flat field
-                const vName = order.vendor?.name || 
-                              order.vendor_name || 
-                              (order.items && order.items[0]?.product_name ? 'Your Kitchen' : 'Pitchammal\'s Kitchen'); // Last resort fallback
+                // 3. Merging Logic (The Core Fix)
+                const liveStatus = liveTracking?.status;
+                const isCancelled = dbStatus === 'cancelled' || order.status === 'rejected' || order.status === 'cancelled' || liveStatus === 'cancelled' || liveStatus === 'rejected';
 
-                // Extract Vendor Location
-                // console.log('📍 Vendor Data from API:', order.vendor);
+                // Only use Live Status if it doesn't downgrade meaningfully
+                const useLiveStatus = !isCancelled && getStatusPriority(liveStatus) >= getStatusPriority(dbStatus);
+
+                const mergedDelivery = {
+                     ...activeDelivery,
+                     rider_name: (useLiveStatus ? liveTracking?.rider_details?.name : activeDelivery?.rider_name) || activeDelivery?.rider_name,
+                     rider_phone: (useLiveStatus ? liveTracking?.rider_details?.contact_number : activeDelivery?.rider_phone) || activeDelivery?.rider_phone,
+                     rider_coordinates: liveTracking?.rider_details?.current_location || activeDelivery?.rider_coordinates, // Prefer live
+                     status: isCancelled ? 'cancelled' : (useLiveStatus ? liveStatus : dbStatus)
+                };
+
+                // 4. Derive Display Status (Same logic as Page)
+                let displayStatus: OrderStatus = 'placed';
+                
+                const rawStatus = (order.status || '').toLowerCase();
+                const deliveryStatus = mergedDelivery.status ? mergedDelivery.status.toLowerCase() : (order.delivery_status || '');
+
+                if (isCancelled || rawStatus === 'rejected' || rawStatus === 'cancelled' || deliveryStatus === 'cancelled') {
+                        displayStatus = 'cancelled';
+                } else if (rawStatus === 'searching_rider' || deliveryStatus === 'searching_rider' || deliveryStatus === 'created') {
+                    displayStatus = 'searching_rider';
+                } else if (['picked_up', 'driver_assigned', 'rider_assigned', 'allotted', 'out_for_delivery', 'on_way', 'reached_location', 'delivered', 'completed'].includes(deliveryStatus)) {
+                     // Strict Mapping to OrderStatus type
+                     if (['driver_assigned', 'rider_assigned', 'allotted'].includes(deliveryStatus)) {
+                         displayStatus = 'ready'; // Map to 'ready' (Food Ready, Waiting for Pickup)
+                     }
+                     else if (['out_for_delivery', 'picked_up'].includes(deliveryStatus)) {
+                         displayStatus = 'picked_up';
+                     }
+                     else if (['on_way', 'reached_location', 'arrived_at_drop'].includes(deliveryStatus)) {
+                         displayStatus = 'on_way';
+                     }
+                     else if (['delivered', 'completed'].includes(deliveryStatus)) {
+                         displayStatus = 'delivered';
+                     }
+                     else {
+                         displayStatus = 'picked_up'; // Fallback
+                     }
+                } else {
+                    // Standard Order Status Fallback
+                    if (rawStatus === 'placed' || rawStatus === 'confirmed' || rawStatus === 'paid') {
+                            displayStatus = 'placed'; 
+                    }
+                    else if (rawStatus === 'preparing' || rawStatus === 'accepted') displayStatus = 'preparing';
+                    else if (rawStatus === 'ready' || rawStatus === 'ready_for_pickup') displayStatus = 'ready';
+                    else displayStatus = (rawStatus as OrderStatus) || 'preparing';
+                }
+
+                const vName = order.vendor?.name || order.vendor_name || 'Gutzo Kitchen';
                 const vLocation = order.vendor?.address || '';
-
-                // Extract Delivery Info
-                const activeDelivery = order.delivery && order.delivery.length > 0
-                    ? order.delivery.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-                    : null;
 
                 const extendedOrder: TrackingState = {
                     ...activeOrder,
-                    status: mappedStatus,
-                    delivery_otp: activeDelivery?.delivery_otp || order.delivery_otp,
-                    rider_name: activeDelivery?.rider_name,
-                    rider_phone: activeDelivery?.rider_phone,
-                    rider_coordinates: activeDelivery?.rider_coordinates,
+                    status: displayStatus,
+                    delivery_otp: mergedDelivery?.delivery_otp || order.delivery_otp,
+                    rider_name: mergedDelivery?.rider_name,
+                    rider_phone: mergedDelivery?.rider_phone,
+                    rider_coordinates: mergedDelivery?.rider_coordinates,
                     vendorName: vName,
                     vendorLocation: vLocation,
                     orderNumber: order.order_number
@@ -236,7 +325,8 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
 
                 setActiveOrder(prev => {
                     if (JSON.stringify(prev) !== JSON.stringify(extendedOrder)) {
-                        console.log('🔄 Tracking Update:', extendedOrder);
+                        console.log('🔄 Context Tracking Update:', extendedOrder.status);
+                        // Auto-minimize on cancel/delivered?
                         return extendedOrder;
                     }
                     return prev;
@@ -244,12 +334,10 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
             }
         } catch (err: any) {
             console.error("Tracking Poll Error:", err);
-            // ZOMBIE KILLER: If order is 404/Not Found, KILL IT immediately from local storage
-            if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('No order'))) {
-               console.error('💀 Zombie Order Detected (404). Purging tracking state.');
+            // ZOMBIE KILLER
+            if (err.message && (err.message.includes('404') || err.message.includes('not found'))) {
                setActiveOrder(null);
                localStorage.removeItem('activeOrder');
-               return;
             }
         }
     };
@@ -263,7 +351,7 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
         isMounted = false;
         clearInterval(interval);
     };
-  }, [activeOrder?.orderId]);
+  }, [activeOrder?.orderId, user?.phone]);
 
   return (
     <OrderTrackingContext.Provider value={{ 
@@ -272,6 +360,7 @@ export function OrderTrackingProvider({ children }: { children: ReactNode }) {
         minimizeOrder, 
         maximizeOrder, 
         closeTracking,
+        clearActiveOrder,
         storeLocation,
         userLocation
     }}>

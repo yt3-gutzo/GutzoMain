@@ -493,7 +493,7 @@ class NodeApiService {
 
     async trackOrder(phone: string, id: string) {
         const formattedPhone = this.formatPhone(phone);
-        return this.request(`/orders/${id}/track`, {
+        return this.request(`/delivery/track/${id}`, {
             headers: { "x-user-phone": formattedPhone },
         });
     }

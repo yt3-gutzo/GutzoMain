@@ -11,11 +11,12 @@ interface OrderTrackingTimelineSheetProps {
   };
   vendorName?: string;
   deliveryOtp?: string;
+  orderId?: string;
 }
 
 import { useOrderTracking } from '../contexts/OrderTrackingContext';
 
-export function OrderTrackingTimelineSheet({ status, driver, vendorName, deliveryOtp }: OrderTrackingTimelineSheetProps) {
+export function OrderTrackingTimelineSheet({ status, driver, vendorName, deliveryOtp, orderId }: OrderTrackingTimelineSheetProps) {
   const { activeOrder } = useOrderTracking();
   
   const isCancelled = status === 'cancelled' || status === 'rejected';
@@ -136,7 +137,7 @@ export function OrderTrackingTimelineSheet({ status, driver, vendorName, deliver
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <ShoppingBag size={20} className="text-gray-400" />
-                            <p className="text-xs text-gray-500">Order ID <span className="font-bold font-mono tracking-wide ml-2">#{activeOrder?.orderId || 'GZ-8291-XJ'}</span></p>
+                            <p className="text-xs text-gray-500">Order ID <span className="font-bold font-mono tracking-wide ml-2">#{orderId || activeOrder?.orderNumber || activeOrder?.orderId}</span></p>
                         </div>
                         <ChevronRight size={20} className="text-gray-400" />
                     </div>

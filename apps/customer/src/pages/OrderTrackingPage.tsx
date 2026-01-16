@@ -350,6 +350,7 @@ export function OrderTrackingPage() {
                 name: mergedDelivery?.rider_name || activeDelivery?.rider_name || contextOrder?.rider_name,
                 phone: mergedDelivery?.rider_phone || activeDelivery?.rider_phone || contextOrder?.rider_phone || ""
             } : undefined} 
+            orderId={localOrder?.order_number || contextOrder?.orderNumber}
         />
     </motion.div>
   );

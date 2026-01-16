@@ -5,29 +5,46 @@ import { useRouter } from './Router';
 import { OrderTrackingMap } from './OrderTrackingMap';
 
 export function ActiveOrderFloatingBar() {
-  const { activeOrder, maximizeOrder, closeTracking, storeLocation, userLocation } = useOrderTracking();
+  const { activeOrder, maximizeOrder, closeTracking, storeLocation, userLocation, clearActiveOrder } = useOrderTracking();
   const { currentRoute } = useRouter();
 
   // Poll storage for debug and fallback
   const [storageOrder, setStorageOrder] = React.useState<any>(null);
 
-  React.useEffect(() => {
-    const checkStorage = () => {
-        const s = localStorage.getItem('activeOrder');
-        if (s) {
-            try { setStorageOrder(JSON.parse(s)); } catch(e) {}
-        } else {
-            setStorageOrder(null);
-        }
-    };
-    checkStorage(); // Init
-    const interval = setInterval(checkStorage, 1000); // Poll
-    return () => clearInterval(interval);
-  }, []);
+  // 1. Priority: Context -> Storage
+  // If context has an order, use it. If not, fall back to storage (but verify it's not cancelled)
+  const order = activeOrder || storageOrder;
 
-  // Use context order OR storage order (fallback)
-  const displayOrder = activeOrder || storageOrder;
-  
+  // 2. Clear Storage if Context says Cancelled
+  React.useEffect(() => {
+      if (activeOrder && (activeOrder.status === 'cancelled' || activeOrder.status === 'rejected')) {
+           console.log('FloatingBar: Order is cancelled. Clearing storage.');
+           setStorageOrder(null);
+           localStorage.removeItem('activeOrder');
+           clearActiveOrder(); // Ensure context is also cleared
+      }
+  }, [activeOrder, clearActiveOrder]);
+
+  // 3. Load from Storage ONLY if context is empty
+  React.useEffect(() => {
+      if (!activeOrder) {
+          const saved = localStorage.getItem('activeOrder');
+          if (saved) {
+              try {
+                  const parsed = JSON.parse(saved);
+                  // Double check if this saved order is actually old/cancelled
+                  if (parsed && parsed.status !== 'cancelled' && parsed.status !== 'rejected') {
+                       setStorageOrder(parsed);
+                  } else {
+                       localStorage.removeItem('activeOrder');
+                  }
+              } catch (e) {
+                  localStorage.removeItem('activeOrder');
+              }
+          }
+      }
+  }, [activeOrder]);
+
   // Helper to get status UI
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -72,7 +89,7 @@ export function ActiveOrderFloatingBar() {
         case 'picked_up':
             return {
                 title: 'Order Picked Up',
-                subtext: (displayOrder?.delivery_otp) ? `Sharing OTP: ${displayOrder.delivery_otp}` : 'Rider is on the way',
+                subtext: (order?.delivery_otp) ? `Sharing OTP: ${order.delivery_otp}` : 'Rider is on the way',
                 icon: <Bike size={14} className="text-[#1BA672]" />,
                 bg: 'bg-green-50',
                 text: 'text-[#1BA672]',
@@ -136,12 +153,12 @@ export function ActiveOrderFloatingBar() {
   if (isTrackingPage || isPartnerPage) return null;
 
   // Render even if delivered (per user request) -> actually hide it
-  if (displayOrder?.status && ['delivered', 'cancelled', 'rejected'].includes(displayOrder.status.toLowerCase())) return null;
+  if (order?.status && ['delivered', 'cancelled', 'rejected'].includes(order.status.toLowerCase())) return null;
 
   // Hide if no order
-  if (!displayOrder) return null;
+  if (!order) return null;
 
-  const config = getStatusConfig(displayOrder.status);
+  const config = getStatusConfig(order.status);
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-[1000] transition-all duration-300 ease-in-out">
@@ -153,11 +170,11 @@ export function ActiveOrderFloatingBar() {
                 <div className="flex-1 p-4 flex flex-col justify-center gap-1" onClick={maximizeOrder}>
                     <div className="flex flex-col">
                         <h3 className="font-bold text-gray-900 text-sm leading-tight font-primary truncate pr-2">
-                             {displayOrder.vendorName || 'Active Order'}
+                             {order.vendorName || 'Active Order'}
                         </h3>
-                        {displayOrder.orderNumber && (
+                        {order.orderNumber && (
                             <span className="text-[10px] text-gray-500 font-medium">
-                                #{displayOrder.orderNumber}
+                                #{order.orderNumber}
                             </span>
                         )}
                     </div>
@@ -177,7 +194,7 @@ export function ActiveOrderFloatingBar() {
                     <OrderTrackingMap 
                         storeLocation={storeLocation}
                         userLocation={userLocation}
-                        status={displayOrder.status}
+                        status={order.status}
                         fitBoundsPadding={20} 
                     />
                     {/* Overlay */}
