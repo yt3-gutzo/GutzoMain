@@ -63,6 +63,49 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
       setStartDate(getFirstValidDate());
    }, []);
 
+   // ==================================================================================
+   //  Menu Processing Logic (Fill Gaps)
+   // ==================================================================================
+   const displayMenu = React.useMemo(() => {
+     if (!plan || !plan.dayMenu || plan.dayMenu.length === 0) return [];
+
+     // 1. Sort existing menu items by date
+     const sortedMenu = [...plan.dayMenu].sort((a, b) => 
+        new Date(a.menu_date).getTime() - new Date(b.menu_date).getTime()
+     );
+
+     // 2. Identify Start and End Date
+     const startDate = new Date(sortedMenu[0].menu_date);
+     const endDate = new Date(sortedMenu[sortedMenu.length - 1].menu_date);
+     
+     // 3. Generate Continuous Date Array
+     const continuousMenu: any[] = [];
+     const currentDate = new Date(startDate);
+
+     while (currentDate <= endDate) {
+        const dateStr = format(currentDate, 'yyyy-MM-dd');
+        
+        // Find existing data for this date
+        const existingData = sortedMenu.find(item => item.menu_date === dateStr);
+
+        if (existingData) {
+           continuousMenu.push(existingData);
+        } else {
+           // Create a placeholder for the missing date (Rest Day)
+           continuousMenu.push({
+              menu_date: dateStr,
+              day_name: format(currentDate, 'EEEE'),
+              day_of_week: getDay(currentDate),
+              is_available: false
+              // All item fields undefined effectively equals "Rest Day"
+           });
+        }
+
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+     }
+     return continuousMenu;
+   }, [plan]);
 
 
   // Constants
@@ -90,8 +133,6 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
     }
   };
 
-
-  if (!plan) return null;
 
   if (!plan) return null;
 
@@ -164,29 +205,38 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
               {/* Scrollable Menu List */}
                <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
                   <div className="space-y-4">
-                   {/* Dynamic Menu Loop */}
-                   {[1, 2, 3, 4, 5, 6, 0].map((dayNum) => {
-                      const dayData = plan.dayMenu?.find(d => d.day_of_week === dayNum);
-                      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayNum];
+                   {/* Continuous Menu Loop */}
+                   {displayMenu.map((dayData, index) => {
+                      const menuDate = dayData.menu_date ? new Date(dayData.menu_date + 'T00:00:00') : null;
+                      const dayName = menuDate ? menuDate.toLocaleDateString('en-US', { weekday: 'long' }) : dayData.day_name || '';
                       
                       const today = new Date();
-                      const todayNum = today.getDay();
-                      const tomorrowNum = (todayNum + 1) % 7;
-                      const dayAfterTomorrowNum = (todayNum + 2) % 7;
+                      today.setHours(0, 0, 0, 0);
+
+                      const tomorrow = new Date(today);
+                      tomorrow.setDate(today.getDate() + 1);
                       
-                      const isTomorrow = dayNum === tomorrowNum;
-                      const isDayAfterTomorrow = dayNum === dayAfterTomorrowNum;
+                      const dayAfterTomorrow = new Date(today);
+                      dayAfterTomorrow.setDate(today.getDate() + 2);
+
+                      const isTomorrow = menuDate && menuDate.getTime() === tomorrow.getTime();
+                      const isDayAfterTomorrow = menuDate && menuDate.getTime() === dayAfterTomorrow.getTime();
+                      // isToday not strictly needed unless used, but good to have if we act on it.
+                      const isToday = menuDate && menuDate.getTime() === today.getTime();
 
                       // Check if Tomorrow is a Rest Day (to decide if we show "Day After Tomorrow" tag)
-                      const tomorrowData = plan.dayMenu?.find(d => d.day_of_week === tomorrowNum);
-                      const tomorrowIsRestDay = !(tomorrowData && (tomorrowData.breakfast_item || tomorrowData.lunch_item || tomorrowData.dinner_item || tomorrowData.snack_item));
+                      const tomorrowEntry = plan.dayMenu?.find(d => {
+                          const dDate = d.menu_date ? new Date(d.menu_date + 'T00:00:00') : null;
+                          return dDate && dDate.getTime() === tomorrow.getTime();
+                      });
+                      const tomorrowIsRestDay = !(tomorrowEntry && (tomorrowEntry.breakfast_item || tomorrowEntry.lunch_item || tomorrowEntry.dinner_item || tomorrowEntry.snack_item));
 
                       // Enhanced Logic: Any day with no menu items is a "Rest Day"
                       const hasMenuData = dayData && (dayData.breakfast_item || dayData.lunch_item || dayData.dinner_item || dayData.snack_item);
 
                       if (!hasMenuData) {
                          return (
-                            <div key={dayNum} className="p-4 rounded-xl bg-gray-100 border border-gray-200 text-center relative overflow-hidden">
+                            <div key={dayData.menu_date || index} className="p-4 rounded-xl bg-gray-100 border border-gray-200 text-center relative overflow-hidden">
                                {isTomorrow && (
                                   <div className="absolute top-0 right-0 bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-bl-lg font-bold">
                                      TOMORROW
@@ -198,14 +248,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                          );
                       }
 
-                      if (!dayData) return null;
-
                       return (
-                         <div key={dayNum} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                         <div key={dayData.menu_date || index} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                             <div className="flex justify-between items-center mb-3">
-                               <h3 className="font-bold text-gray-900">{dayName}</h3>
-                              {isTomorrow && <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#E8F6F1', color: '#1BA672' }}>TOMORROW</span>}
-                              {(isDayAfterTomorrow && tomorrowIsRestDay) && <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#E8F6F1', color: '#1BA672' }}>DAY AFTER TOMORROW</span>}
+                               <div>
+                                  <h3 className="font-bold text-gray-900">{dayName}</h3>
+                                  {dayData.menu_date && <p className="text-xs text-gray-500 mt-0.5">{new Date(dayData.menu_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>}
+                               </div>
+                               {isTomorrow && <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#E8F6F1', color: '#1BA672' }}>TOMORROW</span>}
+                               {(isDayAfterTomorrow && tomorrowIsRestDay) && <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#E8F6F1', color: '#1BA672' }}>DAY AFTER TOMORROW</span>}
                             </div>
                             <div className="space-y-3">
                                {dayData.breakfast_item && (
@@ -213,8 +264,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                      <div className="mt-1 w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center shrink-0">
                                         <Sun size={14} className="text-orange-500" />
                                      </div>
-                                     <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Breakfast</p>
+                                     <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                           <p className="text-xs font-bold text-gray-400 uppercase">Breakfast</p>
+                                           {dayData.breakfast_template_code && (
+                                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-700">
+                                                 {dayData.breakfast_template_code}
+                                              </span>
+                                           )}
+                                        </div>
                                         <p className="text-sm font-medium text-gray-800">{dayData.breakfast_item}</p>
                                      </div>
                                   </div>
@@ -224,8 +282,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                      <div className="mt-1 w-8 h-8 rounded-full bg-green-50 flex items-center justify-center shrink-0">
                                         <Utensils size={14} className="text-green-500" />
                                      </div>
-                                     <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Lunch</p>
+                                     <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                           <p className="text-xs font-bold text-gray-400 uppercase">Lunch</p>
+                                           {dayData.lunch_template_code && (
+                                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-700">
+                                                 {dayData.lunch_template_code}
+                                              </span>
+                                           )}
+                                        </div>
                                         <p className="text-sm font-medium text-gray-800">{dayData.lunch_item}</p>
                                      </div>
                                   </div>
@@ -235,8 +300,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                      <div className="mt-1 w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
                                         <Moon size={14} className="text-indigo-500" />
                                      </div>
-                                     <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Dinner</p>
+                                     <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                           <p className="text-xs font-bold text-gray-400 uppercase">Dinner</p>
+                                           {dayData.dinner_template_code && (
+                                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-700">
+                                                 {dayData.dinner_template_code}
+                                              </span>
+                                           )}
+                                        </div>
                                         <p className="text-sm font-medium text-gray-800">{dayData.dinner_item}</p>
                                      </div>
                                   </div>
@@ -246,8 +318,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                      <div className="mt-1 w-8 h-8 rounded-full bg-pink-50 flex items-center justify-center shrink-0">
                                         <Coffee size={14} className="text-pink-500" />
                                      </div>
-                                     <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Snack</p>
+                                     <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                           <p className="text-xs font-bold text-gray-400 uppercase">Snack</p>
+                                           {dayData.snack_template_code && (
+                                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-700">
+                                                 {dayData.snack_template_code}
+                                              </span>
+                                           )}
+                                        </div>
                                         <p className="text-sm font-medium text-gray-800">{dayData.snack_item}</p>
                                      </div>
                                   </div>
@@ -311,8 +390,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                        {dayData.breakfast_item && (
                                           <div className="flex gap-2.5">
                                              <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
-                                             <div>
-                                                <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>BREAKFAST</p>
+                                             <div className="flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                   <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>BREAKFAST</p>
+                                                   {dayData.breakfast_template_code && (
+                                                      <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-green-50 text-green-600">
+                                                         {dayData.breakfast_template_code}
+                                                      </span>
+                                                   )}
+                                                </div>
                                                 <p className="text-[12px] font-semibold text-gray-800 leading-tight" style={{ fontSize: '12px' }}>{dayData.breakfast_item}</p>
                                              </div>
                                           </div>
@@ -320,8 +406,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                        {dayData.lunch_item && (
                                           <div className="flex gap-2.5">
                                              <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                                             <div>
-                                                <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>LUNCH</p>
+                                             <div className="flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                   <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>LUNCH</p>
+                                                   {dayData.lunch_template_code && (
+                                                      <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-green-50 text-green-600">
+                                                         {dayData.lunch_template_code}
+                                                      </span>
+                                                   )}
+                                                </div>
                                                 <p className="text-[12px] font-semibold text-gray-800 leading-tight" style={{ fontSize: '12px' }}>{dayData.lunch_item}</p>
                                              </div>
                                           </div>
@@ -329,8 +422,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                        {dayData.dinner_item && (
                                           <div className="flex gap-2.5">
                                              <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                                             <div>
-                                                <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>DINNER</p>
+                                             <div className="flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                   <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>DINNER</p>
+                                                   {dayData.dinner_template_code && (
+                                                      <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-green-50 text-green-600">
+                                                         {dayData.dinner_template_code}
+                                                      </span>
+                                                   )}
+                                                </div>
                                                 <p className="text-[12px] font-semibold text-gray-800 leading-tight" style={{ fontSize: '12px' }}>{dayData.dinner_item}</p>
                                              </div>
                                           </div>
@@ -338,8 +438,15 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                                        {dayData.snack_item && (
                                           <div className="flex gap-2.5">
                                              <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0" />
-                                             <div>
-                                                <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>SNACK</p>
+                                             <div className="flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                   <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wide" style={{ fontSize: '12px' }}>SNACK</p>
+                                                   {dayData.snack_template_code && (
+                                                      <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-green-50 text-green-600">
+                                                         {dayData.snack_template_code}
+                                                      </span>
+                                                   )}
+                                                </div>
                                                 <p className="text-[12px] font-semibold text-gray-800 leading-tight" style={{ fontSize: '12px' }}>{dayData.snack_item}</p>
                                              </div>
                                           </div>
@@ -523,11 +630,11 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                         >
                            <Lightbulb size={16} className="text-gray-400 shrink-0" />
                            <p 
-                               style={{ fontSize: '12px' }}
-                               className="text-gray-500 font-medium leading-relaxed"
-                            >
-                               Most people choose this
-                            </p>
+                                style={{ fontSize: '12px' }}
+                                className="text-gray-500 font-medium leading-relaxed"
+                             >
+                                Most people choose this
+                             </p>
                         </div>
                   </div>
 
@@ -568,7 +675,7 @@ const MealPlanBottomSheet: React.FC<MealPlanBottomSheetProps> = ({ plan, onClose
                               })()}
                            </div>
                            <span className="text-sm font-medium text-green-600 hover:text-green-700 hover:underline pl-3">
-                              Change
+                               Change
                            </span>
                         </div>
                      </>

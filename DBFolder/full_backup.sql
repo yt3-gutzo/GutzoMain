@@ -842,6 +842,54 @@ $_$;
 ALTER FUNCTION pgbouncer.get_auth(p_usename text) OWNER TO supabase_admin;
 
 --
+-- Name: assign_template_to_meal(uuid, text, text, date, date, integer); Type: FUNCTION; Schema: public; Owner: supabase_admin
+--
+
+CREATE FUNCTION public.assign_template_to_meal(p_meal_plan_id uuid, p_template_code text, p_meal_slot text, p_start_date date, p_end_date date, p_day_of_week integer DEFAULT NULL::integer) RETURNS integer
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+    v_template_id UUID;
+    v_vendor_id UUID;
+    rows_affected INTEGER := 0;
+    v_column_name TEXT;
+    v_code_column TEXT;
+BEGIN
+    -- Get vendor_id from meal_plan
+    SELECT vendor_id INTO v_vendor_id FROM meal_plans WHERE id = p_meal_plan_id;
+    
+    -- Get template_id
+    SELECT id INTO v_template_id
+    FROM meal_templates
+    WHERE vendor_id = v_vendor_id AND template_code = p_template_code;
+    
+    IF v_template_id IS NULL THEN
+        RAISE EXCEPTION 'Template % not found for this vendor', p_template_code;
+    END IF;
+    
+    -- Determine column names
+    v_column_name := p_meal_slot || '_template_id';
+    v_code_column := p_meal_slot || '_template_code';
+    
+    -- Update calendar entries using dynamic SQL
+    EXECUTE format('
+        UPDATE meal_plan_calendar
+        SET %I = $1, %I = $2
+        WHERE meal_plan_id = $3
+          AND menu_date BETWEEN $4 AND $5
+          AND ($6 IS NULL OR EXTRACT(DOW FROM menu_date) = $6)
+    ', v_column_name, v_code_column)
+    USING v_template_id, p_template_code, p_meal_plan_id, p_start_date, p_end_date, p_day_of_week;
+    
+    GET DIAGNOSTICS rows_affected = ROW_COUNT;
+    RETURN rows_affected;
+END;
+$_$;
+
+
+ALTER FUNCTION public.assign_template_to_meal(p_meal_plan_id uuid, p_template_code text, p_meal_slot text, p_start_date date, p_end_date date, p_day_of_week integer) OWNER TO supabase_admin;
+
+--
 -- Name: ensure_single_default_address(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -862,6 +910,31 @@ $$;
 
 
 ALTER FUNCTION public.ensure_single_default_address() OWNER TO postgres;
+
+--
+-- Name: generate_template_code(uuid); Type: FUNCTION; Schema: public; Owner: supabase_admin
+--
+
+CREATE FUNCTION public.generate_template_code(p_vendor_id uuid) RETURNS text
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    next_number INTEGER;
+BEGIN
+    SELECT COALESCE(
+        MAX(CAST(SUBSTRING(template_code FROM 'GZ_([0-9]+)') AS INTEGER)),
+        0
+    ) + 1
+    INTO next_number
+    FROM meal_templates
+    WHERE vendor_id = p_vendor_id;
+    
+    RETURN 'GZ_' || next_number;
+END;
+$$;
+
+
+ALTER FUNCTION public.generate_template_code(p_vendor_id uuid) OWNER TO supabase_admin;
 
 --
 -- Name: get_user_default_address(uuid); Type: FUNCTION; Schema: public; Owner: postgres
@@ -896,6 +969,24 @@ $$;
 ALTER FUNCTION public.get_user_default_address(input_user_id uuid) OWNER TO postgres;
 
 --
+-- Name: set_template_code(); Type: FUNCTION; Schema: public; Owner: supabase_admin
+--
+
+CREATE FUNCTION public.set_template_code() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF NEW.template_code IS NULL OR NEW.template_code = '' THEN
+        NEW.template_code := generate_template_code(NEW.vendor_id);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.set_template_code() OWNER TO supabase_admin;
+
+--
 -- Name: update_cart_updated_at(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -910,6 +1001,22 @@ $$;
 
 
 ALTER FUNCTION public.update_cart_updated_at() OWNER TO postgres;
+
+--
+-- Name: update_updated_at(); Type: FUNCTION; Schema: public; Owner: supabase_admin
+--
+
+CREATE FUNCTION public.update_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.update_updated_at() OWNER TO supabase_admin;
 
 --
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -3535,6 +3642,58 @@ COMMENT ON TABLE public.coupons IS 'Discount codes - platform-wide or vendor-spe
 
 
 --
+-- Name: deliveries; Type: TABLE; Schema: public; Owner: supabase_admin
+--
+
+CREATE TABLE public.deliveries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    order_id uuid,
+    partner_id text NOT NULL,
+    external_order_id text,
+    status text,
+    rider_name text,
+    rider_phone text,
+    rider_coordinates jsonb,
+    pickup_otp text,
+    delivery_otp text,
+    tracking_url text,
+    meta_data jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    courier_request_payload jsonb DEFAULT '{}'::jsonb,
+    courier_response_payload jsonb DEFAULT '{}'::jsonb,
+    history jsonb DEFAULT '[]'::jsonb,
+    rider_id text,
+    cancellation_reason text,
+    cancelled_by text,
+    CONSTRAINT deliveries_partner_id_check CHECK ((partner_id = 'shadowfax'::text))
+);
+
+
+ALTER TABLE public.deliveries OWNER TO supabase_admin;
+
+--
+-- Name: COLUMN deliveries.courier_request_payload; Type: COMMENT; Schema: public; Owner: supabase_admin
+--
+
+COMMENT ON COLUMN public.deliveries.courier_request_payload IS 'Full OrderCreationRequest sent to Shadowfax';
+
+
+--
+-- Name: COLUMN deliveries.courier_response_payload; Type: COMMENT; Schema: public; Owner: supabase_admin
+--
+
+COMMENT ON COLUMN public.deliveries.courier_response_payload IS 'Latest OrderCallbackRequest received via Webhook';
+
+
+--
+-- Name: COLUMN deliveries.rider_id; Type: COMMENT; Schema: public; Owner: supabase_admin
+--
+
+COMMENT ON COLUMN public.deliveries.rider_id IS 'Unique Rider ID from Shadowfax';
+
+
+--
 -- Name: delivery_zones; Type: TABLE; Schema: public; Owner: supabase_admin
 --
 
@@ -3602,11 +3761,37 @@ CREATE TABLE public.kv_store_6985f4e9 (
 ALTER TABLE public.kv_store_6985f4e9 OWNER TO postgres;
 
 --
--- Name: meal_plan_day_menu; Type: TABLE; Schema: public; Owner: supabase_admin
+-- Name: meal_plan_calendar; Type: TABLE; Schema: public; Owner: supabase_admin
 --
 
-CREATE TABLE public.meal_plan_day_menu (
+CREATE TABLE public.meal_plan_calendar (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
+    meal_plan_id uuid NOT NULL,
+    menu_date date NOT NULL,
+    breakfast_template_id uuid,
+    breakfast_template_code text,
+    lunch_template_id uuid,
+    lunch_template_code text,
+    dinner_template_id uuid,
+    dinner_template_code text,
+    snack_template_id uuid,
+    snack_template_code text,
+    is_available boolean DEFAULT true,
+    total_calories integer,
+    notes text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.meal_plan_calendar OWNER TO supabase_admin;
+
+--
+-- Name: meal_plan_day_menu_backup; Type: TABLE; Schema: public; Owner: supabase_admin
+--
+
+CREATE TABLE public.meal_plan_day_menu_backup (
+    id uuid,
     meal_plan_id uuid,
     day_of_week integer,
     day_name text,
@@ -3621,57 +3806,15 @@ CREATE TABLE public.meal_plan_day_menu (
     snack_image text,
     total_calories integer,
     notes text,
-    created_at timestamp with time zone DEFAULT now(),
+    created_at timestamp with time zone,
     breakfast_item text,
     lunch_item text,
     dinner_item text,
-    snack_item text,
-    CONSTRAINT meal_plan_day_menu_day_of_week_check CHECK (((day_of_week >= 0) AND (day_of_week <= 6)))
+    snack_item text
 );
 
 
-ALTER TABLE public.meal_plan_day_menu OWNER TO supabase_admin;
-
---
--- Name: TABLE meal_plan_day_menu; Type: COMMENT; Schema: public; Owner: supabase_admin
---
-
-COMMENT ON TABLE public.meal_plan_day_menu IS 'Day-wise menu for each meal plan (Monday lunch, Tuesday dinner, etc)';
-
-
---
--- Name: meal_plan_subscriptions; Type: TABLE; Schema: public; Owner: supabase_admin
---
-
-CREATE TABLE public.meal_plan_subscriptions (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    user_id uuid,
-    meal_plan_id uuid,
-    chosen_meals text[] DEFAULT '{lunch,dinner}'::text[],
-    chosen_days integer[] DEFAULT '{1,2,3,4,5,6}'::integer[],
-    custom_times jsonb DEFAULT '{}'::jsonb,
-    duration text NOT NULL,
-    start_date date NOT NULL,
-    end_date date,
-    total_amount numeric(10,2) NOT NULL,
-    delivery_address jsonb NOT NULL,
-    status text DEFAULT 'active'::text,
-    payment_id text,
-    payment_status text DEFAULT 'pending'::text,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT meal_plan_subscriptions_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'cancelled'::text, 'completed'::text])))
-);
-
-
-ALTER TABLE public.meal_plan_subscriptions OWNER TO supabase_admin;
-
---
--- Name: TABLE meal_plan_subscriptions; Type: COMMENT; Schema: public; Owner: supabase_admin
---
-
-COMMENT ON TABLE public.meal_plan_subscriptions IS 'User subscriptions to meal plans';
-
+ALTER TABLE public.meal_plan_day_menu_backup OWNER TO supabase_admin;
 
 --
 -- Name: meal_plans; Type: TABLE; Schema: public; Owner: supabase_admin
@@ -3723,6 +3866,248 @@ ALTER TABLE public.meal_plans OWNER TO supabase_admin;
 --
 
 COMMENT ON TABLE public.meal_plans IS 'Weekly/Monthly meal plans like Protein Power, Balanced Diet';
+
+
+--
+-- Name: meal_templates; Type: TABLE; Schema: public; Owner: supabase_admin
+--
+
+CREATE TABLE public.meal_templates (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    vendor_id uuid NOT NULL,
+    template_code text NOT NULL,
+    item_name text NOT NULL,
+    item_description text,
+    image_url text,
+    product_id uuid,
+    calories integer,
+    protein_grams numeric(5,2),
+    carbs_grams numeric(5,2),
+    fat_grams numeric(5,2),
+    meal_type text DEFAULT 'any'::text,
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT valid_meal_type CHECK ((meal_type = ANY (ARRAY['breakfast'::text, 'lunch'::text, 'dinner'::text, 'snack'::text, 'any'::text]))),
+    CONSTRAINT valid_template_code CHECK ((template_code ~ '^GZ_[0-9]+$'::text))
+);
+
+
+ALTER TABLE public.meal_templates OWNER TO supabase_admin;
+
+--
+-- Name: vendors; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.vendors (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    description text,
+    image text,
+    rating numeric(2,1) DEFAULT 4.5,
+    delivery_time text DEFAULT '25-30 mins'::text,
+    minimum_order numeric(10,2) DEFAULT 0,
+    delivery_fee numeric(10,2) DEFAULT 0,
+    cuisine_type text,
+    address text,
+    phone text,
+    is_active boolean DEFAULT true,
+    is_featured boolean DEFAULT false,
+    opening_hours jsonb,
+    tags text[],
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    logo text,
+    banner_url text,
+    total_orders integer DEFAULT 0,
+    total_reviews integer DEFAULT 0,
+    whatsapp_number text,
+    email text,
+    is_open boolean DEFAULT true,
+    is_verified boolean DEFAULT false,
+    gst_number text,
+    fssai_license text,
+    bank_account jsonb,
+    commission_rate numeric(5,2) DEFAULT 15,
+    payout_frequency text DEFAULT 'weekly'::text,
+    status text DEFAULT 'approved'::text,
+    latitude double precision,
+    longitude double precision,
+    is_blacklisted boolean DEFAULT false,
+    password text DEFAULT "substring"((gen_random_uuid())::text, 1, 8),
+    otp text,
+    otp_expires_at timestamp with time zone,
+    pincode text,
+    company_reg_no text,
+    owner_aadhar_no text,
+    pan_card_no text,
+    bank_account_no text,
+    ifsc_code text,
+    bank_name text,
+    account_holder_name text,
+    owner_name text,
+    company_type text,
+    CONSTRAINT vendors_company_type_check CHECK ((company_type = ANY (ARRAY['Sole Proprietorship'::text, 'Partnership'::text, 'LLP'::text, 'Pvt Ltd'::text, 'OPC'::text])))
+);
+
+
+ALTER TABLE public.vendors OWNER TO postgres;
+
+--
+-- Name: COLUMN vendors.commission_rate; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.commission_rate IS 'Platform commission percentage';
+
+
+--
+-- Name: COLUMN vendors.pincode; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.pincode IS 'Postal code of the vendor location';
+
+
+--
+-- Name: COLUMN vendors.company_reg_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.company_reg_no IS 'Company Registration Number / CIN';
+
+
+--
+-- Name: COLUMN vendors.owner_aadhar_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.owner_aadhar_no IS 'Aadhar Number of the owner';
+
+
+--
+-- Name: COLUMN vendors.pan_card_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.pan_card_no IS 'PAN Card Number';
+
+
+--
+-- Name: COLUMN vendors.bank_account_no; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.bank_account_no IS 'Bank Account Number for payouts';
+
+
+--
+-- Name: COLUMN vendors.ifsc_code; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.ifsc_code IS 'IFSC Code for the bank account';
+
+
+--
+-- Name: COLUMN vendors.bank_name; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.bank_name IS 'Name of the Bank';
+
+
+--
+-- Name: COLUMN vendors.account_holder_name; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.account_holder_name IS 'Name of the account holder as per bank records';
+
+
+--
+-- Name: COLUMN vendors.owner_name; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.owner_name IS 'Full name of the business owner';
+
+
+--
+-- Name: COLUMN vendors.company_type; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.vendors.company_type IS 'Type of company registration';
+
+
+--
+-- Name: meal_plan_menu_view; Type: VIEW; Schema: public; Owner: supabase_admin
+--
+
+CREATE VIEW public.meal_plan_menu_view AS
+ SELECT c.meal_plan_id,
+    mp.title AS meal_plan_title,
+    mp.vendor_id,
+    v.name AS vendor_name,
+    c.menu_date,
+    (EXTRACT(dow FROM c.menu_date))::integer AS day_of_week,
+    to_char((c.menu_date)::timestamp with time zone, 'Day'::text) AS day_name,
+    c.is_available,
+    c.breakfast_template_code,
+    tb.item_name AS breakfast_item,
+    tb.item_description AS breakfast_description,
+    tb.image_url AS breakfast_image,
+    tb.calories AS breakfast_calories,
+    c.lunch_template_code,
+    tl.item_name AS lunch_item,
+    tl.item_description AS lunch_description,
+    tl.image_url AS lunch_image,
+    tl.calories AS lunch_calories,
+    c.dinner_template_code,
+    td.item_name AS dinner_item,
+    td.item_description AS dinner_description,
+    td.image_url AS dinner_image,
+    td.calories AS dinner_calories,
+    c.snack_template_code,
+    ts.item_name AS snack_item,
+    ts.item_description AS snack_description,
+    ts.image_url AS snack_image,
+    ts.calories AS snack_calories,
+    (((COALESCE(tb.calories, 0) + COALESCE(tl.calories, 0)) + COALESCE(td.calories, 0)) + COALESCE(ts.calories, 0)) AS total_calories,
+    c.notes
+   FROM ((((((public.meal_plan_calendar c
+     JOIN public.meal_plans mp ON ((c.meal_plan_id = mp.id)))
+     JOIN public.vendors v ON ((mp.vendor_id = v.id)))
+     LEFT JOIN public.meal_templates tb ON ((c.breakfast_template_id = tb.id)))
+     LEFT JOIN public.meal_templates tl ON ((c.lunch_template_id = tl.id)))
+     LEFT JOIN public.meal_templates td ON ((c.dinner_template_id = td.id)))
+     LEFT JOIN public.meal_templates ts ON ((c.snack_template_id = ts.id)));
+
+
+ALTER TABLE public.meal_plan_menu_view OWNER TO supabase_admin;
+
+--
+-- Name: meal_plan_subscriptions; Type: TABLE; Schema: public; Owner: supabase_admin
+--
+
+CREATE TABLE public.meal_plan_subscriptions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid,
+    meal_plan_id uuid,
+    chosen_meals text[] DEFAULT '{lunch,dinner}'::text[],
+    chosen_days integer[] DEFAULT '{1,2,3,4,5,6}'::integer[],
+    custom_times jsonb DEFAULT '{}'::jsonb,
+    duration text NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    total_amount numeric(10,2) NOT NULL,
+    delivery_address jsonb NOT NULL,
+    status text DEFAULT 'active'::text,
+    payment_id text,
+    payment_status text DEFAULT 'pending'::text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT meal_plan_subscriptions_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'cancelled'::text, 'completed'::text])))
+);
+
+
+ALTER TABLE public.meal_plan_subscriptions OWNER TO supabase_admin;
+
+--
+-- Name: TABLE meal_plan_subscriptions; Type: COMMENT; Schema: public; Owner: supabase_admin
+--
+
+COMMENT ON TABLE public.meal_plan_subscriptions IS 'User subscriptions to meal plans';
 
 
 --
@@ -3833,7 +4218,6 @@ CREATE TABLE public.orders (
     gst_fees numeric DEFAULT 0,
     rider_id uuid,
     tip_amount numeric(10,2) DEFAULT 0,
-    delivery_otp text,
     cancelled_by text,
     cancellation_reason text,
     refund_status text,
@@ -3844,39 +4228,11 @@ CREATE TABLE public.orders (
     invoice_number text,
     invoice_url text,
     order_source text DEFAULT 'app'::text,
-    device_type text,
-    shadowfax_order_id text,
-    pickup_otp text,
-    rider_name text,
-    rider_phone text,
-    rider_coordinates jsonb,
-    delivery_status text,
-    delivery_partner_details jsonb
+    device_type text
 );
 
 
 ALTER TABLE public.orders OWNER TO postgres;
-
---
--- Name: COLUMN orders.delivery_otp; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.orders.delivery_otp IS '4-digit verification code for delivery';
-
-
---
--- Name: COLUMN orders.shadowfax_order_id; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.orders.shadowfax_order_id IS 'Order ID returned by Shadowfax API';
-
-
---
--- Name: COLUMN orders.rider_coordinates; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.orders.rider_coordinates IS 'Latest known {lat, lng} of the rider';
-
 
 --
 -- Name: otp_verification; Type: TABLE; Schema: public; Owner: postgres
@@ -4201,44 +4557,6 @@ ALTER TABLE public.reviews OWNER TO supabase_admin;
 --
 
 COMMENT ON TABLE public.reviews IS 'User reviews for vendors and products';
-
-
---
--- Name: riders; Type: TABLE; Schema: public; Owner: supabase_admin
---
-
-CREATE TABLE public.riders (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    name text NOT NULL,
-    phone text NOT NULL,
-    email text,
-    profile_image text,
-    vehicle_type text,
-    vehicle_number text,
-    license_number text,
-    active_status text DEFAULT 'offline'::text,
-    current_lat numeric(10,8),
-    current_lng numeric(11,8),
-    current_order_id uuid,
-    total_deliveries integer DEFAULT 0,
-    avg_rating numeric(2,1) DEFAULT 0,
-    bank_account jsonb,
-    is_verified boolean DEFAULT false,
-    is_active boolean DEFAULT true,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT riders_active_status_check CHECK ((active_status = ANY (ARRAY['online'::text, 'offline'::text, 'busy'::text]))),
-    CONSTRAINT riders_vehicle_type_check CHECK ((vehicle_type = ANY (ARRAY['bike'::text, 'scooter'::text, 'cycle'::text, 'car'::text])))
-);
-
-
-ALTER TABLE public.riders OWNER TO supabase_admin;
-
---
--- Name: TABLE riders; Type: COMMENT; Schema: public; Owner: supabase_admin
---
-
-COMMENT ON TABLE public.riders IS 'Delivery partners (future feature)';
 
 
 --
@@ -4579,141 +4897,6 @@ ALTER TABLE public.vendor_special_hours OWNER TO supabase_admin;
 --
 
 COMMENT ON TABLE public.vendor_special_hours IS 'Holiday closures and special hours';
-
-
---
--- Name: vendors; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.vendors (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    name text NOT NULL,
-    description text,
-    image text,
-    rating numeric(2,1) DEFAULT 4.5,
-    delivery_time text DEFAULT '25-30 mins'::text,
-    minimum_order numeric(10,2) DEFAULT 0,
-    delivery_fee numeric(10,2) DEFAULT 0,
-    cuisine_type text,
-    address text,
-    phone text,
-    is_active boolean DEFAULT true,
-    is_featured boolean DEFAULT false,
-    opening_hours jsonb,
-    tags text[],
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    logo text,
-    banner_url text,
-    total_orders integer DEFAULT 0,
-    total_reviews integer DEFAULT 0,
-    whatsapp_number text,
-    email text,
-    is_open boolean DEFAULT true,
-    is_verified boolean DEFAULT false,
-    gst_number text,
-    fssai_license text,
-    bank_account jsonb,
-    commission_rate numeric(5,2) DEFAULT 15,
-    payout_frequency text DEFAULT 'weekly'::text,
-    status text DEFAULT 'approved'::text,
-    latitude double precision,
-    longitude double precision,
-    is_blacklisted boolean DEFAULT false,
-    password text DEFAULT "substring"((gen_random_uuid())::text, 1, 8),
-    otp text,
-    otp_expires_at timestamp with time zone,
-    pincode text,
-    company_reg_no text,
-    owner_aadhar_no text,
-    pan_card_no text,
-    bank_account_no text,
-    ifsc_code text,
-    bank_name text,
-    account_holder_name text,
-    owner_name text,
-    company_type text,
-    CONSTRAINT vendors_company_type_check CHECK ((company_type = ANY (ARRAY['Sole Proprietorship'::text, 'Partnership'::text, 'LLP'::text, 'Pvt Ltd'::text, 'OPC'::text])))
-);
-
-
-ALTER TABLE public.vendors OWNER TO postgres;
-
---
--- Name: COLUMN vendors.commission_rate; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.commission_rate IS 'Platform commission percentage';
-
-
---
--- Name: COLUMN vendors.pincode; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.pincode IS 'Postal code of the vendor location';
-
-
---
--- Name: COLUMN vendors.company_reg_no; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.company_reg_no IS 'Company Registration Number / CIN';
-
-
---
--- Name: COLUMN vendors.owner_aadhar_no; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.owner_aadhar_no IS 'Aadhar Number of the owner';
-
-
---
--- Name: COLUMN vendors.pan_card_no; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.pan_card_no IS 'PAN Card Number';
-
-
---
--- Name: COLUMN vendors.bank_account_no; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.bank_account_no IS 'Bank Account Number for payouts';
-
-
---
--- Name: COLUMN vendors.ifsc_code; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.ifsc_code IS 'IFSC Code for the bank account';
-
-
---
--- Name: COLUMN vendors.bank_name; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.bank_name IS 'Name of the Bank';
-
-
---
--- Name: COLUMN vendors.account_holder_name; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.account_holder_name IS 'Name of the account holder as per bank records';
-
-
---
--- Name: COLUMN vendors.owner_name; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.owner_name IS 'Full name of the business owner';
-
-
---
--- Name: COLUMN vendors.company_type; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.vendors.company_type IS 'Type of company registration';
 
 
 --
@@ -5556,6 +5739,183 @@ COPY auth.users (instance_id, id, aud, role, email, encrypted_password, email_co
 --
 
 COPY public.activity_logs (id, user_id, action, entity_type, entity_id, metadata, device_type, created_at) FROM stdin;
+2bfc7a2c-f269-472c-aa3c-80740cebacbe	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 15:36:16.185545+00
+b08f444a-aef5-4250-822b-0bccee88d9f3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 15:36:21.100057+00
+035d64ba-8d0d-4e1f-a94a-9cdc8d4c6ede	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 15:43:19.067573+00
+df3544cc-b325-4fdb-a209-fc6339aca993	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 15:43:20.194886+00
+ab9aa6cf-d3fd-478a-8286-00ba471d68ec	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 15:43:25.369123+00
+1fefc980-256f-4d86-9cec-026f7acead75	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 15:56:13.142496+00
+4c4cd238-ad53-43dd-9ec7-381b575b4f06	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 15:56:14.27635+00
+f98a4b88-4524-489b-9f40-ed8c31c62144	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:05:24.704465+00
+739c1864-416e-4ce7-ac41-22bb18a29cae	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:05:25.906444+00
+ee5ccd31-3e9c-403c-a7e1-46e040a3ad49	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:08:25.260526+00
+07bcff0f-5327-40c0-a925-249084922696	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:08:26.443082+00
+8e9df357-cb8e-477c-8417-bed80b4dd0d7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:11:44.39265+00
+d54a9523-4a37-4b37-9526-af7b4304e4ac	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:14:36.496437+00
+6fb9d1bc-a0df-47dc-8a0b-bfbcb5af3130	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:16:54.555532+00
+3a4702ca-5e3f-4ab5-aac5-1d2d08b9e881	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:20:01.931449+00
+9f03c643-991e-4c1e-a688-a84a0b89eaea	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:20:14.43316+00
+468a289a-6c2e-453c-9859-f2aa814a4e1e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:25:33.182999+00
+1e64591a-418d-411e-8890-c8fc23decb53	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:31:20.167167+00
+8368d1e6-c3d9-4e2c-b9bb-1e02f8c03fcc	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:31:21.380501+00
+fd0c994b-a6dd-46be-8c22-bc80e703cb19	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:42:36.315265+00
+68c06c19-0571-4a42-bc07-8bc5df88c2b0	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:42:37.416962+00
+add548f0-4a77-4b75-8ee2-37f22889ec5f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:45:03.943308+00
+f1c7a24b-18c6-463c-872f-da1e6502d6ae	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:49:41.364104+00
+af880432-9f76-4d47-b733-6204d325543d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:49:42.60328+00
+ea5f3ed8-9b47-4bcf-8760-80751bf9c476	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:58:18.493104+00
+ee007db7-d537-42f0-80ab-5198ea68c87b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 16:58:19.722619+00
+3ce0f454-5304-4b22-a1c8-d37ba920e992	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 17:07:59.884783+00
+902c84d5-6588-4b54-a04c-0b0a695af4b7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 17:08:01.77198+00
+6410deaa-3b16-4d92-a8bd-9b50dbdc750e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 17:54:47.234499+00
+072b914a-369b-4362-9799-0e8e961f7f8d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 17:54:48.590605+00
+47cc7f6b-cf67-43fb-9869-233b78d859dd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 18:10:57.297113+00
+1d25039d-ebd2-4314-96fc-78026e66f71f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-04 18:20:46.407147+00
+75a7c868-5eaa-42c7-adb1-a73e30e729c8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-05 03:02:37.991217+00
+9ac59df9-8244-47fb-bc79-f16820103759	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-05 03:03:31.49786+00
+66cf67ed-4fa1-4e16-805f-8b58d67ba89d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 08:53:54.100958+00
+e5bcb0d7-cbb8-40a5-952e-b4fd38c9ec77	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 08:58:03.887659+00
+82e79c79-21b2-4147-bb0d-c1cfaef219fe	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 09:06:06.038319+00
+2cda1f46-24f8-4fd5-ae88-5f113b5a0388	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 09:06:33.685182+00
+0df378ce-7180-4658-85c4-6d881e405205	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 16:26:03.090176+00
+be799e1a-40d3-47f1-b00a-35cf4900e463	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 16:26:09.075618+00
+321b4180-aa61-407c-93ca-0fd528a04988	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 17:03:07.438895+00
+0a23e16a-d7e0-4151-a5e1-6203fbc13797	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 17:03:08.535136+00
+8e2a8e57-77c0-49d3-8b62-9624098b217c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 17:03:15.16066+00
+be57d49c-1d4a-46c7-bfef-e1d5a0e70bbf	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 17:03:16.599339+00
+9c234ec6-0e35-45f0-9d6b-0d7557aa107b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 18:15:13.343386+00
+7c0c0d87-b8a7-468c-91bb-4fed6000782b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 18:27:36.760366+00
+56ee6e6f-acef-41d0-b87d-ba21a747b345	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 18:27:38.006441+00
+59e40465-7640-402b-bd58-261ef4f41f45	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 18:38:10.941677+00
+1c4ea2bb-e009-4b99-a592-769adf40a27a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 20:52:20.573544+00
+f6659f33-deb4-4c4f-880b-d05af0523b24	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 20:52:21.768194+00
+6b2c6681-c43e-4778-a311-861b9da551cc	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 20:53:28.762592+00
+e0e9fa4d-b54b-47b7-bca1-3efc3d522e2f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-10 20:53:29.888709+00
+c4a7ebaf-b626-466e-bb75-9619ab30491c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 05:49:48.664172+00
+0e441209-18ee-47aa-8d7f-1aa32a5461d5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 05:57:59.372066+00
+dc30dd7a-8178-48b6-bae0-8d207b953f51	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 05:58:00.496693+00
+c495d378-b4fc-4e16-8d24-7b1290d17453	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:24:19.617835+00
+88e17db0-ff20-45d5-bdcc-fbfff6209cfa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:24:20.854764+00
+05c00ac0-e706-4c3c-8f83-2426bfb77b67	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:30:45.16528+00
+56719108-904a-487f-aeaa-8baaefc07d9b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:32:28.480188+00
+6a25e631-fc64-4fbb-86a1-46d6b7250e37	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:32:29.817117+00
+a65e36e2-41b9-49e5-80da-5eeda50538a2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:39:28.332052+00
+95d246bd-991e-465c-8813-7aa3b7fae1e8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:39:29.553184+00
+499678a5-a040-4ea7-baec-05656db4555b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:43:22.925665+00
+5e074bb7-0e02-45c1-aa32-800f06e15e16	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:55:53.621454+00
+aa844b9c-0ef0-49ac-96a1-8fa6d9daa04a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:55:54.96167+00
+a76566fa-73dc-4286-b9c6-077ac128fb28	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:59:30.109039+00
+ade7d621-8b3c-4977-a323-1a1c3deecb17	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 06:59:31.442197+00
+cb019963-f4bf-4eb6-b1fe-f1602c173f61	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:08:22.793453+00
+21e048ba-87e1-4fd0-b4e6-358c7c8389a3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:08:24.130032+00
+d1453e34-b1a9-4e3a-8a07-745f42aad222	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:18:36.931556+00
+dc01365b-2317-438d-861b-1ef625c2d4de	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:18:38.123427+00
+3a48e191-da27-475b-9ee9-b89a19614476	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:28:41.67199+00
+b4d82b8d-b260-476d-9f79-4846db9b92b9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:28:42.816382+00
+8d654910-9d79-4a30-a2f2-4c3a72ca204a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:34:53.390019+00
+40c5f503-094b-470a-9554-ccb7b7cdf838	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:34:54.614671+00
+687d02b2-9ce3-4ec4-bdb0-ad73083b7cf0	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:38:41.026272+00
+7fc31f87-d2d2-46b9-a822-16f7a6b1ffeb	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:38:42.56354+00
+40ea45b1-6870-42e7-9049-96ecdda1e340	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:57:23.972446+00
+f106a886-a8af-49bc-af89-8bf44c6c2edd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 07:57:25.189907+00
+4661be7e-483a-4d98-a483-192b85d450e9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:29:08.310898+00
+d14bc7bc-ce32-4651-b255-a39b6519093a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:29:09.532123+00
+740bafeb-1ecc-4254-8d3f-321ccccdc3af	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:37:40.213986+00
+132b2ea3-460f-43ca-8460-041b0bdf560f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:37:42.055918+00
+df722e5d-7b13-473d-942e-e2d8578f45f1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:44:35.850065+00
+71b7ae78-5913-4b27-bf99-678a6f2b7d07	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:44:37.079999+00
+ddcfc824-19fd-45e7-b459-9e245aeeb4cb	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:54:57.1897+00
+ba92400d-4996-4868-ba9f-5157c8eb59e8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:54:58.551831+00
+72852322-4d01-406e-9ffe-d44c678c3b17	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:59:40.232183+00
+a6378ba8-51e1-439e-bc7f-a0f23ab95714	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 08:59:41.510684+00
+7f7b6721-a55d-41eb-ad4c-d07782e28ff7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 09:03:03.436758+00
+3209271c-1a0f-493a-bb0c-b5dcaa03fa63	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 09:03:04.649783+00
+9c8516dc-334d-46e1-a6da-c6ea2bdce4df	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 09:24:23.120023+00
+7ba6093d-e2b1-4011-9492-1037de74664e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 09:59:00.80788+00
+6bc9f6d4-37f7-4380-acd0-83ad5cbd5668	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 10:11:53.055204+00
+d73a388e-b157-468e-9fa5-ddc6db9737dc	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 10:11:54.287231+00
+72a0d7fa-c671-409d-821a-badc153fd3b7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 10:18:01.394553+00
+114118e1-66a4-4b51-bbf6-5a36a2e7f8dc	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 10:18:02.718065+00
+73cd4fcc-5f9e-4e2f-aa36-e41227ce2831	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 11:17:06.297825+00
+16656d95-cea8-411e-9a4c-6ff0caf55492	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 11:17:07.504655+00
+18a050db-e8e1-49e2-9188-44650a5e597d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 11:24:09.217881+00
+25563365-26b2-4876-b6c9-7647e9518d5e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 11:24:10.550035+00
+fa326636-7b35-4211-8e8b-2d999a5648c7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 12:36:55.519974+00
+e8a8be72-1d52-4aaa-885a-13d247ced5e5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 12:36:56.718785+00
+ab59d6f3-f7a0-488f-b8c5-4eda785f4479	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 13:06:17.493957+00
+c375e630-f409-4a88-a254-61869c38b124	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Special Masala Dosa"}	\N	2026-01-11 13:06:18.705602+00
+f2d2a4ce-161f-4caa-a860-64b089770779	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 13:32:09.185452+00
+f0a013f0-b38b-4754-bc7d-765c705580fd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 13:40:19.257847+00
+d4728962-092b-4894-8a2d-722b98b49c88	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 13:43:10.808702+00
+b6b33f6c-3396-4e56-bff1-b82726f8b71a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 13:52:26.523283+00
+d9090b87-b3c5-47df-a469-1c018e8be9e4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 13:56:19.477792+00
+57d044f8-e37c-464c-a1c5-b8cd4ce4ebaa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 13:56:19.792543+00
+d2d1574a-a854-42e1-8a91-265100949488	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 14:00:39.323122+00
+77d4ca52-156e-4de5-91f2-394276ef4122	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 14:08:09.665778+00
+1ffb6018-37ed-423d-a04c-f90c4faea3c4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 14:08:18.010782+00
+da286dfb-ad8d-4bbd-894b-33a6cec83ae3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 14:15:24.944583+00
+e5d64fc7-7c28-4d4e-8979-a758cf015610	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 14:18:35.185202+00
+c710600e-4d8f-460e-9a31-122d6217bc60	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-11 14:18:35.491522+00
+cf2a8fbd-f6a9-402b-aebd-fa2f77553ecc	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 07:17:10.781603+00
+34a9d4c5-670f-47bd-95ed-2dc1a3f2ba10	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 07:21:54.764079+00
+4420b462-10d4-4bf5-a468-7cffe4af82e3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 07:21:56.229178+00
+0fac97bc-fc9d-4396-8c1e-3b873c776c35	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 08:16:59.538258+00
+e647389f-ee3f-4fd8-8e16-abb846576cda	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 08:17:00.664908+00
+006d23f0-c0e3-4423-a676-71d7dae0be91	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:00:55.607675+00
+142428c8-6766-4c1a-96e4-e25aff147af6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:04:13.159481+00
+d344a378-bed2-4aab-ba91-bcb5329a19a2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:04:14.309179+00
+c1f2527a-db49-4884-b804-df2e5b6abbce	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:16:32.56155+00
+8ddcc87b-181d-48ca-8437-2f6cedfac775	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:22:16.653407+00
+bb692239-4f40-4ba2-954d-1ab2070a7129	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:30:21.986071+00
+972cdca6-2143-475f-bfc3-01638adbacba	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:41:57.711712+00
+133f7539-50b4-4498-b473-20e8756607e9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:41:58.819686+00
+74afa3af-37db-4525-9dfe-4054bccc5e3b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:47:29.321292+00
+19a61914-06db-4c59-a289-94e20afa04d4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 09:47:30.433537+00
+a1c14ca6-689b-4bf8-b532-18c2c18528e4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 10:06:07.893982+00
+eee54afd-c132-4678-b5ef-bf2f064084c4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 10:13:18.163015+00
+20f1d9b8-3958-49f2-b3d7-1bc29d491833	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 10:13:19.291788+00
+68a9c613-ddb5-4880-a7df-0f5b3fd221ba	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 10:58:29.840671+00
+23b18db0-4552-49a1-9441-dd76ec96bc86	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 11:20:58.660426+00
+65fe33d3-09a6-4859-b350-40da1cf0e3f3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 11:20:59.994742+00
+c8046f24-8135-4ad1-a3d2-70aa342a5bd5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 11:34:54.678441+00
+2649280c-cefd-4daf-8f96-ac97a793c283	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 11:48:36.345932+00
+8b6887b9-08d6-45db-bb2a-e71e2219ad5a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 11:48:37.557994+00
+df460be6-aa7a-4098-a7d0-c2b28fd51d84	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 12:08:32.6071+00
+b5e8c14d-f072-4237-ad6c-b13f8cb7cd7b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 12:08:34.003394+00
+0ebb0104-c92d-482b-8658-82d2a3b33120	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 12:30:33.346763+00
+51968857-2abf-4afa-8778-2d0f7ce54173	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 16:35:20.837602+00
+a257513d-cd51-404f-8e9f-8eaef3aa8aff	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-16 16:35:22.047998+00
+8aa93e2d-15a5-4d27-a767-6aac0268fc48	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 03:20:03.400458+00
+9255023c-f3c5-4ebe-9432-251a133530aa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 03:52:26.238401+00
+e0f3ecb2-2246-4f26-b69b-72cca46aed33	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 03:52:27.453062+00
+47e89005-3d02-49fa-be21-2758805ff8c0	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 03:59:55.114494+00
+faf1ed34-3424-408d-9388-37b62d2c3e34	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:00:34.152602+00
+f7b2db18-c77d-42fa-a5b3-2c8bd89ea33c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:00:34.463964+00
+3706dcc4-31fd-4dea-b559-262c782c4ea5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:01:20.830946+00
+4184bfff-df8c-4803-a101-80e34d2e2abd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:04:13.569426+00
+00aecb6b-2cbb-4dd4-bd49-3accce546931	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:05:52.96271+00
+abccfafa-6e54-4aaa-814d-551263b215dd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:20:08.10439+00
+422eb735-a9c9-4e32-a261-2aeb65d07b4c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:20:58.185992+00
+e44cddd6-71ea-43f9-9b23-256c5a180694	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:41:52.907558+00
+e79cfa6c-ef4e-4a0e-8f77-b77e6d3f0d0e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 04:41:53.2781+00
+64c6b8d4-bbe3-4a9f-b946-e10a08bddce6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 05:31:49.130482+00
+88ba2648-4970-4389-9d4b-efcc0ebb2ef2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 09:01:34.861836+00
+613beae5-10a4-4b67-92c6-4853f6a5d57b	d95651a4-be8c-4144-acd7-40c6acf5df35	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 06:19:12.198809+00
+e26a8795-725c-49ba-b85c-403d6dc99525	d95651a4-be8c-4144-acd7-40c6acf5df35	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 06:20:24.009595+00
+d6b12b4f-311d-44d3-8e3f-a15cbdcfa80b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 06:34:43.7385+00
+2e21b375-500f-414a-89ba-a855e0661055	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 06:34:44.934425+00
+878b4abe-f4d5-4cad-94cd-b878ca8d182c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 06:37:01.97173+00
+1b75aa81-50ff-4a9f-a816-daa28b3e92c4	\N	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-17 09:04:28.349835+00
+b11cc5b0-0c22-4c8d-aa98-5275ef8c1431	d95651a4-be8c-4144-acd7-40c6acf5df35	view_product	product	69430b40-976f-4428-a04c-3506b8158ab2	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50e", "product_name": "Gutzo Test"}	\N	2026-01-18 07:39:15.836542+00
+740b65bb-f2bb-49a1-b361-0ae1db0009fa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab2	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50e", "product_name": "Gutzo Test"}	\N	2026-01-18 07:40:42.540942+00
+8c02943f-0e65-48c9-9a78-578890d9e607	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab3	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50f", "product_name": "Gutzo Test"}	\N	2026-01-18 07:45:49.651797+00
+e7f648b8-e313-491c-ab6d-6d85f73337c4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab3	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50f", "product_name": "Gutzo Test"}	\N	2026-01-18 07:45:50.867472+00
+0ad36fd7-4983-4c02-aa4c-1ef25376e61d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab1	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50d", "product_name": "Gutzo Test"}	\N	2026-01-18 07:52:26.112978+00
+450e2fd4-859e-4a54-be27-72f8434dd226	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab1	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50d", "product_name": "Gutzo Test"}	\N	2026-01-18 07:52:27.474876+00
+d91c0249-89d8-4deb-8375-85c3da03d432	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 07:58:41.536327+00
+7b774279-842e-42d3-b211-e8f129509675	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 07:58:42.852043+00
+2d5e1f03-144a-44a2-a657-1151cf5a0777	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 08:06:06.059893+00
+98e4ccc7-89fe-4e17-b01e-d301c5a87741	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	view_product	product	69430b40-976f-4428-a04c-3506b8158ab0	{"vendor_id": "3109c7d3-95e0-4a7a-86dd-9783e778d50c", "product_name": "Gutzo Test"}	\N	2026-01-18 08:06:07.532821+00
 \.
 
 
@@ -5610,6 +5970,20 @@ COPY public.coupons (id, code, name, description, discount_type, discount_value,
 
 
 --
+-- Data for Name: deliveries; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.deliveries (id, order_id, partner_id, external_order_id, status, rider_name, rider_phone, rider_coordinates, pickup_otp, delivery_otp, tracking_url, meta_data, created_at, updated_at, courier_request_payload, courier_response_payload, history, rider_id, cancellation_reason, cancelled_by) FROM stdin;
+a4c1deab-0e44-4880-a19a-bf18caa15fc1	7ef2bc75-9612-4bb7-909a-a48944998cdd	shadowfax	725423668	searching_rider	\N	\N	\N	1414	4476	\N	{}	2026-01-18 07:39:21.731315+00	2026-01-18 07:39:21.731315+00	{}	{}	[]	\N	\N	\N
+811a22fa-7fb9-49a5-9fc1-67a241fd30f3	e9471937-ed88-4fc2-8efb-b5682bbc37d8	shadowfax	725426296	searching_rider	\N	\N	\N	1305	2510	\N	{}	2026-01-18 07:40:49.983854+00	2026-01-18 07:40:49.983854+00	{}	{}	[]	\N	\N	\N
+711d2488-9940-472f-8198-34a9278f4219	565aed50-124e-45e1-9bc8-a27c6ae60f31	shadowfax	725436919	searching_rider	\N	\N	\N	8051	6085	\N	{}	2026-01-18 07:45:56.810382+00	2026-01-18 07:45:56.810382+00	{}	{}	[]	\N	\N	\N
+7575cd14-d0c8-4d1a-8726-30870ff4d864	bc2b9fec-4cfd-4624-bd99-3f385c0390d9	shadowfax	725451368	searching_rider	\N	\N	\N	1320	6353	\N	{}	2026-01-18 07:52:36.863363+00	2026-01-18 07:52:36.863363+00	{}	{}	[]	\N	\N	\N
+e590056b-d9f8-4139-bd51-dc98d92b1f2c	2913c742-0455-43c4-a4b9-c198171e552b	shadowfax	725464663	searching_rider	\N	\N	\N	8362	6295	\N	{}	2026-01-18 07:58:50.144462+00	2026-01-18 07:58:50.144462+00	{}	{}	[]	\N	\N	\N
+a6c83553-d9f4-4461-bd36-8674e02b5663	56724be7-1194-4176-a3e1-ee17841eff2b	shadowfax	725480783	searching_rider	\N	\N	\N	3117	8910	\N	{}	2026-01-18 08:06:18.653419+00	2026-01-18 08:06:18.653419+00	{}	{}	[]	\N	\N	\N
+\.
+
+
+--
 -- Data for Name: delivery_zones; Type: TABLE DATA; Schema: public; Owner: supabase_admin
 --
 
@@ -5634,10 +6008,102 @@ COPY public.kv_store_6985f4e9 (key, value) FROM stdin;
 
 
 --
--- Data for Name: meal_plan_day_menu; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+-- Data for Name: meal_plan_calendar; Type: TABLE DATA; Schema: public; Owner: supabase_admin
 --
 
-COPY public.meal_plan_day_menu (id, meal_plan_id, day_of_week, day_name, day_theme, breakfast_product_id, breakfast_image, lunch_product_id, lunch_image, dinner_product_id, dinner_image, snack_product_id, snack_image, total_calories, notes, created_at, breakfast_item, lunch_item, dinner_item, snack_item) FROM stdin;
+COPY public.meal_plan_calendar (id, meal_plan_id, menu_date, breakfast_template_id, breakfast_template_code, lunch_template_id, lunch_template_code, dinner_template_id, dinner_template_code, snack_template_id, snack_template_code, is_available, total_calories, notes, created_at, updated_at) FROM stdin;
+6e9b20bc-f3d8-40b4-a843-734d1e8725ac	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-19	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8d2ca7c7-995f-41b5-9c6d-8090ab9059b9	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-20	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+7c3f0b92-15f6-4a0e-a880-baf1f5b4a9de	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-21	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+92f0ebca-794b-422a-9e52-22b63d88f42b	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-22	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+93e7fd88-e694-479c-9f70-14baa75dbef5	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-23	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+48dfe2df-ccff-4623-9418-189e2a2a4879	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-24	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+0052d539-a784-4861-a099-81d278cbea2f	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-26	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+3a581486-e167-4e1e-a607-90456b1c7e3a	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-27	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+f1bd49f9-7baf-46cd-bffc-7c826126410e	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-28	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+40cddfb3-f512-4c4c-8f56-912fa8d6c75e	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-29	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8ce8e20a-fce5-402f-85df-8e25e11ebbd7	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-30	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+0651b91a-4d62-4365-8926-744b76bf0ac3	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-01-31	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+45a12f17-4c57-486f-9cab-6f74dad00d82	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-02	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+c6b01461-265c-48c2-a910-6c78569bd75c	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-03	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+9b1e3229-1731-441d-bcbd-cbc54c21f9f0	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-04	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+db036635-cfd6-4ba6-b099-1652fe90e07e	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-05	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+931c507a-80fb-48d4-98c4-f2fb6e8fb96b	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-06	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8ff91154-22f5-4a34-8b4f-6224c7f6b15b	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-07	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+38586222-2f3f-4863-9004-724b2295676a	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-09	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8b0f7ee1-9a2f-4c40-a398-91a24d5f8f03	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-10	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+da9f26c6-df89-45b8-9929-ec1db2c5a889	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-11	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+f980f9ce-9cef-4926-94f0-101f6eb05bb9	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-12	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+f426d1d8-5be6-4d92-bf1d-6c6c4d4b0942	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-13	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+657bd6d6-6960-4e85-ad09-c27c5a0fd139	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-14	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+06463c71-1463-4c6e-8884-e6a561a84dc9	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-16	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8ccfb2e1-0c66-47c7-8e10-878af5592aee	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-17	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+968e4de2-4848-4336-b4c4-5fa62c51bbc6	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-18	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+70e22079-b748-4d17-b41b-02d779060727	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-19	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+c11ea0db-851e-4a18-bbca-175b806fe119	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-20	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+380c56b9-f85a-4883-bd08-3b7ebe2cd2f6	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-21	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+838a092b-d245-4ee9-b176-00f4fe8c7870	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-23	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+bdc11802-8247-480b-b482-a1d8d26a8922	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-24	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+03e5bc8d-dc8a-4cc4-a1af-4096c050af6e	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-25	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+92cbd135-fe1b-4c9c-ab5c-9d053fa9c4e1	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-26	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+33d9b401-56ba-41f8-8154-ed15144b81d0	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-27	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+2bc5dfb0-2cc4-49f1-8ca2-d3980938e26d	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-02-28	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+a7caf3e5-5a32-4f79-b4e5-d40e8c2ccfdf	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-02	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+2661ac10-7e2f-4e43-bc99-73bfedec336e	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-03	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+2513e311-3cf0-48db-befb-4a74132fc715	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-04	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+ecac4208-8980-4a90-a0b4-ca25cd7d95d6	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-05	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+6ba4bda4-30d9-4572-9128-add0c92d59c1	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-06	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+9276e2fb-c10a-4dcc-bf34-238ab60d38f1	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-07	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+05591682-7ca4-4215-9ed2-4aa55a604bd5	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-09	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+d3c0873a-afba-4e07-bcda-8234b29f3279	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-10	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8c03866a-6804-40a5-91a9-69ccf559de39	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-11	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+07ef33bf-3dc5-448e-849f-b396bd009be4	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-12	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+ef787462-ce46-450a-9d40-38e433ce8001	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-13	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+5e219728-44d4-4279-82ea-7a8e5b80a850	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-14	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+b01e94dc-de72-4f5a-b081-9daad7051ded	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-16	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+9bde1acf-2723-42bf-aa44-d73318f20ddb	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-17	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+791d9528-949a-4639-9a1d-e7b9b3b1f6ba	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-18	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+468691a7-b31f-441b-a3d8-95a5a7d7d33c	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-19	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+eac8fc7e-ca46-4dfb-b778-090f0e77e404	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-20	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+d097dc16-64e5-4ff8-83f0-8ca0cde6b499	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-21	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+98978e5f-a806-4418-b267-b6d144938c24	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-23	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+dc6107a1-893b-4daa-baf6-6b8a17592b63	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-24	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+025cba20-84bd-4bf9-ad3c-0d13d8ab3649	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-25	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8bc9bce9-c27b-45fc-8c19-158f735220b0	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-26	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+17624bd3-5526-40ec-9f9f-d6317fef5123	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-27	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+3839ac20-2cab-4555-b7db-532dd96b4189	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-28	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+990e5725-0832-4ecc-87fe-25acf99369f6	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-30	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+f0c3e49e-2bcc-4496-804e-63abd4830a2e	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-03-31	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+45be73ff-30c6-4327-946b-fcaa4439e3bc	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-01	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+3389e6f5-63d5-4d4e-a11c-54e4274c605f	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-02	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+2f4d9046-4d23-49c3-bdb3-2beff0e45825	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-03	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+18498be2-574a-4bc3-8318-8dde2864fe9d	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-04	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+fc16a212-0469-4eb2-902f-b494bced8d51	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-06	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+977b9c4a-85a3-46c8-be5a-16df198b8ad5	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-07	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+5e466280-5c4f-4345-861b-6891a8a5f6d5	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-08	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+285d8060-9ad7-4069-8d76-8a87a75ff81f	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-09	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+961785cd-9962-48ba-8bb2-813967ff0960	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-10	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+5d7c7a09-9882-4f33-a370-ba1e8765ccf3	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-11	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+96e27232-f73a-45ee-a33b-87ed0bdb99c3	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-13	c1d9ff65-32e9-400d-97fa-29f84e211b20	GZ_4	0df99228-114d-414f-bd25-0b84ca68f41d	GZ_9	b9ff51b7-39fb-4b6b-996a-49921cfa06cd	GZ_18	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+080b0efb-02b1-4e90-b44f-a8eab1a09d7a	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-14	dfa870a8-1896-401c-8df0-e504b7fd5170	GZ_1	1f425562-c06c-461a-999e-bffcbd0141ec	GZ_12	491e2628-53ad-4415-a8ee-d816b33506d7	GZ_15	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+e27eb6f0-5f07-47c5-9e42-2cc842570f8c	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-15	c5d6bb45-5a7a-4786-9976-971d8b35ba32	GZ_3	b621bc31-6481-4eb8-b5b1-1a540253f803	GZ_11	8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	GZ_14	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+4415ba05-0ee2-4f2e-adc0-7871a6385cab	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-16	c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	GZ_6	5679784a-9890-4062-a0c0-6c997c8c84c4	GZ_10	7a75a0fc-48af-4646-9f0b-62e7ac5db324	GZ_17	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+c98e6e06-91f5-40db-83a7-5c6445ee31f3	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-17	f36f5501-78f2-4980-8a4b-acca958e1d84	GZ_5	7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	GZ_7	57dd23cb-6058-41a5-b111-ce00b66565fb	GZ_16	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+a70c3122-0479-4c5c-915c-86d7d3c31d8d	096215ff-d15a-40ee-adc9-5f19c68b107f	2026-04-18	bd7ae0cd-32fe-4433-b4e5-7e86ea213733	GZ_2	368a135b-cc58-4383-a95e-a95485e88804	GZ_8	97f8f799-8670-4159-8634-8200e6733554	GZ_13	\N	\N	t	\N	\N	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+\.
+
+
+--
+-- Data for Name: meal_plan_day_menu_backup; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.meal_plan_day_menu_backup (id, meal_plan_id, day_of_week, day_name, day_theme, breakfast_product_id, breakfast_image, lunch_product_id, lunch_image, dinner_product_id, dinner_image, snack_product_id, snack_image, total_calories, notes, created_at, breakfast_item, lunch_item, dinner_item, snack_item) FROM stdin;
+97e8e924-2cd8-4dc2-a4e3-2f7427b1a5c1	096215ff-d15a-40ee-adc9-5f19c68b107f	1	Monday	\N	\N	\N	\N	\N	\N	\N	\N	\N	2000	\N	2026-01-18 08:53:49.298886+00	Protein Pancakes with Greek Yogurt	Grilled Chicken Breast with Quinoa & Veggies	Salmon with Sweet Potato & Broccoli	\N
+058caf93-050f-4626-b05f-c1a7bd0cacc0	096215ff-d15a-40ee-adc9-5f19c68b107f	2	Tuesday	\N	\N	\N	\N	\N	\N	\N	\N	\N	1950	\N	2026-01-18 08:53:49.298886+00	Egg White Omelette with Spinach & Mushrooms	Turkey Meatballs with Brown Rice	Grilled Fish with Asparagus & Cauliflower Rice	\N
+54ef37c7-96d4-46f7-97a2-5c57e73d4928	096215ff-d15a-40ee-adc9-5f19c68b107f	3	Wednesday	\N	\N	\N	\N	\N	\N	\N	\N	\N	2050	\N	2026-01-18 08:53:49.298886+00	Overnight Oats with Berries & Almonds	Lean Beef Stir-fry with Mixed Vegetables	Chicken Tikka with Cucumber Salad	\N
+6b525ea5-aeb9-4f5b-9e28-850eca290a62	096215ff-d15a-40ee-adc9-5f19c68b107f	4	Thursday	\N	\N	\N	\N	\N	\N	\N	\N	\N	2100	\N	2026-01-18 08:53:49.298886+00	Smoothie Bowl with Protein Powder & Chia Seeds	Grilled Prawns with Zucchini Noodles	Lamb Chops with Roasted Brussels Sprouts	\N
+51863bb3-9b83-412f-9e3f-67c40539f00d	096215ff-d15a-40ee-adc9-5f19c68b107f	5	Friday	\N	\N	\N	\N	\N	\N	\N	\N	\N	2020	\N	2026-01-18 08:53:49.298886+00	Scrambled Eggs with Avocado Toast	Chicken Caesar Salad (Low Carb)	Grilled Steak with Green Beans & Mushrooms	\N
+49f0c7cd-5247-4cc3-be17-e4184d7ea2ba	096215ff-d15a-40ee-adc9-5f19c68b107f	6	Saturday	\N	\N	\N	\N	\N	\N	\N	\N	\N	1980	\N	2026-01-18 08:53:49.298886+00	Greek Yogurt Parfait with Granola	Fish Tacos with Cabbage Slaw	BBQ Chicken with Roasted Vegetables	\N
 \.
 
 
@@ -5654,6 +6120,33 @@ COPY public.meal_plan_subscriptions (id, user_id, meal_plan_id, chosen_meals, ch
 --
 
 COPY public.meal_plans (id, vendor_id, title, description, thumbnail, banner_url, video_url, price_display, schedule, features, plan_type, dietary_type, calories_per_day, includes_breakfast, includes_lunch, includes_dinner, includes_snacks, rating, review_count, min_duration_days, max_duration_days, terms_conditions, is_active, is_featured, sort_order, created_at, updated_at, trust_text, vendor_name, price_breakfast, price_lunch, price_dinner, price_snack) FROM stdin;
+096215ff-d15a-40ee-adc9-5f19c68b107f	3109c7d3-95e0-4a7a-86dd-9783e778d50c	Daily Protein Power Meal Plan	High-protein balanced meals delivered fresh daily. Perfect for fitness enthusiasts and muscle building. Includes customizable meal options with 40g+ protein per meal.	https://storage.googleapis.com/gutzo/vendors/3109c7d3-95e0-4a7a-86dd-9783e778d50c/69430b40-976f-4428-a04c-3506b8158ab0/1768048583026.svg	https://example.com/protein-plan-banner.jpg	\N	Starting from ₹258/day	Daily delivery at your chosen time	{"High protein meals (40g+ per meal)","Fresh ingredients daily","Customizable delivery days","Pause/Resume anytime","Nutritionist approved","Track macros in app"}	muscle_gain	non-veg	2000	t	t	t	f	4.7	156	7	90	\N	t	t	0	2026-01-18 08:34:55.399724+00	2026-01-18 08:34:55.399724+00	🔥 96% choose to continue after first week	Coimbatore Cafe, Radisson Blu	89.00	129.00	129.00	49.00
+\.
+
+
+--
+-- Data for Name: meal_templates; Type: TABLE DATA; Schema: public; Owner: supabase_admin
+--
+
+COPY public.meal_templates (id, vendor_id, template_code, item_name, item_description, image_url, product_id, calories, protein_grams, carbs_grams, fat_grams, meal_type, is_active, created_at, updated_at) FROM stdin;
+dfa870a8-1896-401c-8df0-e504b7fd5170	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_1	Egg White Omelette with Spinach & Mushrooms	\N	\N	\N	\N	\N	\N	\N	breakfast	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+bd7ae0cd-32fe-4433-b4e5-7e86ea213733	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_2	Greek Yogurt Parfait with Granola	\N	\N	\N	\N	\N	\N	\N	breakfast	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+c5d6bb45-5a7a-4786-9976-971d8b35ba32	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_3	Overnight Oats with Berries & Almonds	\N	\N	\N	\N	\N	\N	\N	breakfast	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+c1d9ff65-32e9-400d-97fa-29f84e211b20	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_4	Protein Pancakes with Greek Yogurt	\N	\N	\N	\N	\N	\N	\N	breakfast	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+f36f5501-78f2-4980-8a4b-acca958e1d84	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_5	Scrambled Eggs with Avocado Toast	\N	\N	\N	\N	\N	\N	\N	breakfast	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+c9a4ad59-89a2-45e3-90d2-e4abd93ad03d	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_6	Smoothie Bowl with Protein Powder & Chia Seeds	\N	\N	\N	\N	\N	\N	\N	breakfast	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+7fbf5a5e-f6e3-46ea-9f12-aad7b68373b5	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_7	Chicken Caesar Salad (Low Carb)	\N	\N	\N	\N	\N	\N	\N	lunch	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+368a135b-cc58-4383-a95e-a95485e88804	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_8	Fish Tacos with Cabbage Slaw	\N	\N	\N	\N	\N	\N	\N	lunch	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+0df99228-114d-414f-bd25-0b84ca68f41d	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_9	Grilled Chicken Breast with Quinoa & Veggies	\N	\N	\N	\N	\N	\N	\N	lunch	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+5679784a-9890-4062-a0c0-6c997c8c84c4	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_10	Grilled Prawns with Zucchini Noodles	\N	\N	\N	\N	\N	\N	\N	lunch	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+b621bc31-6481-4eb8-b5b1-1a540253f803	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_11	Lean Beef Stir-fry with Mixed Vegetables	\N	\N	\N	\N	\N	\N	\N	lunch	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+1f425562-c06c-461a-999e-bffcbd0141ec	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_12	Turkey Meatballs with Brown Rice	\N	\N	\N	\N	\N	\N	\N	lunch	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+97f8f799-8670-4159-8634-8200e6733554	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_13	BBQ Chicken with Roasted Vegetables	\N	\N	\N	\N	\N	\N	\N	dinner	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+8ea5d1f1-d253-4869-8c5a-a5fd9f98f943	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_14	Chicken Tikka with Cucumber Salad	\N	\N	\N	\N	\N	\N	\N	dinner	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+491e2628-53ad-4415-a8ee-d816b33506d7	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_15	Grilled Fish with Asparagus & Cauliflower Rice	\N	\N	\N	\N	\N	\N	\N	dinner	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+57dd23cb-6058-41a5-b111-ce00b66565fb	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_16	Grilled Steak with Green Beans & Mushrooms	\N	\N	\N	\N	\N	\N	\N	dinner	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+7a75a0fc-48af-4646-9f0b-62e7ac5db324	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_17	Lamb Chops with Roasted Brussels Sprouts	\N	\N	\N	\N	\N	\N	\N	dinner	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
+b9ff51b7-39fb-4b6b-996a-49921cfa06cd	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ_18	Salmon with Sweet Potato & Broccoli	\N	\N	\N	\N	\N	\N	\N	dinner	t	2026-01-18 10:53:37.524248+00	2026-01-18 10:53:37.524248+00
 \.
 
 
@@ -5670,6 +6163,214 @@ COPY public.notification_preferences (id, user_id, order_updates, subscription_a
 --
 
 COPY public.notifications (id, user_id, type, title, message, data, is_read, read_at, created_at) FROM stdin;
+a5ef87f7-b744-4dd5-8f87-56149c04244a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601012326DS9N has been placed successfully.	{"order_id": "1051d5a4-87e3-4236-a456-3758c59a6981", "order_number": "GZ202601012326DS9N"}	f	\N	2026-01-01 17:56:54.576912+00
+9fb35d38-b524-4da9-b61a-79328356df20	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment of ₹105.87 received for order #GZ202601012326DS9N	{"txn_id": "20260101211370000213628640270206555", "order_id": "GZ202601012326DS9N"}	f	\N	2026-01-01 17:57:09.135525+00
+87ffe90f-103e-45fa-a1f0-177de58e95c4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026010123346J5W has been placed successfully.	{"order_id": "ef07b016-d745-48ed-877c-4ecbb130315c", "order_number": "GZ2026010123346J5W"}	f	\N	2026-01-01 18:04:55.195099+00
+a8d11cb3-0ebb-4dd0-8ae2-2d31f9d8c182	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment of ₹105.87 received for order #GZ2026010123346J5W	{"txn_id": "20260101211370000213630657076129012", "order_id": "GZ2026010123346J5W"}	f	\N	2026-01-01 18:05:21.453396+00
+10b2efb5-ce72-46d2-a8ee-175f031549df	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601012340AKI9 has been placed successfully.	{"order_id": "98765c24-e4d0-48dc-b8e1-0423e9d42e36", "order_number": "GZ202601012340AKI9"}	f	\N	2026-01-01 18:10:25.950411+00
+6dbe1830-c91c-47a6-b899-f0ffa541ad19	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment of ₹105.87 received for order #GZ202601012340AKI9	{"txn_id": "20260101211370000213632043549440605", "order_id": "GZ202601012340AKI9"}	f	\N	2026-01-01 18:10:55.838447+00
+5fa99f88-ac19-4126-8db8-a546adf1fd34	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601012347S1Y7 has been placed successfully.	{"order_id": "3c348623-6a1f-4983-bd68-f59ab564a385", "order_number": "GZ202601012347S1Y7"}	f	\N	2026-01-01 18:17:22.566577+00
+f7343487-5e9f-4aa1-b482-f5fd5c6947a4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment of ₹105.87 received for order #GZ202601012347S1Y7	{"txn_id": "20260101211370000213633791823434164", "order_id": "GZ202601012347S1Y7"}	f	\N	2026-01-01 18:17:48.128435+00
+3b799a52-1337-42ef-982b-280699ab9571	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601020403EMU5 has been placed successfully.	{"order_id": "7edc8cb9-0d67-455a-859d-f5f9784b9a6b", "order_number": "GZ202601020403EMU5"}	f	\N	2026-01-02 04:03:03.803389+00
+2fefcf7b-1138-465b-beb8-2935da1c2b1f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026010204032XZQ has been placed successfully.	{"order_id": "f1d49f08-4683-4f25-bafa-275441514239", "order_number": "GZ2026010204032XZQ"}	f	\N	2026-01-02 04:03:55.007217+00
+38c30f02-3cac-473d-bbd1-11d7fbc0c372	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601020730K20F has been placed successfully.	{"order_id": "2a67cbd8-0cba-4998-a7a2-8b02bba254e2", "order_number": "GZ202601020730K20F"}	f	\N	2026-01-02 07:30:02.20242+00
+09320dca-076c-43e7-992d-ce8036db1683	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026010216146WHI has been placed successfully.	{"order_id": "581b77fd-754f-4331-b5ee-f41270d9a0d6", "order_number": "GZ2026010216146WHI"}	f	\N	2026-01-02 16:14:44.83527+00
+2f0cc465-d13c-44c4-9a6c-cd44f2939827	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601021617ESAN has been placed successfully.	{"order_id": "69e32fb0-6dbb-4205-8624-9a151e522f38", "order_number": "GZ202601021617ESAN"}	f	\N	2026-01-02 16:17:33.593918+00
+010dd9d4-4946-4fa2-b175-a891932aa09d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601021619VPJI has been placed successfully.	{"order_id": "7763d9d0-d8bc-4e4b-ba3e-2f16c96895f7", "order_number": "GZ202601021619VPJI"}	f	\N	2026-01-02 16:19:57.273538+00
+58036503-c43f-4bb9-be9d-b2643340bfbb	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601021620R6IW has been placed successfully.	{"order_id": "c1247322-510e-4ca3-890c-77d0cfbf2243", "order_number": "GZ202601021620R6IW"}	f	\N	2026-01-02 16:20:32.691741+00
+deb46875-f31d-4478-a5f0-095d0f68a4b3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601021620BU4A has been placed successfully.	{"order_id": "f6c6b919-835c-4f65-9610-651e9c20544d", "order_number": "GZ202601021620BU4A"}	f	\N	2026-01-02 16:20:38.311938+00
+8c5c1c27-a7cf-43de-909f-11aeb8312d20	4adb1ec3-90bd-42cb-a070-0145e88c2a5c	order_placed	Order Placed!	Your order #GZ20260102162081SB has been placed successfully.	{"order_id": "540c235e-bdcc-475f-93f2-a12580c1cd55", "order_number": "GZ20260102162081SB"}	f	\N	2026-01-02 16:20:40.155404+00
+4bc47e46-44b3-4711-9cf5-219114e111a5	4adb1ec3-90bd-42cb-a070-0145e88c2a5c	order_placed	Order Placed!	Your order #GZ20260102162095YI has been placed successfully.	{"order_id": "8f66c9e0-63ac-470c-a96b-2d2a14364923", "order_number": "GZ20260102162095YI"}	f	\N	2026-01-02 16:20:43.133824+00
+3c7e50b3-18a6-4d3f-ab5c-19d3cf05532f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601021620EKZN has been placed successfully.	{"order_id": "3f609d12-4510-423b-8bbd-e55bb6a9f4be", "order_number": "GZ202601021620EKZN"}	f	\N	2026-01-02 16:20:44.451297+00
+33056f40-b2ae-45ce-acbe-5f47768c816f	4adb1ec3-90bd-42cb-a070-0145e88c2a5c	order_placed	Order Placed!	Your order #GZ202601021620SH2Y has been placed successfully.	{"order_id": "2f9b8908-3022-4271-aa4c-3388af886eb8", "order_number": "GZ202601021620SH2Y"}	f	\N	2026-01-02 16:20:48.806434+00
+847db6eb-2e0d-4b5c-8792-092601738f5b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601041233T0C3 has been placed successfully.	{"order_id": "72b1b08d-8974-4bf6-bcf0-23715961daea", "order_number": "GZ202601041233T0C3"}	f	\N	2026-01-04 07:03:07.596105+00
+fa9e8d54-d7aa-435e-aba5-7f05aa2751f5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment of ₹105.87 received for order #GZ202601041233T0C3	{"txn_id": "20260104211400000214551277682443412", "order_id": "GZ202601041233T0C3"}	f	\N	2026-01-04 07:03:38.879968+00
+8ed29342-e632-47f6-b5dc-88a3c756a29a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment of ₹100.00 received for order #TEST_SUCCESS_1767514884752	{"txn_id": "TXN_1767514885326", "order_id": "TEST_SUCCESS_1767514884752"}	f	\N	2026-01-04 08:21:27.083388+00
+1c6cc354-6938-46ca-a9fb-d63c1ef6d246	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment of ₹100.00 received for order #TEST_FAIL_1767514890672	{"txn_id": "TXN_1767514891281", "order_id": "TEST_FAIL_1767514890672"}	f	\N	2026-01-04 08:21:32.714082+00
+f75751c4-c0c9-4def-9022-a878887da761	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	We could not find a delivery partner. Your refund has been initiated.	{"order_id": "TEST_FAIL_1767514890672"}	f	\N	2026-01-04 08:21:33.263006+00
+7606753e-d01e-48b2-ac14-31dd1916ec5c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042051ANUV has been placed successfully.	{"order_id": "b55cdbcc-9c4c-435a-8bef-3d142b961d1a", "order_number": "GZ202601042051ANUV"}	f	\N	2026-01-04 15:21:29.711539+00
+baab11b8-13a9-4c21-a759-9429d81ca402	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	Payment successful but no delivery partner available. Refund initiated.	{"order_id": "GZ202601042051ANUV"}	f	\N	2026-01-04 15:21:55.913956+00
+31c0aa5e-4585-480d-b803-cd6fc0f5cec8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042106V1TG has been placed successfully.	{"order_id": "4de57d1f-46cf-4783-b1f7-ab3aad668301", "order_number": "GZ202601042106V1TG"}	f	\N	2026-01-04 15:36:39.018375+00
+ea9396cf-be50-45f4-b481-b182504a99a8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	Payment successful but no delivery partner available. Refund initiated.	{"order_id": "GZ202601042106V1TG"}	f	\N	2026-01-04 15:37:09.512925+00
+7f26e34f-b916-4df0-9a05-da03263e9d79	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042113MDBJ has been placed successfully.	{"order_id": "c61a2f99-445c-4286-b050-0659392ba3e5", "order_number": "GZ202601042113MDBJ"}	f	\N	2026-01-04 15:43:37.10612+00
+08b46f24-27a5-48d0-bcc6-f26dba257f42	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	Payment successful but no delivery partner available. Refund initiated.	{"order_id": "GZ202601042113MDBJ"}	f	\N	2026-01-04 15:43:53.113946+00
+bddd937c-4e8b-4943-bc28-b7af4fb2fbb6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042126J4T5 has been placed successfully.	{"order_id": "5f801b32-64ec-4bf4-a2da-d1e70f231f7f", "order_number": "GZ202601042126J4T5"}	f	\N	2026-01-04 15:56:26.973463+00
+b84904ab-3fed-4bfd-b7a9-bb0a61e97247	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	Payment successful but no delivery partner available. Refund initiated.	{"order_id": "GZ202601042126J4T5"}	f	\N	2026-01-04 15:56:44.451573+00
+49ef096f-efbc-4835-a0e3-b90cc21466f1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026010421354AZS has been placed successfully.	{"order_id": "78fc6e06-1b7d-4d49-a35e-dd9d040d9822", "order_number": "GZ2026010421354AZS"}	f	\N	2026-01-04 16:05:44.954049+00
+6eb89847-1a27-4a37-a3fe-46c1dbb10e8c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	Payment successful but no delivery partner available. Refund initiated.	{"order_id": "GZ2026010421354AZS"}	f	\N	2026-01-04 16:06:02.362376+00
+2a034687-cde9-43a7-8ba2-94db0478c3aa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026010421382B84 has been placed successfully.	{"order_id": "7174d24a-0c40-4f13-a5d5-632de7445ecb", "order_number": "GZ2026010421382B84"}	f	\N	2026-01-04 16:08:46.302038+00
+294b9d3a-0036-4d4b-811a-e78bc1d86698	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	Payment successful but no delivery partner available. Refund initiated.	{"order_id": "GZ2026010421382B84"}	f	\N	2026-01-04 16:09:10.080992+00
+2f1adf03-2886-4b58-aa41-2b4a6950b5bd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042141VU5N has been placed successfully.	{"order_id": "05071aae-91f6-4a24-901d-6093df4c4456", "order_number": "GZ202601042141VU5N"}	f	\N	2026-01-04 16:11:58.882384+00
+076a54fd-9529-48af-9786-bb51c91ab5d7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_cancelled	Order Cancelled	Payment successful but no delivery partner available. Refund initiated.	{"order_id": "GZ202601042141VU5N"}	f	\N	2026-01-04 16:12:15.308084+00
+175badd0-58ff-4964-b428-c816dd9d89ce	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042144XZQ2 has been placed successfully.	{"order_id": "39b20f95-3c2f-472d-b906-729fdcc9ec93", "order_number": "GZ202601042144XZQ2"}	f	\N	2026-01-04 16:14:58.163019+00
+155a2b64-1eb3-4b0a-9384-866e117a2185	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211370000214690149749966913", "order_id": "GZ202601042144XZQ2"}	f	\N	2026-01-04 16:15:20.451399+00
+7f114cc8-efbd-4a97-92c9-32e679b9c214	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042147QKN0 has been placed successfully.	{"order_id": "e962be3a-3ea1-4431-84c8-14862bc16b9d", "order_number": "GZ202601042147QKN0"}	f	\N	2026-01-04 16:17:12.265842+00
+d75525cf-a833-404f-8c1f-c8c1ccfbf114	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211400000214690712625507027", "order_id": "GZ202601042147QKN0"}	f	\N	2026-01-04 16:17:31.424724+00
+dc113baa-cf09-4969-8ad8-8f9d9113d85e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026010421502RUL has been placed successfully.	{"order_id": "40cf202a-3674-4592-ab69-f4e9d6198c6e", "order_number": "GZ2026010421502RUL"}	f	\N	2026-01-04 16:20:24.066298+00
+a4cdb731-81c6-4a72-9b50-4da76eaca265	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211400000214691516530975168", "order_id": "GZ2026010421502RUL"}	f	\N	2026-01-04 16:20:48.928737+00
+8fa8e88b-e04b-4a3d-9e28-6b7688576c6e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ20260104215565Y1 has been placed successfully.	{"order_id": "e8b5bf92-7bff-4687-a99d-5a61218290b7", "order_number": "GZ20260104215565Y1"}	f	\N	2026-01-04 16:25:44.988151+00
+48e1fbcf-1d15-49e7-ad42-f4cca3eab61e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211400000214692863326177099", "order_id": "GZ20260104215565Y1"}	f	\N	2026-01-04 16:26:03.212934+00
+1d5ba07c-5b4e-4109-a578-0687663d7a85	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042201TCOQ has been placed successfully.	{"order_id": "b6587471-0640-4d33-b075-2e26c157ba5a", "order_number": "GZ202601042201TCOQ"}	f	\N	2026-01-04 16:31:39.963373+00
+8ccc2c4f-75e7-41fc-b8cc-dc2528c8ed83	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211370000214694352576795105", "order_id": "GZ202601042201TCOQ"}	f	\N	2026-01-04 16:32:01.581788+00
+0c36f749-3e4f-42d2-bd60-0bcc0f5f4c40	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042212YWPE has been placed successfully.	{"order_id": "260cc7c1-a627-4710-8d05-96c6da0ad66a", "order_number": "GZ202601042212YWPE"}	f	\N	2026-01-04 16:42:44.496224+00
+986ce008-05dd-40ba-aa70-ce4143940fc2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211370000214697139117183523", "order_id": "GZ202601042212YWPE"}	f	\N	2026-01-04 16:44:06.035245+00
+1ac4a225-afbd-450c-90ef-b685479707c2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042215FSK2 has been placed successfully.	{"order_id": "0592b2de-f13f-486d-930f-ca44a332042e", "order_number": "GZ202601042215FSK2"}	f	\N	2026-01-04 16:45:11.706177+00
+df504123-3abf-43c2-815a-5ab861a8e852	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211370000214697756887836759", "order_id": "GZ202601042215FSK2"}	f	\N	2026-01-04 16:45:33.140349+00
+a7bf13ea-046e-4e41-80bd-ac11179c5fe0	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042220QTU1 has been placed successfully.	{"order_id": "3f8262b9-295d-4e10-a2da-e114736e8db1", "order_number": "GZ202601042220QTU1"}	f	\N	2026-01-04 16:50:15.360051+00
+d0c40c49-d4c6-48b7-a142-6f15c4cf0caa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211370000214699030697953116", "order_id": "GZ202601042220QTU1"}	f	\N	2026-01-04 16:50:30.667264+00
+d242e849-5cd5-4c26-9acc-ffb2d40e4928	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042228FS1L has been placed successfully.	{"order_id": "d0488ea6-6367-4c72-ac53-b5db7d735ec2", "order_number": "GZ202601042228FS1L"}	f	\N	2026-01-04 16:58:27.526147+00
+70bb1ebf-fb52-4526-bc69-a1612396b26c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211400000214701096245800003", "order_id": "GZ202601042228FS1L"}	f	\N	2026-01-04 16:58:58.346398+00
+bc4c6d2e-e5aa-4de8-86a8-3f321a286ad9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042238REFM has been placed successfully.	{"order_id": "dda7a50a-4295-41e3-9fc6-73f714419318", "order_number": "GZ202601042238REFM"}	f	\N	2026-01-04 17:08:07.728866+00
+0f299828-205e-407d-8797-442d8616fb96	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211400000214703528082298734", "order_id": "GZ202601042238REFM"}	f	\N	2026-01-04 17:08:23.390148+00
+e0e3c0f0-f129-4575-8bdb-2bab14233afe	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042341BVOJ has been placed successfully.	{"order_id": "f8056db7-750c-4166-af9f-0efcfdac8343", "order_number": "GZ202601042341BVOJ"}	f	\N	2026-01-04 18:11:42.240192+00
+77776187-85ec-4953-9d34-5f0f568c0755	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211370000214719530140652916", "order_id": "GZ202601042341BVOJ"}	f	\N	2026-01-04 18:12:57.296727+00
+82c19e27-331a-4f2f-9294-54ffcfbcb6e4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601042350JX88 has been placed successfully.	{"order_id": "c9385e31-65da-4c5a-a962-adc82c30eb15", "order_number": "GZ202601042350JX88"}	f	\N	2026-01-04 18:21:00.222074+00
+acfb4f9d-d7e0-49d9-b493-920a3403e6cf	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260104211370000214721868679044313", "order_id": "GZ202601042350JX88"}	f	\N	2026-01-04 18:21:17.633091+00
+1500f4ed-5b88-4c7e-b55f-3dfe1f49a19c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601050302VNZE has been placed successfully.	{"order_id": "e06c18f0-f6a2-4c60-9d8e-1d95f8fd85e4", "order_number": "GZ202601050302VNZE"}	f	\N	2026-01-05 03:02:42.400602+00
+1de7dcec-f4c6-4edd-bc25-46462b8515aa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601050303GW7Y has been placed successfully.	{"order_id": "7f5de5bc-5475-4ad9-93ea-8f903ce79385", "order_number": "GZ202601050303GW7Y"}	f	\N	2026-01-05 03:03:36.147875+00
+26abdd56-57c1-45d0-9c0c-aa9ef1aa6eac	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601101436CJVN has been placed successfully.	{"order_id": "c0173220-3005-42df-b252-58355f40a36a", "order_number": "GZ202601101436CJVN"}	f	\N	2026-01-10 09:06:45.148147+00
+9944d4f2-d055-4e75-912d-a25645c896c6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260110211400000216756715844943377", "order_id": "GZ202601101436CJVN"}	f	\N	2026-01-10 09:07:07.979986+00
+dd5eea31-5b0d-42a3-8e7d-b5d046edb1f7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011021566LU8 has been placed successfully.	{"order_id": "934558c4-b8bc-4736-bbd4-0942ad22c61c", "order_number": "GZ2026011021566LU8"}	f	\N	2026-01-10 16:26:21.906687+00
+cdd827ed-d219-4bc3-b661-93bbd282e7b2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260110211400000216867350779942173", "order_id": "GZ2026011021566LU8"}	f	\N	2026-01-10 16:26:45.144191+00
+ccb3b7b3-0341-4197-8cdb-cac7a4cb8a1d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011022332ZGL has been placed successfully.	{"order_id": "3d2643b5-6a25-41da-a866-bf4c6030e505", "order_number": "GZ2026011022332ZGL"}	f	\N	2026-01-10 17:03:22.971774+00
+aa2c7bdb-744c-4c76-9f60-fe6eccd2c6fb	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260110211380000216876660641807319", "order_id": "GZ2026011022332ZGL"}	f	\N	2026-01-10 17:03:40.963024+00
+f74d7988-1551-492b-9a41-2690e7385b44	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601102345JIUF has been placed successfully.	{"order_id": "ee4ad14e-e542-4893-8c63-911a38a98cd9", "order_number": "GZ202601102345JIUF"}	f	\N	2026-01-10 18:15:59.911482+00
+2144fe0d-1ebf-4252-9285-8347fca82504	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260110211380000216894935354355836", "order_id": "GZ202601102345JIUF"}	f	\N	2026-01-10 18:17:48.450287+00
+7406e523-0ab2-434c-8195-c7c1714af222	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011023579DFK has been placed successfully.	{"order_id": "b8f8d4aa-c321-44d1-b7a3-8c5a2d67ef5a", "order_number": "GZ2026011023579DFK"}	f	\N	2026-01-10 18:27:49.939399+00
+063f5d3b-3357-4680-bb36-359f6f490153	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260110211380000216897914321017203", "order_id": "GZ2026011023579DFK"}	f	\N	2026-01-10 18:28:05.707661+00
+547f4749-5e8a-4e70-a409-60bb464f2737	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601110223UQQ8 has been placed successfully.	{"order_id": "c9ca9d09-dcc9-4840-aaef-4f1ac1582ff1", "order_number": "GZ202601110223UQQ8"}	f	\N	2026-01-10 20:53:37.569286+00
+fdca7fec-dd40-4794-a07b-d08a92ba7524	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000216934604628448751", "order_id": "GZ202601110223UQQ8"}	f	\N	2026-01-10 20:53:53.650253+00
+88d8f049-dc90-46d6-9dce-b1c9d18dda20	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111119MKI0 has been placed successfully.	{"order_id": "abeae918-3054-4b88-a2ca-ee7625b2358a", "order_number": "GZ202601111119MKI0"}	f	\N	2026-01-11 05:49:57.127529+00
+0f667016-1e1f-4a24-8078-91bdd5e52e82	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217069576823655064", "order_id": "GZ202601111119MKI0"}	f	\N	2026-01-11 05:50:54.128132+00
+ab96ccb3-ce42-4386-8c15-b3ab3dfc10fd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111128ZVEA has been placed successfully.	{"order_id": "7a1b2e27-1e4b-425c-8635-200a9c089c8c", "order_number": "GZ202601111128ZVEA"}	f	\N	2026-01-11 05:58:07.867282+00
+7b08b87e-49e7-447c-bce9-cf3a82c6d1aa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217071632485679319", "order_id": "GZ202601111128ZVEA"}	f	\N	2026-01-11 05:58:24.560406+00
+45571a97-0185-43a2-a3e1-a7ef50dd1de1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111154GQ4E has been placed successfully.	{"order_id": "d31bbcbc-29dd-4f67-b2b1-4f62021efee9", "order_number": "GZ202601111154GQ4E"}	f	\N	2026-01-11 06:24:46.306545+00
+b7a4a9fa-4fa6-45a7-b2a8-4419cf653f44	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217078338158482971", "order_id": "GZ202601111154GQ4E"}	f	\N	2026-01-11 06:25:06.010169+00
+f5b369f7-3a8d-46ac-9765-e10fa500194c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011112004XYB has been placed successfully.	{"order_id": "40cff9a1-e90b-4763-8f4b-749a0bd7a51e", "order_number": "GZ2026011112004XYB"}	f	\N	2026-01-11 06:30:59.708708+00
+afda1bdb-92a8-403b-b42c-aacde312bcbf	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217079903753756199", "order_id": "GZ2026011112004XYB"}	f	\N	2026-01-11 06:31:18.568925+00
+3ed44d16-d055-4b0c-a76f-50d9cf06e1e6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ20260111120296L1 has been placed successfully.	{"order_id": "85657b52-b70e-4a41-b3f0-15367bba605e", "order_number": "GZ20260111120296L1"}	f	\N	2026-01-11 06:32:41.282994+00
+a49b31f4-863c-44ac-9487-fd702f1b6304	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217080330272525664", "order_id": "GZ20260111120296L1"}	f	\N	2026-01-11 06:32:57.781231+00
+211e91d5-f961-4b2b-945b-5761bd683002	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111209AJOI has been placed successfully.	{"order_id": "edeedf58-64c0-4269-9e9c-e3df384df918", "order_number": "GZ202601111209AJOI"}	f	\N	2026-01-11 06:39:42.460797+00
+a28f4d58-a4bc-4c88-ae7f-c65000a764e5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217082097425073384", "order_id": "GZ202601111209AJOI"}	f	\N	2026-01-11 06:40:05.296669+00
+5188a63a-4b72-4906-a57a-b00297e585fd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111213GTGC has been placed successfully.	{"order_id": "f611867e-8a74-4acc-b790-240259a4d21d", "order_number": "GZ202601111213GTGC"}	f	\N	2026-01-11 06:43:34.9043+00
+b148546e-8ab3-40c6-b9c4-94db5cfb47df	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217083070696546887", "order_id": "GZ202601111213GTGC"}	f	\N	2026-01-11 06:43:58.773912+00
+3603ef71-9315-4cee-9c37-91cbcc36afba	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011112263BIF has been placed successfully.	{"order_id": "a1e68265-3906-4203-9018-150b7208bb6e", "order_number": "GZ2026011112263BIF"}	f	\N	2026-01-11 06:56:03.769504+00
+00210d8f-d0a5-44d8-b3d6-efdc7e8ae8f6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217086212918186732", "order_id": "GZ2026011112263BIF"}	f	\N	2026-01-11 06:56:26.811089+00
+65ad52a0-bdc0-416e-99fa-c829cfaaa77f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111229TPAU has been placed successfully.	{"order_id": "c1269dd8-7e37-4d69-b572-16d2334474c4", "order_number": "GZ202601111229TPAU"}	f	\N	2026-01-11 06:59:42.603714+00
+beb47ee9-d55c-4dd1-b58c-d8197f150cd8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217087130359186717", "order_id": "GZ202601111229TPAU"}	f	\N	2026-01-11 07:00:08.400258+00
+f2db2754-392a-422b-96a2-2fcee3438f69	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011112388SX1 has been placed successfully.	{"order_id": "71a12d33-4a44-4d33-b25d-bb24a78c1fed", "order_number": "GZ2026011112388SX1"}	f	\N	2026-01-11 07:08:31.595529+00
+8bec3afe-dbc5-4a7f-803e-5415244b5b30	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217089349741592107", "order_id": "GZ2026011112388SX1"}	f	\N	2026-01-11 07:08:50.54441+00
+05505938-efe4-46cf-bf95-f5d68ff18308	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111248FUSI has been placed successfully.	{"order_id": "e94f2677-ce4a-43c5-9a95-87ce5f531a9d", "order_number": "GZ202601111248FUSI"}	f	\N	2026-01-11 07:18:49.693415+00
+cc41edd2-6364-4679-a834-59817a99531d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217091941653779195", "order_id": "GZ202601111248FUSI"}	f	\N	2026-01-11 07:19:14.037995+00
+8f5818d5-0750-4d81-ae38-18659997fd17	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011112584D99 has been placed successfully.	{"order_id": "8c8952a1-b084-47ca-9fa7-171c497d7bb0", "order_number": "GZ2026011112584D99"}	f	\N	2026-01-11 07:28:54.057079+00
+faeb51eb-4e4b-4d05-a42d-5ee80eb110ea	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217094476976240401", "order_id": "GZ2026011112584D99"}	f	\N	2026-01-11 07:29:11.781875+00
+5ec3ba5b-d182-45d3-9c15-dea012692fc2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111304RQOM has been placed successfully.	{"order_id": "ac8e7f79-9910-48b5-a297-a2c14cae7640", "order_number": "GZ202601111304RQOM"}	f	\N	2026-01-11 07:35:00.861943+00
+3f07380f-bc07-4619-a2e9-b6718bddbedd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217096016386479522", "order_id": "GZ202601111304RQOM"}	f	\N	2026-01-11 07:35:18.277311+00
+4db31741-5b67-4262-8183-43ad3eb4352e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111308I59X has been placed successfully.	{"order_id": "14155709-2aa0-4bdc-8915-a680c31da986", "order_number": "GZ202601111308I59X"}	f	\N	2026-01-11 07:38:53.324139+00
+959abb23-d10f-4638-bcde-0fe6f6e1fb4d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217096989041389344", "order_id": "GZ202601111308I59X"}	f	\N	2026-01-11 07:39:12.461325+00
+31022190-e762-467f-955e-9845f837a5e5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111327KTCJ has been placed successfully.	{"order_id": "0db1e17e-377f-4e72-be7d-2db233269353", "order_number": "GZ202601111327KTCJ"}	f	\N	2026-01-11 07:57:32.303773+00
+f8fbe9ea-e3e8-46fa-b6e9-aeb802bb8b3c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217101685684581070", "order_id": "GZ202601111327KTCJ"}	f	\N	2026-01-11 07:57:52.681295+00
+ed99756e-3047-4679-a3d6-ebbc9bda5072	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011113595D2B has been placed successfully.	{"order_id": "4210f25f-9be5-4dc5-a665-ca453e8cd8cf", "order_number": "GZ2026011113595D2B"}	f	\N	2026-01-11 08:29:17.117896+00
+0378dc64-3842-45c5-8529-4e5a402987c1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217109673778493984", "order_id": "GZ2026011113595D2B"}	f	\N	2026-01-11 08:29:34.931351+00
+afe12440-c728-404a-917d-9bc14e3e0744	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011114077LY3 has been placed successfully.	{"order_id": "b1f5e5c0-bda3-4418-9426-be91757aa22b", "order_number": "GZ2026011114077LY3"}	f	\N	2026-01-11 08:37:50.143241+00
+5a78fcdd-9bbc-4d1e-b56d-3b73d79c0830	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217111824399483220", "order_id": "GZ2026011114077LY3"}	f	\N	2026-01-11 08:38:12.665772+00
+5ca75949-a741-4f58-bdd9-0a14d0619f34	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111414NA3E has been placed successfully.	{"order_id": "0bdfb46a-308f-4eae-9902-38a95400d4c9", "order_number": "GZ202601111414NA3E"}	f	\N	2026-01-11 08:44:53.51221+00
+f1ff03df-6c0f-45ac-8898-14ac152c95dd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217113601312266326", "order_id": "GZ202601111414NA3E"}	f	\N	2026-01-11 08:45:16.184957+00
+45084d50-caf8-4d09-9b22-36ce2b0a33ad	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111425JXDG has been placed successfully.	{"order_id": "5693220a-89a4-4733-874f-0a8b479be975", "order_number": "GZ202601111425JXDG"}	f	\N	2026-01-11 08:55:09.407956+00
+9ec14ecb-dfa2-4b00-8b0c-2e30dcae439c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217116183501969714", "order_id": "GZ202601111425JXDG"}	f	\N	2026-01-11 08:55:27.234363+00
+49907a08-be63-426e-990b-1f1d3fef31d9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ20260111142900QO has been placed successfully.	{"order_id": "b75bdb88-c718-40ed-8a09-e0b0c1a10e84", "order_number": "GZ20260111142900QO"}	f	\N	2026-01-11 08:59:49.010765+00
+58e6c418-6df3-43ab-8689-a2fa53480a7f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217117357722537939", "order_id": "GZ20260111142900QO"}	f	\N	2026-01-11 09:00:10.335882+00
+9584bd68-47fd-415a-a3b3-2af9b9c1e662	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111433DF5Z has been placed successfully.	{"order_id": "59b41baa-6a0a-438a-a0e6-a670c61ea7d2", "order_number": "GZ202601111433DF5Z"}	f	\N	2026-01-11 09:03:17.044185+00
+88772596-ba07-4bf5-b7e9-9c3c0747ebac	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217118228086753003", "order_id": "GZ202601111433DF5Z"}	f	\N	2026-01-11 09:03:42.336221+00
+1772b170-5b0c-438d-9a49-1f6910831bad	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111454GEEQ has been placed successfully.	{"order_id": "66d94cd2-4e58-44e1-8ee9-daab1dd5ec91", "order_number": "GZ202601111454GEEQ"}	f	\N	2026-01-11 09:24:29.971242+00
+689f5151-fbb3-47b2-9b5f-4302694b67fd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217123567142069175", "order_id": "GZ202601111454GEEQ"}	f	\N	2026-01-11 09:24:50.84396+00
+c4501bb6-4771-4acd-afde-df35ad117ad1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011115298EK7 has been placed successfully.	{"order_id": "c77b256b-fe40-4f32-abf6-c9a545fdd58e", "order_number": "GZ2026011115298EK7"}	f	\N	2026-01-11 09:59:08.884977+00
+0064512a-c9d5-4c3a-a4c4-f2b42fb302e6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217132287783755935", "order_id": "GZ2026011115298EK7"}	f	\N	2026-01-11 09:59:34.529587+00
+52ce6898-629d-4679-8158-a4ee7a83a28c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111542N4YI has been placed successfully.	{"order_id": "d1cf0b85-7747-4619-8f62-a6d2ff4681c2", "order_number": "GZ202601111542N4YI"}	f	\N	2026-01-11 10:12:05.120028+00
+3d519729-f6b6-4927-be80-f232a2eba7f3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217135543788472963", "order_id": "GZ202601111542N4YI"}	f	\N	2026-01-11 10:12:25.90504+00
+78579544-cb37-479d-806a-ea215d225a3c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ20260111154825MV has been placed successfully.	{"order_id": "3c061edd-0ebe-45a6-a986-34a8ff0f4a53", "order_number": "GZ20260111154825MV"}	f	\N	2026-01-11 10:18:10.097231+00
+d365e45d-f2fc-4d8f-a2be-0ada70ce8d7a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217137074319368593", "order_id": "GZ20260111154825MV"}	f	\N	2026-01-11 10:18:37.63133+00
+7bd1d66a-4b60-432a-8193-060d4017fadf	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111647TEJT has been placed successfully.	{"order_id": "e8111ef8-ca00-4ee6-876d-93026522c5ee", "order_number": "GZ202601111647TEJT"}	f	\N	2026-01-11 11:17:20.133883+00
+b0fc335c-92a1-471b-8040-7c447667963a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211400000217151963515477266", "order_id": "GZ202601111647TEJT"}	f	\N	2026-01-11 11:17:51.206231+00
+abd35481-cf76-47b2-b2dc-2e8c2838caaa	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111654PDGG has been placed successfully.	{"order_id": "28a92f00-f4a9-4134-a72f-038445d16314", "order_number": "GZ202601111654PDGG"}	f	\N	2026-01-11 11:24:17.504954+00
+b8dc2f44-514a-4545-83fd-5ca14c9e78df	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217153714582947667", "order_id": "GZ202601111654PDGG"}	f	\N	2026-01-11 11:24:38.919581+00
+7dfa81e1-a8f4-4ab3-bfc9-fd314b9d7d45	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ20260111180702L0 has been placed successfully.	{"order_id": "62e9ba0d-bbad-4fe1-9454-365646a9dc79", "order_number": "GZ20260111180702L0"}	f	\N	2026-01-11 12:37:03.677003+00
+28174833-d17c-41cd-a52e-c7f71d0eccb5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217172031339206865", "order_id": "GZ20260111180702L0"}	f	\N	2026-01-11 12:37:31.111678+00
+ee451114-bb78-4337-81e1-2d0e53d7ec0d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111836M0LM has been placed successfully.	{"order_id": "9669089b-cd2f-4166-a931-cbc34075eb44", "order_number": "GZ202601111836M0LM"}	f	\N	2026-01-11 13:06:28.866842+00
+69975c76-e973-4619-8e95-60c296c1daf7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260111211370000217179431181979369", "order_id": "GZ202601111836M0LM"}	f	\N	2026-01-11 13:06:45.457823+00
+5f84119e-fabe-456f-a341-2f17be5a68a7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111340GO4B has been placed successfully.	{"order_id": "d9fda487-b4d9-4d56-9eca-a61b42acb7a3", "order_number": "GZ202601111340GO4B"}	f	\N	2026-01-11 13:40:23.323057+00
+28b24dd5-92dd-4cd3-b49b-1e8d7887a2e1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111343NEN5 has been placed successfully.	{"order_id": "a4253693-1874-4872-b45c-9e35388bb464", "order_number": "GZ202601111343NEN5"}	f	\N	2026-01-11 13:43:16.949542+00
+03a7f684-4888-49d5-a946-0d4d004b4371	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111352OIW7 has been placed successfully.	{"order_id": "33d7bbdc-a36f-4c34-bf50-04b5637c9c8b", "order_number": "GZ202601111352OIW7"}	f	\N	2026-01-11 13:52:30.416212+00
+1d97aa94-d046-4521-a523-50dd549cb43d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111356L497 has been placed successfully.	{"order_id": "2bd0c39f-8b33-4c0c-8044-c3a71323a224", "order_number": "GZ202601111356L497"}	f	\N	2026-01-11 13:56:24.201341+00
+b99e5ffc-3e1d-4837-852a-66b3a02d4120	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111400VDOB has been placed successfully.	{"order_id": "2d5d2da4-572d-4e29-8c75-ef309a5ec5ac", "order_number": "GZ202601111400VDOB"}	f	\N	2026-01-11 14:00:43.620155+00
+6b3716d1-a054-43e3-9088-ad4f4b6bb0b3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601111408WYZ8 has been placed successfully.	{"order_id": "7db234a3-1c0d-4bbe-8987-d4379b7b90f4", "order_number": "GZ202601111408WYZ8"}	f	\N	2026-01-11 14:08:21.818351+00
+9295c6f5-fed0-4079-bb4d-743237774346	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011114158FK9 has been placed successfully.	{"order_id": "ae364144-89db-448a-85fc-edfb3c1d504c", "order_number": "GZ2026011114158FK9"}	f	\N	2026-01-11 14:15:31.305551+00
+6eee053f-8cb1-4df3-ae96-871dd78d119b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011114185Z5D has been placed successfully.	{"order_id": "ab2eb63d-8b46-4f12-a067-93a482ab02ec", "order_number": "GZ2026011114185Z5D"}	f	\N	2026-01-11 14:18:40.734081+00
+9fa925bf-5920-4cb7-9e91-e8fb47345c30	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161252YKYM has been placed successfully.	{"order_id": "adc0cc9f-7d76-4c2f-8b43-ce46e07b4c25", "order_number": "GZ202601161252YKYM"}	f	\N	2026-01-16 07:22:17.720954+00
+2e16f319-7fb4-451b-bb2a-f342e1601a87	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218904754902654956", "order_id": "GZ202601161252YKYM"}	f	\N	2026-01-16 07:22:34.090671+00
+0a2a9ba8-a802-4f5f-8b00-ecefe5f73363	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161431V054 has been placed successfully.	{"order_id": "ecf631f4-236b-4a93-a9bd-92769d0aa693", "order_number": "GZ202601161431V054"}	f	\N	2026-01-16 09:01:09.013967+00
+711bc755-33e8-4ecb-9c7c-786ddccec1f6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161434GPKA has been placed successfully.	{"order_id": "3ef748b0-ab28-40b9-9547-e5326fdb07bd", "order_number": "GZ202601161434GPKA"}	f	\N	2026-01-16 09:04:25.851915+00
+ce77f2dd-797c-4294-b240-21a0c519b7ad	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218930455240365715", "order_id": "GZ202601161434GPKA"}	f	\N	2026-01-16 09:04:47.722554+00
+6edc6709-1562-4312-9bfd-c9105e197c73	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161446JUA3 has been placed successfully.	{"order_id": "1f6f4d1a-01f9-41e7-a2e6-d5408d8073a5", "order_number": "GZ202601161446JUA3"}	f	\N	2026-01-16 09:16:41.362417+00
+eb1eb50e-ce73-4916-b512-077577e738d2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218933540255819906", "order_id": "GZ202601161446JUA3"}	f	\N	2026-01-16 09:16:58.301898+00
+811802ff-058c-4976-a808-9736ad1de96f	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161452HONJ has been placed successfully.	{"order_id": "d5111ee0-e478-4a9e-8cc7-1395998d09bd", "order_number": "GZ202601161452HONJ"}	f	\N	2026-01-16 09:22:25.455239+00
+0d49cd0d-060d-4677-b683-ae9a2d7b1415	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211400000218934984979666179", "order_id": "GZ202601161452HONJ"}	f	\N	2026-01-16 09:22:40.350183+00
+0bdf21ce-4f3f-4ca9-b77d-baeb4e527604	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161500D9RX has been placed successfully.	{"order_id": "5b625c1f-ea63-4414-9327-10733183d0c3", "order_number": "GZ202601161500D9RX"}	f	\N	2026-01-16 09:30:29.293703+00
+328d4896-d286-493c-a213-dbaa3d4fdb7b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218937012799787985", "order_id": "GZ202601161500D9RX"}	f	\N	2026-01-16 09:30:47.273972+00
+95531465-d23e-48e0-9fed-2739f6d1be29	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161512X0CQ has been placed successfully.	{"order_id": "35083761-df90-4d22-8b39-78d2562be790", "order_number": "GZ202601161512X0CQ"}	f	\N	2026-01-16 09:42:08.903903+00
+2154e470-98e9-4ba8-b748-b881a4b8b6a3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211400000218939947160064763", "order_id": "GZ202601161512X0CQ"}	f	\N	2026-01-16 09:42:23.083972+00
+87fc4d73-c433-4e5f-9890-e67b606de9f6	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161517OOS8 has been placed successfully.	{"order_id": "a8a1ce04-63c1-412e-8da1-ed167937809f", "order_number": "GZ202601161517OOS8"}	f	\N	2026-01-16 09:47:42.316404+00
+353bf5ba-40dc-4cf8-869d-976d1ec9b39a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211400000218941345473907583", "order_id": "GZ202601161517OOS8"}	f	\N	2026-01-16 09:47:59.738188+00
+9396868a-5436-4d7a-ad25-00310abaac23	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161536UDWT has been placed successfully.	{"order_id": "3f310b34-3570-43da-81d7-3f7d2fb96388", "order_number": "GZ202601161536UDWT"}	f	\N	2026-01-16 10:06:15.409002+00
+c13c00d6-da5f-4f2e-9789-c629d77898f1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218946014342408813", "order_id": "GZ202601161536UDWT"}	f	\N	2026-01-16 10:06:31.293125+00
+465afd92-5bf8-43c4-9b8d-f54ae9c5ba5d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161543X2TO has been placed successfully.	{"order_id": "4bdfdaf2-a967-49e4-a88e-2cd0ae6301ed", "order_number": "GZ202601161543X2TO"}	f	\N	2026-01-16 10:13:26.487747+00
+d43b93a9-c107-457c-83b9-36ace443e28a	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218947824176186872", "order_id": "GZ202601161543X2TO"}	f	\N	2026-01-16 10:13:43.506484+00
+2710fae9-5355-4580-9fe0-d8777b2aa5a7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011616281Z5X has been placed successfully.	{"order_id": "228e4e8b-a272-4ed5-a346-3ad957341ff3", "order_number": "GZ2026011616281Z5X"}	f	\N	2026-01-16 10:58:39.647531+00
+3fe84b55-bca3-44f1-867f-9a73f6482949	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218959202408581577", "order_id": "GZ2026011616281Z5X"}	f	\N	2026-01-16 10:58:53.964687+00
+a6bd7116-11f6-4a97-8a85-b695dbcb44a5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161651CTM3 has been placed successfully.	{"order_id": "05fae180-8732-4ff7-a414-b8ac4b86fc4e", "order_number": "GZ202601161651CTM3"}	f	\N	2026-01-16 11:21:08.81577+00
+28c8680a-9ee7-4b7e-8cce-f53c10a57a0c	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218964862122702632", "order_id": "GZ202601161651CTM3"}	f	\N	2026-01-16 11:21:27.989308+00
+716f6764-614f-49cb-a967-e31c1bc0bacd	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161705CVJQ has been placed successfully.	{"order_id": "90003380-7361-451d-b405-bd35e5ec2a74", "order_number": "GZ202601161705CVJQ"}	f	\N	2026-01-16 11:35:18.217802+00
+3832955c-2038-4089-8183-bcefc2991a71	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218968426777799349", "order_id": "GZ202601161705CVJQ"}	f	\N	2026-01-16 11:35:40.473405+00
+2b5516ba-0ded-452d-bb70-db18a3adc65b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161718RZJG has been placed successfully.	{"order_id": "125a7148-b350-4532-977c-5304a3ce6e3a", "order_number": "GZ202601161718RZJG"}	f	\N	2026-01-16 11:48:43.811032+00
+c7ac9734-312c-44e1-9b2b-41c193f5a28e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218971803419008066", "order_id": "GZ202601161718RZJG"}	f	\N	2026-01-16 11:48:59.231348+00
+4615d187-2339-4c8b-a0f2-01f07061dfce	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161738AC6P has been placed successfully.	{"order_id": "1c3c341f-96aa-448c-b730-4a7e6b5120cf", "order_number": "GZ202601161738AC6P"}	f	\N	2026-01-16 12:08:50.921067+00
+8b12e94c-9222-4538-a92c-1dee2bb72cff	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218976866996705399", "order_id": "GZ202601161738AC6P"}	f	\N	2026-01-16 12:09:06.71902+00
+e2b9cc3b-08f0-4251-8911-4a4a0652df95	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601161800JJBG has been placed successfully.	{"order_id": "f3902eab-00e3-43a8-8ac6-1eff40363f2b", "order_number": "GZ202601161800JJBG"}	f	\N	2026-01-16 12:30:46.965032+00
+7d6f4ad5-72c7-4c63-994e-5834b5afaff8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211390000218982385748661308", "order_id": "GZ202601161800JJBG"}	f	\N	2026-01-16 12:31:52.215299+00
+213dcb5f-8fde-4a4b-a94a-8630209aaa97	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011622058UZ1 has been placed successfully.	{"order_id": "9ab46d08-8512-4f22-accb-44f3aacb01c6", "order_number": "GZ2026011622058UZ1"}	f	\N	2026-01-16 16:35:41.149088+00
+f915e536-7df8-4ca7-92f7-20b70bb96d85	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260116211400000219044019556999271", "order_id": "GZ2026011622058UZ1"}	f	\N	2026-01-16 16:35:57.989716+00
+4dcbd7b8-f51c-4f7e-959a-ab1ca4551a75	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170320NMF9 has been placed successfully.	{"order_id": "cb9705b4-25f9-49b7-bed7-505c9c1001d3", "order_number": "GZ202601170320NMF9"}	f	\N	2026-01-17 03:20:07.95028+00
+51c2fc10-cfe4-4da1-8de7-b9d27bc37c97	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_failed	Payment Failed	Payment failed for order #GZ202601170320NMF9. Please try again.	{"txn_id": "20260117211400000219206204006482700", "order_id": "GZ202601170320NMF9"}	f	\N	2026-01-17 03:20:28.141822+00
+250c176f-fafc-42c2-b42f-a225e7a40b8b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170922GEX8 has been placed successfully.	{"order_id": "98ae894e-4dd9-429e-82d9-a8aee1a68030", "order_number": "GZ202601170922GEX8"}	f	\N	2026-01-17 03:52:37.810564+00
+8c195443-84c9-4983-9baa-78ab2e62b2da	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_failed	Payment Failed	Payment failed for order #GZ202601170922GEX8. Please try again.	{"txn_id": "20260117211400000219214377681570728", "order_id": "GZ202601170922GEX8"}	f	\N	2026-01-17 03:52:52.454688+00
+dae0543a-6a24-4286-a16a-452e1a896323	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170359DL60 has been placed successfully.	{"order_id": "2f9f1874-d3f8-47bd-8097-b9b3cbd2f1b8", "order_number": "GZ202601170359DL60"}	f	\N	2026-01-17 03:59:58.644697+00
+b05bb77e-6f62-4c42-ad1e-aac4168cffcf	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011704003G1A has been placed successfully.	{"order_id": "a63a4423-fb8b-4518-9ed1-ccd75f31ed9d", "order_number": "GZ2026011704003G1A"}	f	\N	2026-01-17 04:00:38.851992+00
+9a36435b-e9a1-4964-be4c-e67a217550f7	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_failed	Payment Failed	Payment failed for order #GZ2026011704003G1A. Please try again.	{"txn_id": "20260117211400000219216392612632375", "order_id": "GZ2026011704003G1A"}	f	\N	2026-01-17 04:00:52.543051+00
+090e7cf7-455b-4ddc-88fe-15c2d5928e15	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170401OGC5 has been placed successfully.	{"order_id": "9b6c736f-fc0d-4637-a83d-241cd57c8055", "order_number": "GZ202601170401OGC5"}	f	\N	2026-01-17 04:01:25.885092+00
+67607fdd-0cca-421e-800a-94c5cf9c05f3	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260117211400000219216590084654992", "order_id": "GZ202601170401OGC5"}	f	\N	2026-01-17 04:01:37.986418+00
+479b7cbb-705d-49a0-9ff4-4a0e6e499911	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170936EYC8 has been placed successfully.	{"order_id": "1a6909f0-b5ff-4d6d-a800-44cf010b1db4", "order_number": "GZ202601170936EYC8"}	f	\N	2026-01-17 04:06:02.785142+00
+6f3ac22f-0e38-4d4f-b66c-a3a13d3f6179	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260117211400000219217753127406074", "order_id": "GZ202601170936EYC8"}	f	\N	2026-01-17 04:06:20.803686+00
+0b84358f-e4a9-437b-b081-2d6e7bf620f2	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170951RUJ9 has been placed successfully.	{"order_id": "d2cafa62-35d2-4dad-8eb0-0366a85aa2be", "order_number": "GZ202601170951RUJ9"}	f	\N	2026-01-17 04:21:06.882763+00
+bf5b9379-0db3-48cc-9f66-e88af347dd23	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_failed	Payment Failed	Payment failed for order #GZ202601170951RUJ9. Please try again.	{"txn_id": "20260117211400000219221545386399496", "order_id": "GZ202601170951RUJ9"}	f	\N	2026-01-17 04:21:29.277098+00
+e3631794-b2e4-4999-8ed6-13be58bf8e9d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170442SGKR has been placed successfully.	{"order_id": "cd234a44-656c-4651-9e9b-e954a41e5bfe", "order_number": "GZ202601170442SGKR"}	f	\N	2026-01-17 04:42:01.935579+00
+e90ede72-ca76-41f4-891c-e3951ae86e79	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260117211400000219226810806584126", "order_id": "GZ202601170442SGKR"}	f	\N	2026-01-17 04:42:15.568103+00
+bfddb9ed-ba57-4dfc-8cc2-dd940506225e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601170901LBBS has been placed successfully.	{"order_id": "fcb5da7d-55bd-4a34-89e0-15de262367ab", "order_number": "GZ202601170901LBBS"}	f	\N	2026-01-17 09:01:39.866802+00
+cba387d3-3b06-4327-a896-ec29d9ab4a21	d95651a4-be8c-4144-acd7-40c6acf5df35	order_placed	Order Placed!	Your order #GZ202601180620UGIM has been placed successfully.	{"order_id": "741f604c-9fd0-4a9c-acd6-8e74cd2261a2", "order_number": "GZ202601180620UGIM"}	f	\N	2026-01-18 06:20:27.417158+00
+87edf332-965f-452b-ac5c-7cc800a98803	d95651a4-be8c-4144-acd7-40c6acf5df35	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211400000219613968809748972", "order_id": "GZ202601180620UGIM"}	f	\N	2026-01-18 06:20:44.617306+00
+224f6ad3-45ee-4dca-bd62-ebf44f49021d	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601181207N83R has been placed successfully.	{"order_id": "0722f749-f716-4833-b47d-8fe38c7f9edf", "order_number": "GZ202601181207N83R"}	f	\N	2026-01-18 06:37:12.817479+00
+ea370a0d-62cb-400e-b41e-92ab2eea829e	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211400000219618183120579693", "order_id": "GZ202601181207N83R"}	f	\N	2026-01-18 06:38:01.562081+00
+75e95f9a-14e3-4a38-b7e9-3d9de8fa7841	d95651a4-be8c-4144-acd7-40c6acf5df35	order_placed	Order Placed!	Your order #GZ202601180739QLSG has been placed successfully.	{"order_id": "7ef2bc75-9612-4bb7-909a-a48944998cdd", "order_number": "GZ202601180739QLSG"}	f	\N	2026-01-18 07:39:21.767061+00
+e787846f-ba2d-4544-a12b-566bacf79d81	d95651a4-be8c-4144-acd7-40c6acf5df35	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211390000219633822849766290", "order_id": "GZ202601180739QLSG"}	f	\N	2026-01-18 07:39:50.407299+00
+09143a49-7da3-4e2a-bb50-f05a98d25069	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601181310BOZN has been placed successfully.	{"order_id": "e9471937-ed88-4fc2-8efb-b5682bbc37d8", "order_number": "GZ202601181310BOZN"}	f	\N	2026-01-18 07:40:51.241072+00
+9c67e219-400c-4b5c-8fba-ca69e5715140	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211400000219634198663543468", "order_id": "GZ202601181310BOZN"}	f	\N	2026-01-18 07:41:10.168951+00
+6ec7313e-a1ef-4009-8987-dd7a6095ed57	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601181315PSG7 has been placed successfully.	{"order_id": "565aed50-124e-45e1-9bc8-a27c6ae60f31", "order_number": "GZ202601181315PSG7"}	f	\N	2026-01-18 07:45:58.151408+00
+3c7d2468-1f19-4082-92cb-95b44bccc41b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211390000219635486092634315", "order_id": "GZ202601181315PSG7"}	f	\N	2026-01-18 07:46:15.175716+00
+15a41a33-414f-46ef-8ccc-ef86218dcfa1	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601181322GA8N has been placed successfully.	{"order_id": "bc2b9fec-4cfd-4624-bd99-3f385c0390d9", "order_number": "GZ202601181322GA8N"}	f	\N	2026-01-18 07:52:38.215576+00
+f700e7a2-3409-427d-870b-8193a2d59fe4	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211390000219637165403870524", "order_id": "GZ202601181322GA8N"}	f	\N	2026-01-18 07:53:04.124695+00
+cafd913b-21cf-4b19-9c83-e6b0ade394d9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ202601181328CYVE has been placed successfully.	{"order_id": "2913c742-0455-43c4-a4b9-c198171e552b", "order_number": "GZ202601181328CYVE"}	f	\N	2026-01-18 07:58:51.441301+00
+7462a4fe-1358-4d8e-980b-da36f63d72dc	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211390000219638731896725841", "order_id": "GZ202601181328CYVE"}	f	\N	2026-01-18 07:59:10.213305+00
+c08e89c1-3216-46b8-891d-2b2b2cc1c1b9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	order_placed	Order Placed!	Your order #GZ2026011813365B9L has been placed successfully.	{"order_id": "56724be7-1194-4176-a3e1-ee17841eff2b", "order_number": "GZ2026011813365B9L"}	f	\N	2026-01-18 08:06:20.191463+00
+abe65514-ab84-4d50-a7d2-de1463d26d00	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	payment_success	Payment Successful!	Payment received. Searching for delivery partner...	{"txn_id": "20260118211390000219640612970765751", "order_id": "GZ2026011813365B9L"}	f	\N	2026-01-18 08:06:38.00686+00
 \.
 
 
@@ -5678,6 +6379,12 @@ COPY public.notifications (id, user_id, type, title, message, data, is_read, rea
 --
 
 COPY public.order_items (id, order_id, product_id, vendor_id, product_name, product_description, product_image_url, quantity, unit_price, total_price, special_instructions, customizations, created_at) FROM stdin;
+9ef129ac-2e9c-4a4f-a070-5b40b927765e	7ef2bc75-9612-4bb7-909a-a48944998cdd	69430b40-976f-4428-a04c-3506b8158ab2	3109c7d3-95e0-4a7a-86dd-9783e778d50e	Gutzo Test	\N	\N	1	1.00	1.00	\N	\N	2026-01-18 07:39:21.741238+00
+04cedce6-1f05-48ce-8348-85fa1384f700	e9471937-ed88-4fc2-8efb-b5682bbc37d8	69430b40-976f-4428-a04c-3506b8158ab2	3109c7d3-95e0-4a7a-86dd-9783e778d50e	Gutzo Test	\N	\N	1	1.00	1.00	\N	\N	2026-01-18 07:40:50.291801+00
+5f0666a1-5ee0-4459-b727-aa336e650976	565aed50-124e-45e1-9bc8-a27c6ae60f31	69430b40-976f-4428-a04c-3506b8158ab3	3109c7d3-95e0-4a7a-86dd-9783e778d50f	Gutzo Test	\N	\N	1	1.00	1.00	\N	\N	2026-01-18 07:45:57.122509+00
+83c4c2a8-40ae-4b45-8f01-07b12cf5663c	bc2b9fec-4cfd-4624-bd99-3f385c0390d9	69430b40-976f-4428-a04c-3506b8158ab1	3109c7d3-95e0-4a7a-86dd-9783e778d50d	Gutzo Test	\N	\N	1	1.00	1.00	\N	\N	2026-01-18 07:52:37.172412+00
+9482a232-3dbd-42b5-8825-6c5d7adddeb7	2913c742-0455-43c4-a4b9-c198171e552b	69430b40-976f-4428-a04c-3506b8158ab0	3109c7d3-95e0-4a7a-86dd-9783e778d50c	Gutzo Test	\N	\N	1	1.00	1.00	\N	\N	2026-01-18 07:58:50.447943+00
+3ccde4b8-c17a-4304-998e-623d71181922	56724be7-1194-4176-a3e1-ee17841eff2b	69430b40-976f-4428-a04c-3506b8158ab0	3109c7d3-95e0-4a7a-86dd-9783e778d50c	Gutzo Test	\N	\N	1	1.00	1.00	\N	\N	2026-01-18 08:06:19.063147+00
 \.
 
 
@@ -5685,7 +6392,13 @@ COPY public.order_items (id, order_id, product_id, vendor_id, product_name, prod
 -- Data for Name: orders; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.orders (id, user_id, vendor_id, order_number, status, order_type, subtotal, delivery_fee, packaging_fee, taxes, discount_amount, total_amount, delivery_address, delivery_phone, estimated_delivery_time, actual_delivery_time, payment_id, payment_method, payment_status, special_instructions, created_at, updated_at, platform_fee, gst_items, gst_fees, rider_id, tip_amount, delivery_otp, cancelled_by, cancellation_reason, refund_status, refund_amount, rating, feedback, feedback_at, invoice_number, invoice_url, order_source, device_type, shadowfax_order_id, pickup_otp, rider_name, rider_phone, rider_coordinates, delivery_status, delivery_partner_details) FROM stdin;
+COPY public.orders (id, user_id, vendor_id, order_number, status, order_type, subtotal, delivery_fee, packaging_fee, taxes, discount_amount, total_amount, delivery_address, delivery_phone, estimated_delivery_time, actual_delivery_time, payment_id, payment_method, payment_status, special_instructions, created_at, updated_at, platform_fee, gst_items, gst_fees, rider_id, tip_amount, cancelled_by, cancellation_reason, refund_status, refund_amount, rating, feedback, feedback_at, invoice_number, invoice_url, order_source, device_type) FROM stdin;
+7ef2bc75-9612-4bb7-909a-a48944998cdd	d95651a4-be8c-4144-acd7-40c6acf5df35	3109c7d3-95e0-4a7a-86dd-9783e778d50e	GZ202601180739QLSG	searching_rider	instant	1.00	83.71	0.00	0.00	0.00	89.71	"{\\"id\\":\\"a5066eab-c7d6-4398-a53f-71df4e6dadcb\\",\\"user_id\\":\\"d95651a4-be8c-4144-acd7-40c6acf5df35\\",\\"type\\":\\"home\\",\\"label\\":\\"Home\\",\\"street\\":\\"3328+XVJ\\",\\"area\\":\\"Chinniyampalayam\\",\\"landmark\\":\\"\\",\\"full_address\\":\\"3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India\\",\\"city\\":\\"Coimbatore\\",\\"state\\":\\"Tamil Nadu\\",\\"country\\":\\"Portugal\\",\\"postal_code\\":null,\\"latitude\\":11.0525166,\\"longitude\\":77.0671836,\\"delivery_instructions\\":null,\\"is_default\\":true,\\"created_at\\":\\"2026-01-18T06:20:18.172353+00:00\\",\\"updated_at\\":\\"2026-01-18T06:20:18.172353+00:00\\",\\"custom_label\\":null,\\"zipcode\\":\\"641062\\",\\"delivery_notes\\":null}"	+919003802398	\N	\N	20260118211390000219633822849766290	paytm	paid	\N	2026-01-18 07:39:21.720364+00	2026-01-18 07:39:48.97654+00	5	0	0	\N	0.00	\N	\N	\N	\N	\N	\N	\N	\N	\N	app	\N
+bc2b9fec-4cfd-4624-bd99-3f385c0390d9	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	3109c7d3-95e0-4a7a-86dd-9783e778d50d	GZ202601181322GA8N	searching_rider	instant	1.00	70.62	0.00	0.00	0.00	76.62	"{\\"id\\":\\"a40fad18-d28c-4e55-90a0-138027533ae5\\",\\"user_id\\":\\"c95f6a2b-fa44-414f-bee6-4f5f9d79c602\\",\\"type\\":\\"home\\",\\"label\\":\\"Home\\",\\"street\\":\\"3328+XVJ\\",\\"area\\":\\"Chinniyampalayam\\",\\"landmark\\":\\"\\",\\"full_address\\":\\"3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India\\",\\"city\\":\\"Coimbatore\\",\\"state\\":\\"Tamil Nadu\\",\\"country\\":\\"Portugal\\",\\"postal_code\\":null,\\"latitude\\":11.0525207,\\"longitude\\":77.0671894,\\"delivery_instructions\\":null,\\"is_default\\":true,\\"created_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"updated_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"custom_label\\":null,\\"zipcode\\":\\"641062\\",\\"delivery_notes\\":null}"	+919944751745	\N	\N	20260118211390000219637165403870524	paytm	paid	\N	2026-01-18 07:52:36.552533+00	2026-01-18 07:53:01.212811+00	5	0	0	\N	0.00	\N	\N	\N	\N	\N	\N	\N	\N	\N	app	\N
+2913c742-0455-43c4-a4b9-c198171e552b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ202601181328CYVE	searching_rider	instant	1.00	146.15	0.00	0.00	0.00	152.15	"{\\"id\\":\\"a40fad18-d28c-4e55-90a0-138027533ae5\\",\\"user_id\\":\\"c95f6a2b-fa44-414f-bee6-4f5f9d79c602\\",\\"type\\":\\"home\\",\\"label\\":\\"Home\\",\\"street\\":\\"3328+XVJ\\",\\"area\\":\\"Chinniyampalayam\\",\\"landmark\\":\\"\\",\\"full_address\\":\\"3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India\\",\\"city\\":\\"Coimbatore\\",\\"state\\":\\"Tamil Nadu\\",\\"country\\":\\"Portugal\\",\\"postal_code\\":null,\\"latitude\\":11.0525207,\\"longitude\\":77.0671894,\\"delivery_instructions\\":null,\\"is_default\\":true,\\"created_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"updated_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"custom_label\\":null,\\"zipcode\\":\\"641062\\",\\"delivery_notes\\":null}"	+919944751745	\N	\N	20260118211390000219638731896725841	paytm	paid	\N	2026-01-18 07:58:49.842693+00	2026-01-18 07:59:07.433053+00	5	0	0	\N	0.00	\N	\N	\N	\N	\N	\N	\N	\N	\N	app	\N
+e9471937-ed88-4fc2-8efb-b5682bbc37d8	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	3109c7d3-95e0-4a7a-86dd-9783e778d50e	GZ202601181310BOZN	searching_rider	instant	1.00	83.72	0.00	0.00	0.00	89.72	"{\\"id\\":\\"a40fad18-d28c-4e55-90a0-138027533ae5\\",\\"user_id\\":\\"c95f6a2b-fa44-414f-bee6-4f5f9d79c602\\",\\"type\\":\\"home\\",\\"label\\":\\"Home\\",\\"street\\":\\"3328+XVJ\\",\\"area\\":\\"Chinniyampalayam\\",\\"landmark\\":\\"\\",\\"full_address\\":\\"3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India\\",\\"city\\":\\"Coimbatore\\",\\"state\\":\\"Tamil Nadu\\",\\"country\\":\\"Portugal\\",\\"postal_code\\":null,\\"latitude\\":11.0525207,\\"longitude\\":77.0671894,\\"delivery_instructions\\":null,\\"is_default\\":true,\\"created_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"updated_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"custom_label\\":null,\\"zipcode\\":\\"641062\\",\\"delivery_notes\\":null}"	+919944751745	\N	\N	20260118211400000219634198663543468	paytm	paid	\N	2026-01-18 07:40:49.699873+00	2026-01-18 07:41:07.383253+00	5	0	0	\N	0.00	\N	\N	\N	\N	\N	\N	\N	\N	\N	app	\N
+565aed50-124e-45e1-9bc8-a27c6ae60f31	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	3109c7d3-95e0-4a7a-86dd-9783e778d50f	GZ202601181315PSG7	searching_rider	instant	1.00	131.75	0.00	0.00	0.00	137.75	"{\\"id\\":\\"a40fad18-d28c-4e55-90a0-138027533ae5\\",\\"user_id\\":\\"c95f6a2b-fa44-414f-bee6-4f5f9d79c602\\",\\"type\\":\\"home\\",\\"label\\":\\"Home\\",\\"street\\":\\"3328+XVJ\\",\\"area\\":\\"Chinniyampalayam\\",\\"landmark\\":\\"\\",\\"full_address\\":\\"3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India\\",\\"city\\":\\"Coimbatore\\",\\"state\\":\\"Tamil Nadu\\",\\"country\\":\\"Portugal\\",\\"postal_code\\":null,\\"latitude\\":11.0525207,\\"longitude\\":77.0671894,\\"delivery_instructions\\":null,\\"is_default\\":true,\\"created_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"updated_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"custom_label\\":null,\\"zipcode\\":\\"641062\\",\\"delivery_notes\\":null}"	+919944751745	\N	\N	20260118211390000219635486092634315	paytm	paid	\N	2026-01-18 07:45:56.400302+00	2026-01-18 07:46:11.739003+00	5	0	0	\N	0.00	\N	\N	\N	\N	\N	\N	\N	\N	\N	app	\N
+56724be7-1194-4176-a3e1-ee17841eff2b	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	3109c7d3-95e0-4a7a-86dd-9783e778d50c	GZ2026011813365B9L	searching_rider	instant	1.00	146.15	0.00	0.00	0.00	152.15	"{\\"id\\":\\"a40fad18-d28c-4e55-90a0-138027533ae5\\",\\"user_id\\":\\"c95f6a2b-fa44-414f-bee6-4f5f9d79c602\\",\\"type\\":\\"home\\",\\"label\\":\\"Home\\",\\"street\\":\\"3328+XVJ\\",\\"area\\":\\"Chinniyampalayam\\",\\"landmark\\":\\"\\",\\"full_address\\":\\"3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India\\",\\"city\\":\\"Coimbatore\\",\\"state\\":\\"Tamil Nadu\\",\\"country\\":\\"Portugal\\",\\"postal_code\\":null,\\"latitude\\":11.0525207,\\"longitude\\":77.0671894,\\"delivery_instructions\\":null,\\"is_default\\":true,\\"created_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"updated_at\\":\\"2026-01-17T04:03:50.236489+00:00\\",\\"custom_label\\":null,\\"zipcode\\":\\"641062\\",\\"delivery_notes\\":null}"	+919944751745	\N	\N	20260118211390000219640612970765751	paytm	paid	\N	2026-01-18 08:06:18.246259+00	2026-01-18 08:06:34.734262+00	5	0	0	\N	0.00	\N	\N	\N	\N	\N	\N	\N	\N	\N	app	\N
 \.
 
 
@@ -5694,6 +6407,10 @@ COPY public.orders (id, user_id, vendor_id, order_number, status, order_type, su
 --
 
 COPY public.otp_verification (id, phone, otp, expires_at, verified, attempts, created_at, verified_at) FROM stdin;
+fead5ef2-70ef-4924-904d-934b769849b3	+919003802398	876565	2026-01-18 06:23:07.48+00	t	0	2026-01-18 06:18:07.481+00	2026-01-18 06:18:23.684+00
+f43623aa-c43b-4171-89be-f7122c38ab80	+919940890213	609992	2026-01-02 16:20:54.054+00	t	0	2026-01-02 16:15:54.054+00	2026-01-02 16:16:09.082+00
+435c771f-ff69-4919-8931-c8231f2084d8	+919944751745	378467	2026-01-17 03:24:29.662+00	t	0	2026-01-17 03:19:29.663+00	2026-01-17 03:19:40.5+00
+ae28f960-6662-4b51-a7d8-ce132674878c	+917904838530	634494	2026-01-17 09:09:13.524+00	t	0	2026-01-17 09:04:13.525+00	2026-01-17 09:04:21.594+00
 \.
 
 
@@ -5734,6 +6451,10 @@ COPY public.product_variants (id, product_id, name, price, calories, image, is_d
 --
 
 COPY public.products (id, vendor_id, name, description, price, image_url, category, tags, is_available, preparation_time, nutritional_info, ingredients, allergens, portion_size, spice_level, is_featured, sort_order, created_at, updated_at, thumbnail, gallery_images, video_url, type, discount_price, discount_percent, is_bestseller, calories, serves, stock_quantity, max_order_qty, min_order_qty, available_days, rating, review_count, addon_ids, is_veg) FROM stdin;
+69430b40-976f-4428-a04c-3506b8158ab0	3109c7d3-95e0-4a7a-86dd-9783e778d50c	Gutzo Test	Crispy golden crepe made from fermented rice and lentil batter, filled with spiced potato masala and served with coconut chutney and sambar.	1.00	https://storage.googleapis.com/gutzo/vendors/3109c7d3-95e0-4a7a-86dd-9783e778d50c/69430b40-976f-4428-a04c-3506b8158ab0/1768048583026.svg	Specials	\N	t	15	\N	\N	\N	\N	\N	t	0	2025-12-31 18:47:53.005502+00	2026-01-11 13:31:57.405762+00	\N	\N	\N	veg	\N	\N	t	\N	1	\N	10	1	\N	\N	0	{}	t
+69430b40-976f-4428-a04c-3506b8158ab1	3109c7d3-95e0-4a7a-86dd-9783e778d50d	Gutzo Test	Crispy golden crepe made from fermented rice and lentil batter, filled with spiced potato masala and served with coconut chutney and sambar.	1.00	https://storage.googleapis.com/gutzo/vendors/3109c7d3-95e0-4a7a-86dd-9783e778d50c/69430b40-976f-4428-a04c-3506b8158ab0/1768048583026.svg	Specials	\N	t	15	\N	\N	\N	\N	\N	t	0	2025-12-31 18:47:53.005502+00	2026-01-11 13:31:57.405762+00	\N	\N	\N	veg	\N	\N	t	\N	1	\N	10	1	\N	\N	0	{}	t
+69430b40-976f-4428-a04c-3506b8158ab2	3109c7d3-95e0-4a7a-86dd-9783e778d50e	Gutzo Test	Crispy golden crepe made from fermented rice and lentil batter, filled with spiced potato masala and served with coconut chutney and sambar.	1.00	https://storage.googleapis.com/gutzo/vendors/3109c7d3-95e0-4a7a-86dd-9783e778d50c/69430b40-976f-4428-a04c-3506b8158ab0/1768048583026.svg	Specials	\N	t	15	\N	\N	\N	\N	\N	t	0	2025-12-31 18:47:53.005502+00	2026-01-11 13:31:57.405762+00	\N	\N	\N	veg	\N	\N	t	\N	1	\N	10	1	\N	\N	0	{}	t
+69430b40-976f-4428-a04c-3506b8158ab3	3109c7d3-95e0-4a7a-86dd-9783e778d50f	Gutzo Test	Crispy golden crepe made from fermented rice and lentil batter, filled with spiced potato masala and served with coconut chutney and sambar.	1.00	https://storage.googleapis.com/gutzo/vendors/3109c7d3-95e0-4a7a-86dd-9783e778d50c/69430b40-976f-4428-a04c-3506b8158ab0/1768048583026.svg	Specials	\N	t	15	\N	\N	\N	\N	\N	t	0	2025-12-31 18:47:53.005502+00	2026-01-11 13:31:57.405762+00	\N	\N	\N	veg	\N	\N	t	\N	1	\N	10	1	\N	\N	0	{}	t
 \.
 
 
@@ -5766,14 +6487,6 @@ COPY public.review_votes (id, review_id, user_id, is_helpful, created_at) FROM s
 --
 
 COPY public.reviews (id, user_id, vendor_id, product_id, order_id, rating, comment, images, is_verified_purchase, status, vendor_reply, replied_at, helpful_count, created_at, updated_at) FROM stdin;
-\.
-
-
---
--- Data for Name: riders; Type: TABLE DATA; Schema: public; Owner: supabase_admin
---
-
-COPY public.riders (id, name, phone, email, profile_image, vehicle_type, vehicle_number, license_number, active_status, current_lat, current_lng, current_order_id, total_deliveries, avg_rating, bank_account, is_verified, is_active, created_at, updated_at) FROM stdin;
 \.
 
 
@@ -5814,6 +6527,8 @@ COPY public.support_tickets (id, user_id, order_id, subject, description, catego
 --
 
 COPY public.user_addresses (id, user_id, type, label, street, area, landmark, full_address, city, state, country, postal_code, latitude, longitude, delivery_instructions, is_default, created_at, updated_at, custom_label, zipcode, delivery_notes) FROM stdin;
+a40fad18-d28c-4e55-90a0-138027533ae5	c95f6a2b-fa44-414f-bee6-4f5f9d79c602	home	Home	3328+XVJ	Chinniyampalayam		3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India	Coimbatore	Tamil Nadu	Portugal	\N	11.05252070	77.06718940	\N	t	2026-01-17 04:03:50.236489+00	2026-01-17 04:03:50.236489+00	\N	641062	\N
+a5066eab-c7d6-4398-a53f-71df4e6dadcb	d95651a4-be8c-4144-acd7-40c6acf5df35	home	Home	3328+XVJ	Chinniyampalayam		3328+XVJ, Teachers Colony, Chinniyampalayam, Coimbatore, Tamil Nadu 641062, India	Coimbatore	Tamil Nadu	Portugal	\N	11.05251660	77.06718360	\N	t	2026-01-18 06:20:18.172353+00	2026-01-18 06:20:18.172353+00	\N	641062	\N
 \.
 
 
@@ -5830,6 +6545,9 @@ COPY public.user_favorites (id, user_id, vendor_id, product_id, created_at) FROM
 --
 
 COPY public.users (id, phone, name, email, verified, created_at, updated_at, profile_image, date_of_birth, gender, language_preference, dietary_preference, allergies, health_goals, referral_code, referred_by, total_orders, total_spent, loyalty_points, membership_tier, device_tokens, last_order_at, last_login_at, is_blocked, blocked_reason) FROM stdin;
+d95651a4-be8c-4144-acd7-40c6acf5df35	+919003802398	Maha	mahalakshmisundaram244@gmail.com	t	2026-01-18 06:18:23.711+00	2026-01-18 06:18:23.71444+00	\N	\N	\N	en	\N	\N	\N	GZ8023988QU	\N	2	241.86	0	bronze	\N	2026-01-18 07:39:21.756+00	2026-01-18 07:41:28.893+00	f	\N
+c95f6a2b-fa44-414f-bee6-4f5f9d79c602	+919944751745	Gowtham Sundaram	goc@gmai.com	t	2026-01-01 17:53:29.626+00	2026-01-01 17:53:29.870604+00	\N	\N	\N	en	\N	\N	\N	GZ751745SJR	\N	110	11942.88	0	bronze	\N	2026-01-18 08:06:19.559+00	2026-01-18 11:11:05.683+00	f	\N
+4adb1ec3-90bd-42cb-a070-0145e88c2a5c	+919940890213	VASANTHAN L	vasanthmail59@gmail.com	t	2026-01-02 16:16:09.098+00	2026-01-02 16:16:09.100174+00	\N	\N	\N	en	\N	\N	\N	GZ890213Y3X	\N	3	317.61	0	bronze	\N	2026-01-02 16:20:48.799+00	2026-01-02 16:22:24.22+00	f	\N
 \.
 
 
@@ -5878,6 +6596,10 @@ COPY public.vendor_special_hours (id, vendor_id, special_date, opening_time, clo
 --
 
 COPY public.vendors (id, name, description, image, rating, delivery_time, minimum_order, delivery_fee, cuisine_type, address, phone, is_active, is_featured, opening_hours, tags, created_at, updated_at, logo, banner_url, total_orders, total_reviews, whatsapp_number, email, is_open, is_verified, gst_number, fssai_license, bank_account, commission_rate, payout_frequency, status, latitude, longitude, is_blacklisted, password, otp, otp_expires_at, pincode, company_reg_no, owner_aadhar_no, pan_card_no, bank_account_no, ifsc_code, bank_name, account_holder_name, owner_name, company_type) FROM stdin;
+3109c7d3-95e0-4a7a-86dd-9783e778d50f	Coimbatore Cafe, Peelamedu	Authentic South Indian vegetarian delicacies served with love.	https://images.unsplash.com/photo-1552566626-52f8b828add9?q=80&w=2670&auto=format&fit=crop	4.8		\N	\N	South Indian	164/165, Avinashi Rd, Coimbatore, Tamil Nadu 641004	9790312308	t	f	[{"day": "Monday", "open": "07:00", "close": "22:00"}, {"day": "Tuesday", "open": "07:00", "close": "22:00"}, {"day": "Wednesday", "open": "07:00", "close": "22:00"}, {"day": "Thursday", "open": "07:00", "close": "22:00"}, {"day": "Friday", "open": "07:00", "close": "22:00"}, {"day": "Saturday", "open": "07:00", "close": "22:00"}, {"day": "Sunday", "open": "07:00", "close": "22:00"}]	\N	2025-12-31 18:47:53.005502+00	2026-01-18 08:44:01.388842+00	\N	\N	0	0	\N	pichammal1967@gmail.com	t	f	\N	\N	\N	15.00	weekly	approved	11.024492091008764	77.00310586543303	t	qwe	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+3109c7d3-95e0-4a7a-86dd-9783e778d50e	Coimbatore Cafe, SITRA	Authentic South Indian vegetarian delicacies served with love.	https://images.unsplash.com/photo-1552566626-52f8b828add9?q=80&w=2670&auto=format&fit=crop	4.8		\N	\N	South Indian	164/165, Avinashi Rd, Coimbatore, Tamil Nadu 641004	9790312308	t	f	[{"day": "Monday", "open": "07:00", "close": "22:00"}, {"day": "Tuesday", "open": "07:00", "close": "22:00"}, {"day": "Wednesday", "open": "07:00", "close": "22:00"}, {"day": "Thursday", "open": "07:00", "close": "22:00"}, {"day": "Friday", "open": "07:00", "close": "22:00"}, {"day": "Saturday", "open": "07:00", "close": "22:00"}, {"day": "Sunday", "open": "07:00", "close": "22:00"}]	\N	2025-12-31 18:47:53.005502+00	2026-01-18 08:43:58.949483+00	\N	\N	0	0	\N	pichammal1967@gmail.com	t	f	\N	\N	\N	15.00	weekly	approved	11.038335022716877	77.03816545123526	t	qwe	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+3109c7d3-95e0-4a7a-86dd-9783e778d50c	Coimbatore Cafe, Radisson Blu	Authentic South Indian vegetarian delicacies served with love.	https://images.unsplash.com/photo-1552566626-52f8b828add9?q=80&w=2670&auto=format&fit=crop	4.8		\N	\N	South Indian	164/165, Avinashi Rd, Coimbatore, Tamil Nadu 641004	9790312308	t	f	[{"day": "Monday", "open": "07:00", "close": "22:00"}, {"day": "Tuesday", "open": "07:00", "close": "22:00"}, {"day": "Wednesday", "open": "07:00", "close": "22:00"}, {"day": "Thursday", "open": "07:00", "close": "22:00"}, {"day": "Friday", "open": "07:00", "close": "22:00"}, {"day": "Saturday", "open": "07:00", "close": "22:00"}, {"day": "Sunday", "open": "07:00", "close": "22:00"}]	\N	2025-12-31 18:47:53.005502+00	2026-01-18 08:51:28.205143+00	\N	\N	0	0	\N	pichammal1967@gmail.com	t	f	\N	\N	\N	15.00	weekly	approved	11.020672306760327	76.99276159257745	f	qwe	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+3109c7d3-95e0-4a7a-86dd-9783e778d50d	Coimbatore Cafe, GK Nagar	Authentic South Indian vegetarian delicacies served with love.	https://images.unsplash.com/photo-1552566626-52f8b828add9?q=80&w=2670&auto=format&fit=crop	4.8		\N	\N	South Indian	164/165, Avinashi Rd, Coimbatore, Tamil Nadu 641004	9790312308	t	f	[{"day": "Monday", "open": "07:00", "close": "22:00"}, {"day": "Tuesday", "open": "07:00", "close": "22:00"}, {"day": "Wednesday", "open": "07:00", "close": "22:00"}, {"day": "Thursday", "open": "07:00", "close": "22:00"}, {"day": "Friday", "open": "07:00", "close": "22:00"}, {"day": "Saturday", "open": "07:00", "close": "22:00"}, {"day": "Sunday", "open": "07:00", "close": "22:00"}]	\N	2025-12-31 18:47:53.005502+00	2026-01-18 08:51:32.715864+00	\N	\N	0	0	\N	pichammal1967@gmail.com	t	f	\N	\N	\N	15.00	weekly	approved	11.046996185089585	77.05576557666393	t	qwe	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
 \.
 
 
@@ -6542,6 +7264,22 @@ ALTER TABLE ONLY public.coupons
 
 
 --
+-- Name: deliveries deliveries_order_id_key; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.deliveries
+    ADD CONSTRAINT deliveries_order_id_key UNIQUE (order_id);
+
+
+--
+-- Name: deliveries deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.deliveries
+    ADD CONSTRAINT deliveries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: delivery_zones delivery_zones_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
 --
 
@@ -6566,11 +7304,11 @@ ALTER TABLE ONLY public.kv_store_6985f4e9
 
 
 --
--- Name: meal_plan_day_menu meal_plan_day_menu_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
+-- Name: meal_plan_calendar meal_plan_calendar_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY public.meal_plan_day_menu
-    ADD CONSTRAINT meal_plan_day_menu_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.meal_plan_calendar
+    ADD CONSTRAINT meal_plan_calendar_pkey PRIMARY KEY (id);
 
 
 --
@@ -6587,6 +7325,14 @@ ALTER TABLE ONLY public.meal_plan_subscriptions
 
 ALTER TABLE ONLY public.meal_plans
     ADD CONSTRAINT meal_plans_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: meal_templates meal_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.meal_templates
+    ADD CONSTRAINT meal_templates_pkey PRIMARY KEY (id);
 
 
 --
@@ -6750,22 +7496,6 @@ ALTER TABLE ONLY public.reviews
 
 
 --
--- Name: riders riders_phone_key; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
---
-
-ALTER TABLE ONLY public.riders
-    ADD CONSTRAINT riders_phone_key UNIQUE (phone);
-
-
---
--- Name: riders riders_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
---
-
-ALTER TABLE ONLY public.riders
-    ADD CONSTRAINT riders_pkey PRIMARY KEY (id);
-
-
---
 -- Name: search_logs search_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
 --
 
@@ -6803,6 +7533,22 @@ ALTER TABLE ONLY public.support_tickets
 
 ALTER TABLE ONLY public.user_favorites
     ADD CONSTRAINT unique_favorite UNIQUE NULLS NOT DISTINCT (user_id, vendor_id, product_id);
+
+
+--
+-- Name: meal_plan_calendar unique_meal_plan_date; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.meal_plan_calendar
+    ADD CONSTRAINT unique_meal_plan_date UNIQUE (meal_plan_id, menu_date);
+
+
+--
+-- Name: meal_templates unique_vendor_template_code; Type: CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.meal_templates
+    ADD CONSTRAINT unique_vendor_template_code UNIQUE (vendor_id, template_code);
 
 
 --
@@ -7475,6 +8221,48 @@ CREATE INDEX idx_activity_logs_user ON public.activity_logs USING btree (user_id
 
 
 --
+-- Name: idx_calendar_breakfast; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_calendar_breakfast ON public.meal_plan_calendar USING btree (breakfast_template_id);
+
+
+--
+-- Name: idx_calendar_date_range; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_calendar_date_range ON public.meal_plan_calendar USING btree (menu_date);
+
+
+--
+-- Name: idx_calendar_dinner; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_calendar_dinner ON public.meal_plan_calendar USING btree (dinner_template_id);
+
+
+--
+-- Name: idx_calendar_lunch; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_calendar_lunch ON public.meal_plan_calendar USING btree (lunch_template_id);
+
+
+--
+-- Name: idx_calendar_meal_plan; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_calendar_meal_plan ON public.meal_plan_calendar USING btree (meal_plan_id, menu_date);
+
+
+--
+-- Name: idx_calendar_snack; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_calendar_snack ON public.meal_plan_calendar USING btree (snack_template_id);
+
+
+--
 -- Name: idx_cart_created_at; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -7531,13 +8319,6 @@ CREATE INDEX idx_inventory_logs_product ON public.inventory_logs USING btree (pr
 
 
 --
--- Name: idx_meal_plan_day_menu_plan; Type: INDEX; Schema: public; Owner: supabase_admin
---
-
-CREATE INDEX idx_meal_plan_day_menu_plan ON public.meal_plan_day_menu USING btree (meal_plan_id);
-
-
---
 -- Name: idx_meal_plan_subs_status; Type: INDEX; Schema: public; Owner: supabase_admin
 --
 
@@ -7563,6 +8344,34 @@ CREATE INDEX idx_meal_plans_active ON public.meal_plans USING btree (is_active) 
 --
 
 CREATE INDEX idx_meal_plans_vendor ON public.meal_plans USING btree (vendor_id);
+
+
+--
+-- Name: idx_meal_templates_active; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_meal_templates_active ON public.meal_templates USING btree (vendor_id, is_active);
+
+
+--
+-- Name: idx_meal_templates_code; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_meal_templates_code ON public.meal_templates USING btree (vendor_id, template_code);
+
+
+--
+-- Name: idx_meal_templates_type; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_meal_templates_type ON public.meal_templates USING btree (vendor_id, meal_type);
+
+
+--
+-- Name: idx_meal_templates_vendor; Type: INDEX; Schema: public; Owner: supabase_admin
+--
+
+CREATE INDEX idx_meal_templates_vendor ON public.meal_templates USING btree (vendor_id);
 
 
 --
@@ -7745,13 +8554,6 @@ CREATE INDEX idx_reviews_user ON public.reviews USING btree (user_id);
 --
 
 CREATE INDEX idx_reviews_vendor ON public.reviews USING btree (vendor_id);
-
-
---
--- Name: idx_riders_phone; Type: INDEX; Schema: public; Owner: supabase_admin
---
-
-CREATE INDEX idx_riders_phone ON public.riders USING btree (phone);
 
 
 --
@@ -8350,6 +9152,27 @@ CREATE TRIGGER ensure_single_default_address_trigger BEFORE INSERT OR UPDATE ON 
 
 
 --
+-- Name: meal_templates trigger_set_template_code; Type: TRIGGER; Schema: public; Owner: supabase_admin
+--
+
+CREATE TRIGGER trigger_set_template_code BEFORE INSERT ON public.meal_templates FOR EACH ROW EXECUTE FUNCTION public.set_template_code();
+
+
+--
+-- Name: meal_plan_calendar trigger_update_meal_calendar_timestamp; Type: TRIGGER; Schema: public; Owner: supabase_admin
+--
+
+CREATE TRIGGER trigger_update_meal_calendar_timestamp BEFORE UPDATE ON public.meal_plan_calendar FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+
+--
+-- Name: meal_templates trigger_update_meal_templates_timestamp; Type: TRIGGER; Schema: public; Owner: supabase_admin
+--
+
+CREATE TRIGGER trigger_update_meal_templates_timestamp BEFORE UPDATE ON public.meal_templates FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+
+--
 -- Name: orders update_orders_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -8624,6 +9447,14 @@ ALTER TABLE ONLY public.coupons
 
 
 --
+-- Name: deliveries deliveries_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.deliveries
+    ADD CONSTRAINT deliveries_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE CASCADE;
+
+
+--
 -- Name: cart fk_cart_product; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -8656,43 +9487,43 @@ ALTER TABLE ONLY public.inventory_logs
 
 
 --
--- Name: meal_plan_day_menu meal_plan_day_menu_breakfast_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+-- Name: meal_plan_calendar meal_plan_calendar_breakfast_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY public.meal_plan_day_menu
-    ADD CONSTRAINT meal_plan_day_menu_breakfast_product_id_fkey FOREIGN KEY (breakfast_product_id) REFERENCES public.products(id) ON DELETE SET NULL;
-
-
---
--- Name: meal_plan_day_menu meal_plan_day_menu_dinner_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
---
-
-ALTER TABLE ONLY public.meal_plan_day_menu
-    ADD CONSTRAINT meal_plan_day_menu_dinner_product_id_fkey FOREIGN KEY (dinner_product_id) REFERENCES public.products(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.meal_plan_calendar
+    ADD CONSTRAINT meal_plan_calendar_breakfast_template_id_fkey FOREIGN KEY (breakfast_template_id) REFERENCES public.meal_templates(id) ON DELETE SET NULL;
 
 
 --
--- Name: meal_plan_day_menu meal_plan_day_menu_lunch_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+-- Name: meal_plan_calendar meal_plan_calendar_dinner_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY public.meal_plan_day_menu
-    ADD CONSTRAINT meal_plan_day_menu_lunch_product_id_fkey FOREIGN KEY (lunch_product_id) REFERENCES public.products(id) ON DELETE SET NULL;
-
-
---
--- Name: meal_plan_day_menu meal_plan_day_menu_meal_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
---
-
-ALTER TABLE ONLY public.meal_plan_day_menu
-    ADD CONSTRAINT meal_plan_day_menu_meal_plan_id_fkey FOREIGN KEY (meal_plan_id) REFERENCES public.meal_plans(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.meal_plan_calendar
+    ADD CONSTRAINT meal_plan_calendar_dinner_template_id_fkey FOREIGN KEY (dinner_template_id) REFERENCES public.meal_templates(id) ON DELETE SET NULL;
 
 
 --
--- Name: meal_plan_day_menu meal_plan_day_menu_snack_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+-- Name: meal_plan_calendar meal_plan_calendar_lunch_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
 --
 
-ALTER TABLE ONLY public.meal_plan_day_menu
-    ADD CONSTRAINT meal_plan_day_menu_snack_product_id_fkey FOREIGN KEY (snack_product_id) REFERENCES public.products(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.meal_plan_calendar
+    ADD CONSTRAINT meal_plan_calendar_lunch_template_id_fkey FOREIGN KEY (lunch_template_id) REFERENCES public.meal_templates(id) ON DELETE SET NULL;
+
+
+--
+-- Name: meal_plan_calendar meal_plan_calendar_meal_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.meal_plan_calendar
+    ADD CONSTRAINT meal_plan_calendar_meal_plan_id_fkey FOREIGN KEY (meal_plan_id) REFERENCES public.meal_plans(id) ON DELETE CASCADE;
+
+
+--
+-- Name: meal_plan_calendar meal_plan_calendar_snack_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.meal_plan_calendar
+    ADD CONSTRAINT meal_plan_calendar_snack_template_id_fkey FOREIGN KEY (snack_template_id) REFERENCES public.meal_templates(id) ON DELETE SET NULL;
 
 
 --
@@ -8717,6 +9548,22 @@ ALTER TABLE ONLY public.meal_plan_subscriptions
 
 ALTER TABLE ONLY public.meal_plans
     ADD CONSTRAINT meal_plans_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id) ON DELETE CASCADE;
+
+
+--
+-- Name: meal_templates meal_templates_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.meal_templates
+    ADD CONSTRAINT meal_templates_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL;
+
+
+--
+-- Name: meal_templates meal_templates_vendor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: supabase_admin
+--
+
+ALTER TABLE ONLY public.meal_templates
+    ADD CONSTRAINT meal_templates_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id) ON DELETE CASCADE;
 
 
 --
@@ -9255,13 +10102,6 @@ CREATE POLICY "Public can view categories" ON public.categories FOR SELECT USING
 
 
 --
--- Name: meal_plan_day_menu Public can view meal plan menus; Type: POLICY; Schema: public; Owner: supabase_admin
---
-
-CREATE POLICY "Public can view meal plan menus" ON public.meal_plan_day_menu FOR SELECT USING (true);
-
-
---
 -- Name: reviews Public can view published reviews; Type: POLICY; Schema: public; Owner: supabase_admin
 --
 
@@ -9447,12 +10287,6 @@ ALTER TABLE public.inventory_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.kv_store_6985f4e9 ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: meal_plan_day_menu; Type: ROW SECURITY; Schema: public; Owner: supabase_admin
---
-
-ALTER TABLE public.meal_plan_day_menu ENABLE ROW LEVEL SECURITY;
-
---
 -- Name: meal_plan_subscriptions; Type: ROW SECURITY; Schema: public; Owner: supabase_admin
 --
 
@@ -9541,12 +10375,6 @@ ALTER TABLE public.review_votes ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
-
---
--- Name: riders; Type: ROW SECURITY; Schema: public; Owner: supabase_admin
---
-
-ALTER TABLE public.riders ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: search_logs; Type: ROW SECURITY; Schema: public; Owner: supabase_admin
@@ -10500,12 +11328,32 @@ GRANT ALL ON FUNCTION pgbouncer.get_auth(p_usename text) TO postgres;
 
 
 --
+-- Name: FUNCTION assign_template_to_meal(p_meal_plan_id uuid, p_template_code text, p_meal_slot text, p_start_date date, p_end_date date, p_day_of_week integer); Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON FUNCTION public.assign_template_to_meal(p_meal_plan_id uuid, p_template_code text, p_meal_slot text, p_start_date date, p_end_date date, p_day_of_week integer) TO postgres;
+GRANT ALL ON FUNCTION public.assign_template_to_meal(p_meal_plan_id uuid, p_template_code text, p_meal_slot text, p_start_date date, p_end_date date, p_day_of_week integer) TO anon;
+GRANT ALL ON FUNCTION public.assign_template_to_meal(p_meal_plan_id uuid, p_template_code text, p_meal_slot text, p_start_date date, p_end_date date, p_day_of_week integer) TO authenticated;
+GRANT ALL ON FUNCTION public.assign_template_to_meal(p_meal_plan_id uuid, p_template_code text, p_meal_slot text, p_start_date date, p_end_date date, p_day_of_week integer) TO service_role;
+
+
+--
 -- Name: FUNCTION ensure_single_default_address(); Type: ACL; Schema: public; Owner: postgres
 --
 
 GRANT ALL ON FUNCTION public.ensure_single_default_address() TO anon;
 GRANT ALL ON FUNCTION public.ensure_single_default_address() TO authenticated;
 GRANT ALL ON FUNCTION public.ensure_single_default_address() TO service_role;
+
+
+--
+-- Name: FUNCTION generate_template_code(p_vendor_id uuid); Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON FUNCTION public.generate_template_code(p_vendor_id uuid) TO postgres;
+GRANT ALL ON FUNCTION public.generate_template_code(p_vendor_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.generate_template_code(p_vendor_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.generate_template_code(p_vendor_id uuid) TO service_role;
 
 
 --
@@ -10518,12 +11366,32 @@ GRANT ALL ON FUNCTION public.get_user_default_address(input_user_id uuid) TO ser
 
 
 --
+-- Name: FUNCTION set_template_code(); Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON FUNCTION public.set_template_code() TO postgres;
+GRANT ALL ON FUNCTION public.set_template_code() TO anon;
+GRANT ALL ON FUNCTION public.set_template_code() TO authenticated;
+GRANT ALL ON FUNCTION public.set_template_code() TO service_role;
+
+
+--
 -- Name: FUNCTION update_cart_updated_at(); Type: ACL; Schema: public; Owner: postgres
 --
 
 GRANT ALL ON FUNCTION public.update_cart_updated_at() TO anon;
 GRANT ALL ON FUNCTION public.update_cart_updated_at() TO authenticated;
 GRANT ALL ON FUNCTION public.update_cart_updated_at() TO service_role;
+
+
+--
+-- Name: FUNCTION update_updated_at(); Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON FUNCTION public.update_updated_at() TO postgres;
+GRANT ALL ON FUNCTION public.update_updated_at() TO anon;
+GRANT ALL ON FUNCTION public.update_updated_at() TO authenticated;
+GRANT ALL ON FUNCTION public.update_updated_at() TO service_role;
 
 
 --
@@ -11011,6 +11879,16 @@ GRANT ALL ON TABLE public.coupons TO service_role;
 
 
 --
+-- Name: TABLE deliveries; Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE public.deliveries TO postgres;
+GRANT ALL ON TABLE public.deliveries TO anon;
+GRANT ALL ON TABLE public.deliveries TO authenticated;
+GRANT ALL ON TABLE public.deliveries TO service_role;
+
+
+--
 -- Name: TABLE delivery_zones; Type: ACL; Schema: public; Owner: supabase_admin
 --
 
@@ -11040,23 +11918,23 @@ GRANT ALL ON TABLE public.kv_store_6985f4e9 TO service_role;
 
 
 --
--- Name: TABLE meal_plan_day_menu; Type: ACL; Schema: public; Owner: supabase_admin
+-- Name: TABLE meal_plan_calendar; Type: ACL; Schema: public; Owner: supabase_admin
 --
 
-GRANT ALL ON TABLE public.meal_plan_day_menu TO postgres;
-GRANT ALL ON TABLE public.meal_plan_day_menu TO anon;
-GRANT ALL ON TABLE public.meal_plan_day_menu TO authenticated;
-GRANT ALL ON TABLE public.meal_plan_day_menu TO service_role;
+GRANT ALL ON TABLE public.meal_plan_calendar TO postgres;
+GRANT ALL ON TABLE public.meal_plan_calendar TO anon;
+GRANT ALL ON TABLE public.meal_plan_calendar TO authenticated;
+GRANT ALL ON TABLE public.meal_plan_calendar TO service_role;
 
 
 --
--- Name: TABLE meal_plan_subscriptions; Type: ACL; Schema: public; Owner: supabase_admin
+-- Name: TABLE meal_plan_day_menu_backup; Type: ACL; Schema: public; Owner: supabase_admin
 --
 
-GRANT ALL ON TABLE public.meal_plan_subscriptions TO postgres;
-GRANT ALL ON TABLE public.meal_plan_subscriptions TO anon;
-GRANT ALL ON TABLE public.meal_plan_subscriptions TO authenticated;
-GRANT ALL ON TABLE public.meal_plan_subscriptions TO service_role;
+GRANT ALL ON TABLE public.meal_plan_day_menu_backup TO postgres;
+GRANT ALL ON TABLE public.meal_plan_day_menu_backup TO anon;
+GRANT ALL ON TABLE public.meal_plan_day_menu_backup TO authenticated;
+GRANT ALL ON TABLE public.meal_plan_day_menu_backup TO service_role;
 
 
 --
@@ -11067,6 +11945,45 @@ GRANT ALL ON TABLE public.meal_plans TO postgres;
 GRANT ALL ON TABLE public.meal_plans TO anon;
 GRANT ALL ON TABLE public.meal_plans TO authenticated;
 GRANT ALL ON TABLE public.meal_plans TO service_role;
+
+
+--
+-- Name: TABLE meal_templates; Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE public.meal_templates TO postgres;
+GRANT ALL ON TABLE public.meal_templates TO anon;
+GRANT ALL ON TABLE public.meal_templates TO authenticated;
+GRANT ALL ON TABLE public.meal_templates TO service_role;
+
+
+--
+-- Name: TABLE vendors; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.vendors TO anon;
+GRANT ALL ON TABLE public.vendors TO authenticated;
+GRANT ALL ON TABLE public.vendors TO service_role;
+
+
+--
+-- Name: TABLE meal_plan_menu_view; Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE public.meal_plan_menu_view TO postgres;
+GRANT ALL ON TABLE public.meal_plan_menu_view TO anon;
+GRANT ALL ON TABLE public.meal_plan_menu_view TO authenticated;
+GRANT ALL ON TABLE public.meal_plan_menu_view TO service_role;
+
+
+--
+-- Name: TABLE meal_plan_subscriptions; Type: ACL; Schema: public; Owner: supabase_admin
+--
+
+GRANT ALL ON TABLE public.meal_plan_subscriptions TO postgres;
+GRANT ALL ON TABLE public.meal_plan_subscriptions TO anon;
+GRANT ALL ON TABLE public.meal_plan_subscriptions TO authenticated;
+GRANT ALL ON TABLE public.meal_plan_subscriptions TO service_role;
 
 
 --
@@ -11205,16 +12122,6 @@ GRANT ALL ON TABLE public.reviews TO service_role;
 
 
 --
--- Name: TABLE riders; Type: ACL; Schema: public; Owner: supabase_admin
---
-
-GRANT ALL ON TABLE public.riders TO postgres;
-GRANT ALL ON TABLE public.riders TO anon;
-GRANT ALL ON TABLE public.riders TO authenticated;
-GRANT ALL ON TABLE public.riders TO service_role;
-
-
---
 -- Name: TABLE search_logs; Type: ACL; Schema: public; Owner: supabase_admin
 --
 
@@ -11328,15 +12235,6 @@ GRANT ALL ON TABLE public.vendor_special_hours TO postgres;
 GRANT ALL ON TABLE public.vendor_special_hours TO anon;
 GRANT ALL ON TABLE public.vendor_special_hours TO authenticated;
 GRANT ALL ON TABLE public.vendor_special_hours TO service_role;
-
-
---
--- Name: TABLE vendors; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT ALL ON TABLE public.vendors TO anon;
-GRANT ALL ON TABLE public.vendors TO authenticated;
-GRANT ALL ON TABLE public.vendors TO service_role;
 
 
 --

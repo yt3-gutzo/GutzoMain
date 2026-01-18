@@ -9,9 +9,10 @@ const router = express.Router();
 router.get('/', optionalAuth, asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, featured, dietary_type } = req.query;
 
+  // First get meal plans
   let query = supabaseAdmin
     .from('meal_plans')
-    .select('*, vendor:vendors(id, name, image, rating), day_menu:meal_plan_day_menu(*)', { count: 'exact' })
+    .select('*, vendor:vendors(id, name, image, rating)', { count: 'exact' })
     .eq('is_active', true);
 
   if (featured === 'true') query = query.eq('is_featured', true);
@@ -23,7 +24,26 @@ router.get('/', optionalAuth, asyncHandler(async (req, res) => {
   const { data, error, count } = await query;
   if (error) throw new ApiError(500, 'Failed to fetch meal plans');
 
-  paginatedResponse(res, data, page, limit, count);
+  // Fetch all available future menu dates (no limit)
+  const today = new Date().toISOString().split('T')[0];
+  
+  const plansWithMenu = await Promise.all(
+    data.map(async (plan) => {
+      const { data: menuData } = await supabaseAdmin
+        .from('meal_plan_menu_view')
+        .select('*')
+        .eq('meal_plan_id', plan.id)
+        .gte('menu_date', today)
+        .order('menu_date', { ascending: true });
+      
+      return {
+        ...plan,
+        day_menu: menuData || []
+      };
+    })
+  );
+
+  paginatedResponse(res, plansWithMenu, page, limit, count);
 }));
 
 // GET FEATURED
@@ -44,13 +64,24 @@ router.get('/featured', asyncHandler(async (req, res) => {
 router.get('/:id', asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('meal_plans')
-    .select('*, vendor:vendors(*), day_menu:meal_plan_day_menu(*)')
+    .select('*, vendor:vendors(*)')
     .eq('id', req.params.id)
     .eq('is_active', true)
     .single();
 
   if (error || !data) throw new ApiError(404, 'Meal plan not found');
-  successResponse(res, data);
+  
+  // Fetch all available future menu dates
+  const today = new Date().toISOString().split('T')[0];
+  
+  const { data: menuData } = await supabaseAdmin
+    .from('meal_plan_menu_view')
+    .select('*')
+    .eq('meal_plan_id', req.params.id)
+    .gte('menu_date', today)
+    .order('menu_date', { ascending: true });
+  
+  successResponse(res, { ...data, day_menu: menuData || [] });
 }));
 
 // SUBSCRIBE

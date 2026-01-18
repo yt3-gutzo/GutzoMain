@@ -1,0 +1,16 @@
+// CRITICAL FIX NEEDED: MealPlanBottomSheet.tsx Line 168
+//============================================================================
+// PROBLEM: Hardcoded [1,2,3,4,5,6,0] only shows 7 days of the week
+// This ignores all future dates like Jan 25!
+//
+// CURRENT CODE (Line 168):
+{[1, 2, 3, 4, 5, 6, 0].map((dayNum) => {
+  const dayData = plan.dayMenu?.find(d => d.day_of_week === dayNum);
+
+// REPLACE WITH:
+{(plan.dayMenu || []).map((dayData, index) => {
+  const menuDate = dayData.menu_date ? new Date(dayData.menu_date + 'T00:00:00') : null;
+  const dayName = menuDate ? menuDate.toLocaleDateString('en-US', { weekday: 'long' }) : dayData.day_name || '';
+
+//============================================================================
+// This will render ALL dates from the database, not just one week!

@@ -38,6 +38,8 @@ import vendorLeadsRoutes from './routes/vendorLeads.js';
 import vendorAuthRoutes from './routes/vendorAuth.js'; // [NEW]
 import uploadRoutes from './routes/upload.js'; // [NEW]
 import shadowfaxRoutes from './routes/shadowfax.js'; // [NEW]
+import mealTemplateRoutes from './routes/mealTemplates.js'; // [NEW]
+import mealCalendarRoutes from './routes/mealCalendar.js'; // [NEW]
 
 // Import middleware
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -143,6 +145,8 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/meal-plans', mealPlanRoutes);
+app.use('/api/meal-templates', mealTemplateRoutes);
+app.use('/api/meal-calendar', mealCalendarRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/payments', paymentRoutes);

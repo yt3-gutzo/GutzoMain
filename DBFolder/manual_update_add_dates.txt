@@ -1,0 +1,16 @@
+// MANUAL UPDATE REQUIRED: MealPlanBottomSheet.tsx Line 206
+// ============================================================================
+// Replace this line:
+<h3 className="font-bold text-gray-900">{dayName}</h3>
+
+// With this block:
+<div>
+  <h3 className="font-bold text-gray-900">{dayName}</h3>
+  {dayData.menu_date && (
+    <p className="text-xs text-gray-500 mt-0.5">
+      {new Date(dayData.menu_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+    </p>
+  )}
+</div>
+
+// This will display dates like "Friday" followed by "Jan 24" below it

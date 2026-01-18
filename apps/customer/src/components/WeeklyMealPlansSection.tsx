@@ -16,14 +16,34 @@ export type MealPlan = {
 	// Dynamic UI Fields
 	trustText?: string;
 	
-	// Menu Data
+	// Menu Data (Item-Level Templates)
 	dayMenu?: Array<{
-		day_of_week: number;
-		day_name: string;
+		menu_date: string; // '2026-01-20'
+		day_of_week: number; // 0-6
+		day_name: string; // 'Monday'
+		// Breakfast
+		breakfast_template_code?: string; // 'GZ_1'
 		breakfast_item?: string;
+		breakfast_image?: string;
+		breakfast_calories?: number;
+		// Lunch
+		lunch_template_code?: string; // 'GZ_2'
 		lunch_item?: string;
+		lunch_image?: string;
+		lunch_calories?: number;
+		// Dinner
+		dinner_template_code?: string; // 'GZ_3'
 		dinner_item?: string;
+		dinner_image?: string;
+		dinner_calories?: number;
+		// Snack
+		snack_template_code?: string; // 'GZ_4'
 		snack_item?: string;
+		snack_image?: string;
+		snack_calories?: number;
+		// Metadata
+		is_available?: boolean;
+		total_calories?: number;
 	}>;
 };
 
